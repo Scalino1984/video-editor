@@ -83,6 +83,7 @@ Thumbs.db
 # Allgemein
 #######################################
 data/
+editor-ui/
 .DS_Store
 Thumbs.db
 *.log
