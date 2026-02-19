@@ -333,6 +333,7 @@ python -m src.cli export --input subs/ --karaoke-mode kf --preset neon
 8. **UTF-8 überall** — `encoding="utf-8"` bei allen Datei-Operationen explizit angeben
 9. **Karaoke-Tags brauchen Word-Timestamps** — `ensure_word_timestamps()` vor ASS-Export aufrufen
 10. **Config via Dot-Notation** — `merge_cli_overrides(cfg, {"transcription.backend": "whisperx"})`
+11. **SQLite-Registry pflegen** — Vor jeder Änderung an DDL, Migrationen oder Queries: `.intern/sqlite-registry.json` aktualisieren und Query↔Schema-Konsistenz prüfen
 
 ---
 
@@ -343,6 +344,7 @@ Das Verzeichnis `.intern/` (in `.gitignore`, wird **nicht** mit GitHub synchroni
 ```
 .intern/
   BESTANDSAUFNAHME.md                ← Vollständige Code-Inventur (PFLICHTDOKUMENT)
+  sqlite-registry.json               ← Kanonische SQLite-Referenz (Schema, Queries, Issues)
   worklog/
     YYYY-MM.md                       ← Monatliches Arbeitsprotokoll (Journal)
   changes/
@@ -453,3 +455,12 @@ Die Datei `.intern/BESTANDSAUFNAHME.md` ist die **verbindliche Referenz** für d
 - **Änderungsprotokoll führen**: Am Ende der Bestandsaufnahme ein `## Änderungsprotokoll` pflegen mit Datum, Beschreibung der Änderung und betroffenen Modulen
 - **Format beibehalten**: Bestehende Struktur (Module → Dateien → Funktionen/Klassen → Abhängigkeiten) nicht ändern, nur ergänzen/aktualisieren
 - **An die Bestandsaufnahme halten**: Die dort dokumentierte Architektur und die beschriebenen Patterns sind verbindlich — Abweichungen nur nach bewusster Entscheidung und Aktualisierung
+
+### sqlite-registry.json — Pflege & Protokoll
+
+Die Datei `.intern/sqlite-registry.json` ist die **kanonische Referenz** für SQLite Schema, Migrationen und Query-Verwendung:
+
+- **Vor jeder Änderung an DDL/Migrationen/Queries**: Registry lesen und Query↔Schema-Konsistenz prüfen
+- **Nach jeder Schema-Änderung** (neue Tabellen, neue Spalten, neue Indizes, geänderte Queries): Registry **aktualisieren**
+- **Queries katalogisieren**: Jede neue SQL-Anweisung mit ID, SQL-Text, Kind (read/write/ddl), Tabellen, Spalten und Aufrufstellen dokumentieren
+- **Issues pflegen**: Neue Findings (fehlende Indizes, Race Conditions, Drift) in der issues-Sektion dokumentieren

@@ -1,0 +1,513 @@
+{
+  "generated_at": "2026-02-19T11:15:59Z",
+  "description": "Canonical SQLite schema, query and issue registry for karaoke-sub-tool. Update this file before any DDL, migration, or query change.",
+  "databases": {
+    "library": {
+      "file": "data/library.sqlite",
+      "opened_in": "src/db/library.py::init_db",
+      "connection_flags": {
+        "check_same_thread": false,
+        "row_factory": "sqlite3.Row",
+        "journal_mode": "delete (default — WAL not configured)",
+        "busy_timeout": "not set"
+      }
+    },
+    "chat_history": {
+      "file": "data/output/{job_id}/.chat_history.sqlite",
+      "opened_in": "src/ai/database.py::Database.connect",
+      "connection_flags": {
+        "check_same_thread": false,
+        "row_factory": "none (tuple mode)",
+        "journal_mode": "delete (default — WAL not configured)",
+        "busy_timeout": "not set"
+      }
+    }
+  },
+  "schema": {
+    "tables": {
+      "transcriptions": {
+        "database": "library",
+        "defined_in": "src/db/library.py (SCHEMA constant, line 24)",
+        "columns": [
+          {"name": "id", "type": "TEXT", "pk": true, "not_null": true, "default": null},
+          {"name": "created_at", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "updated_at", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "title", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "source_filename", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "source_hash", "type": "TEXT", "pk": false, "not_null": false, "default": null},
+          {"name": "language", "type": "TEXT", "pk": false, "not_null": false, "default": "''"},
+          {"name": "backend", "type": "TEXT", "pk": false, "not_null": false, "default": "''"},
+          {"name": "duration_sec", "type": "REAL", "pk": false, "not_null": false, "default": "0"},
+          {"name": "bpm", "type": "REAL", "pk": false, "not_null": false, "default": "0"},
+          {"name": "segments_count", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "has_word_timestamps", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "needs_review", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "avg_confidence", "type": "REAL", "pk": false, "not_null": false, "default": "0"},
+          {"name": "srt_text", "type": "TEXT", "pk": false, "not_null": false, "default": null},
+          {"name": "ass_text", "type": "TEXT", "pk": false, "not_null": false, "default": null},
+          {"name": "segments_json", "type": "TEXT", "pk": false, "not_null": false, "default": null},
+          {"name": "job_id", "type": "TEXT", "pk": false, "not_null": false, "default": null},
+          {"name": "tags", "type": "TEXT", "pk": false, "not_null": false, "default": "'[]'"},
+          {"name": "deleted", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"}
+        ],
+        "constraints": {
+          "primary_key": ["id"],
+          "unique": [],
+          "foreign_keys": [],
+          "check": []
+        },
+        "indexes": [
+          {"name": "idx_transcriptions_created", "unique": false, "columns": ["created_at DESC"]},
+          {"name": "idx_transcriptions_source", "unique": false, "columns": ["source_hash"]},
+          {"name": "idx_transcriptions_deleted", "unique": false, "columns": ["deleted"]}
+        ]
+      },
+      "media": {
+        "database": "library",
+        "defined_in": "src/db/library.py (SCHEMA constant, line 48)",
+        "columns": [
+          {"name": "id", "type": "TEXT", "pk": true, "not_null": true, "default": null},
+          {"name": "filename", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "original_name", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "mime", "type": "TEXT", "pk": false, "not_null": false, "default": "''"},
+          {"name": "file_type", "type": "TEXT", "pk": false, "not_null": false, "default": "''"},
+          {"name": "size", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "duration", "type": "REAL", "pk": false, "not_null": false, "default": "0"},
+          {"name": "path", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "hash", "type": "TEXT", "pk": false, "not_null": false, "default": "''"},
+          {"name": "taggable", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "editable", "type": "INTEGER", "pk": false, "not_null": false, "default": "0"},
+          {"name": "created_at", "type": "TEXT", "pk": false, "not_null": true, "default": null},
+          {"name": "job_id", "type": "TEXT", "pk": false, "not_null": false, "default": null}
+        ],
+        "constraints": {
+          "primary_key": ["id"],
+          "unique": [],
+          "foreign_keys": [],
+          "check": []
+        },
+        "indexes": [
+          {"name": "idx_media_filename", "unique": false, "columns": ["filename"]},
+          {"name": "idx_media_job", "unique": false, "columns": ["job_id"]}
+        ]
+      },
+      "messages": {
+        "database": "chat_history",
+        "defined_in": "src/ai/database.py::Database.connect (line 43)",
+        "columns": [
+          {"name": "id", "type": "INTEGER", "pk": true, "not_null": true, "default": null, "autoincrement": true},
+          {"name": "message_list", "type": "TEXT", "pk": false, "not_null": false, "default": null}
+        ],
+        "constraints": {
+          "primary_key": ["id"],
+          "unique": [],
+          "foreign_keys": [],
+          "check": []
+        },
+        "indexes": []
+      }
+    }
+  },
+  "migrations": [
+    {
+      "id": "none",
+      "note": "No migration framework. Schema is auto-created via CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS on every startup (library.py::init_db) and on every Database.connect call (database.py). No versioning, no up/down scripts, no drift detection."
+    }
+  ],
+  "queries": [
+    {
+      "id": "Q01",
+      "sql": "CREATE TABLE IF NOT EXISTS transcriptions (...)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Schema creation at startup via executescript"}],
+      "tables": ["transcriptions"],
+      "columns": ["all"]
+    },
+    {
+      "id": "Q02",
+      "sql": "CREATE TABLE IF NOT EXISTS media (...)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Schema creation at startup via executescript"}],
+      "tables": ["media"],
+      "columns": ["all"]
+    },
+    {
+      "id": "Q03",
+      "sql": "CREATE INDEX IF NOT EXISTS idx_transcriptions_created ON transcriptions(created_at DESC)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Index creation at startup"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.created_at"]
+    },
+    {
+      "id": "Q04",
+      "sql": "CREATE INDEX IF NOT EXISTS idx_transcriptions_source ON transcriptions(source_hash)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Index creation at startup"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.source_hash"]
+    },
+    {
+      "id": "Q05",
+      "sql": "CREATE INDEX IF NOT EXISTS idx_transcriptions_deleted ON transcriptions(deleted)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Index creation at startup"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.deleted"]
+    },
+    {
+      "id": "Q06",
+      "sql": "CREATE INDEX IF NOT EXISTS idx_media_filename ON media(filename)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Index creation at startup"}],
+      "tables": ["media"],
+      "columns": ["media.filename"]
+    },
+    {
+      "id": "Q07",
+      "sql": "CREATE INDEX IF NOT EXISTS idx_media_job ON media(job_id)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/db/library.py", "symbol": "SCHEMA / init_db", "context": "Index creation at startup"}],
+      "tables": ["media"],
+      "columns": ["media.job_id"]
+    },
+    {
+      "id": "Q08",
+      "sql": "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, message_list TEXT)",
+      "kind": "ddl",
+      "used_in": [{"file": "src/ai/database.py", "symbol": "Database.connect", "context": "Schema creation on connect"}],
+      "tables": ["messages"],
+      "columns": ["all"]
+    },
+    {
+      "id": "Q09",
+      "sql": "SELECT id FROM transcriptions WHERE source_hash = ? AND deleted = 0",
+      "kind": "read",
+      "used_in": [{"file": "src/db/library.py", "symbol": "save_transcription", "context": "Deduplication check before insert/update"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.id", "transcriptions.source_hash", "transcriptions.deleted"]
+    },
+    {
+      "id": "Q10",
+      "sql": "UPDATE transcriptions SET updated_at=?, duration_sec=?, bpm=?, segments_count=?, has_word_timestamps=?, needs_review=?, avg_confidence=?, srt_text=?, ass_text=?, segments_json=?, job_id=? WHERE id=?",
+      "kind": "write",
+      "used_in": [{"file": "src/db/library.py", "symbol": "save_transcription", "context": "Update existing record on dedupe match"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.updated_at", "transcriptions.duration_sec", "transcriptions.bpm", "transcriptions.segments_count", "transcriptions.has_word_timestamps", "transcriptions.needs_review", "transcriptions.avg_confidence", "transcriptions.srt_text", "transcriptions.ass_text", "transcriptions.segments_json", "transcriptions.job_id", "transcriptions.id"]
+    },
+    {
+      "id": "Q11",
+      "sql": "INSERT INTO transcriptions (id, created_at, updated_at, title, source_filename, source_hash, language, backend, duration_sec, bpm, segments_count, has_word_timestamps, needs_review, avg_confidence, srt_text, ass_text, segments_json, job_id, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "save_transcription", "context": "Insert new transcription record"},
+        {"file": "src/api/tasks.py", "symbol": "_transcribe_sync (line 470)", "context": "Saves completed transcription to library (calls save_transcription)"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["all"]
+    },
+    {
+      "id": "Q12",
+      "sql": "SELECT COUNT(*) FROM transcriptions WHERE {where}",
+      "kind": "read",
+      "used_in": [{"file": "src/db/library.py", "symbol": "list_transcriptions", "context": "Total count for pagination"}],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.deleted", "transcriptions.title", "transcriptions.source_filename", "transcriptions.backend"],
+      "note": "Dynamic WHERE clause: always includes 'deleted = 0', optionally adds LIKE on title/source_filename/backend"
+    },
+    {
+      "id": "Q13",
+      "sql": "SELECT * FROM transcriptions WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "list_transcriptions", "context": "Paginated list with optional search"},
+        {"file": "src/db/routes.py", "symbol": "list_library (GET /api/library)", "context": "REST endpoint calls list_transcriptions"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["all (SELECT *)"],
+      "note": "Dynamic WHERE clause: always includes 'deleted = 0', optionally adds LIKE on title/source_filename/backend"
+    },
+    {
+      "id": "Q14",
+      "sql": "SELECT * FROM transcriptions WHERE id = ? AND deleted = 0",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "get_transcription", "context": "Fetch single record by ID"},
+        {"file": "src/db/routes.py", "symbol": "get_library_item (GET /api/library/{rec_id})", "context": "REST endpoint"},
+        {"file": "src/db/routes.py", "symbol": "get_library_srt (GET /api/library/{rec_id}/srt)", "context": "SRT download"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["all (SELECT *)"]
+    },
+    {
+      "id": "Q15",
+      "sql": "DELETE FROM transcriptions WHERE id = ?",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "delete_transcription (hard=True)", "context": "Hard delete"},
+        {"file": "src/db/routes.py", "symbol": "delete_library_item (DELETE /api/library/{rec_id})", "context": "REST endpoint"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.id"]
+    },
+    {
+      "id": "Q16",
+      "sql": "UPDATE transcriptions SET deleted = 1, updated_at = ? WHERE id = ?",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "delete_transcription (hard=False)", "context": "Soft delete"},
+        {"file": "src/db/routes.py", "symbol": "delete_library_item (DELETE /api/library/{rec_id})", "context": "REST endpoint (default)"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.deleted", "transcriptions.updated_at", "transcriptions.id"]
+    },
+    {
+      "id": "Q17",
+      "sql": "UPDATE transcriptions SET {dynamic_fields}, updated_at = ? WHERE id = ?",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "update_transcription", "context": "Dynamic field update (allowed: title, tags, bpm, needs_review)"},
+        {"file": "src/db/routes.py", "symbol": "update_library_item (PATCH /api/library/{rec_id})", "context": "REST endpoint"}
+      ],
+      "tables": ["transcriptions"],
+      "columns": ["transcriptions.title", "transcriptions.tags", "transcriptions.bpm", "transcriptions.needs_review", "transcriptions.updated_at", "transcriptions.id"],
+      "note": "Dynamic SET clause built from allowed kwargs. SQL injection safe: field names from hardcoded allowlist, values parameterized."
+    },
+    {
+      "id": "Q18",
+      "sql": "SELECT id FROM media WHERE filename = ? AND path = ?",
+      "kind": "read",
+      "used_in": [{"file": "src/db/library.py", "symbol": "register_media", "context": "Deduplication check before insert"}],
+      "tables": ["media"],
+      "columns": ["media.id", "media.filename", "media.path"]
+    },
+    {
+      "id": "Q19",
+      "sql": "INSERT INTO media (id, filename, original_name, mime, file_type, size, duration, path, hash, taggable, editable, created_at, job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "register_media", "context": "Insert new media record"},
+        {"file": "src/db/routes.py", "symbol": "update_media_tags (PUT /api/media/{media_id}/tags)", "context": "Registers tagged copy as new media"}
+      ],
+      "tables": ["media"],
+      "columns": ["all"]
+    },
+    {
+      "id": "Q20",
+      "sql": "SELECT * FROM media WHERE id = ?",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "get_media", "context": "Fetch single media by ID"},
+        {"file": "src/db/routes.py", "symbol": "get_media_endpoint (GET /api/media/{media_id})", "context": "REST endpoint"},
+        {"file": "src/db/routes.py", "symbol": "get_media_tags (GET /api/media/{media_id}/tags)", "context": "Tag reading"},
+        {"file": "src/db/routes.py", "symbol": "update_media_tags (PUT /api/media/{media_id}/tags)", "context": "Tag writing"}
+      ],
+      "tables": ["media"],
+      "columns": ["all (SELECT *)"]
+    },
+    {
+      "id": "Q21",
+      "sql": "SELECT * FROM media WHERE filename = ? ORDER BY created_at DESC LIMIT 1",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "get_media_by_filename", "context": "Lookup media by filename"},
+        {"file": "src/db/routes.py", "symbol": "get_media_by_filename_endpoint (GET /api/media/by-filename/{filename})", "context": "REST endpoint"}
+      ],
+      "tables": ["media"],
+      "columns": ["all (SELECT *)"]
+    },
+    {
+      "id": "Q22",
+      "sql": "SELECT * FROM media WHERE file_type = ? ORDER BY created_at DESC LIMIT ?",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "list_media (file_type filter)", "context": "List media filtered by type"},
+        {"file": "src/db/routes.py", "symbol": "list_media_endpoint (GET /api/media)", "context": "REST endpoint"}
+      ],
+      "tables": ["media"],
+      "columns": ["all (SELECT *)"]
+    },
+    {
+      "id": "Q23",
+      "sql": "SELECT * FROM media ORDER BY created_at DESC LIMIT ?",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/db/library.py", "symbol": "list_media (no filter)", "context": "List all media"},
+        {"file": "src/db/routes.py", "symbol": "list_media_endpoint (GET /api/media)", "context": "REST endpoint"}
+      ],
+      "tables": ["media"],
+      "columns": ["all (SELECT *)"]
+    },
+    {
+      "id": "Q24",
+      "sql": "DELETE FROM media WHERE id = ?",
+      "kind": "write",
+      "used_in": [{"file": "src/db/library.py", "symbol": "delete_media", "context": "Hard delete media record"}],
+      "tables": ["media"],
+      "columns": ["media.id"]
+    },
+    {
+      "id": "Q25",
+      "sql": "INSERT INTO messages (message_list) VALUES (?)",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/ai/database.py", "symbol": "Database.add_messages", "context": "Store new chat messages"},
+        {"file": "src/ai/routes.py", "symbol": "chat_stream (POST /api/ai/chat/{job_id})", "context": "After agent run, stores result messages"}
+      ],
+      "tables": ["messages"],
+      "columns": ["messages.message_list"]
+    },
+    {
+      "id": "Q26",
+      "sql": "SELECT message_list FROM messages ORDER BY id",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/ai/database.py", "symbol": "Database.get_messages", "context": "Load full conversation history"},
+        {"file": "src/ai/routes.py", "symbol": "get_chat_history (GET /api/ai/chat/{job_id})", "context": "REST endpoint"},
+        {"file": "src/ai/routes.py", "symbol": "chat_stream (POST /api/ai/chat/{job_id})", "context": "Load history before agent run"}
+      ],
+      "tables": ["messages"],
+      "columns": ["messages.message_list"]
+    },
+    {
+      "id": "Q27",
+      "sql": "SELECT COUNT(*) FROM messages",
+      "kind": "read",
+      "used_in": [
+        {"file": "src/ai/database.py", "symbol": "Database.clear", "context": "Count before clearing"}
+      ],
+      "tables": ["messages"],
+      "columns": []
+    },
+    {
+      "id": "Q28",
+      "sql": "DELETE FROM messages",
+      "kind": "write",
+      "used_in": [
+        {"file": "src/ai/database.py", "symbol": "Database.clear", "context": "Truncate all messages"},
+        {"file": "src/ai/routes.py", "symbol": "clear_chat (DELETE /api/ai/chat/{job_id})", "context": "REST endpoint"}
+      ],
+      "tables": ["messages"],
+      "columns": []
+    }
+  ],
+  "issues": {
+    "missing_tables": [],
+    "missing_columns": [],
+    "migration_drift": [
+      {
+        "id": "DRIFT-01",
+        "severity": "info",
+        "description": "No migration framework in use. Schema is created via CREATE TABLE/INDEX IF NOT EXISTS on every startup. Adding or renaming columns requires manual DDL changes to the SCHEMA constant, with no rollback path. Existing databases will silently retain the old schema after code updates unless ALTER TABLE is manually added."
+      }
+    ],
+    "missing_indexes": [
+      {
+        "id": "IDX-01",
+        "severity": "low",
+        "table": "transcriptions",
+        "column": "id",
+        "context": "Primary key on TEXT column — SQLite uses rowid internally; TEXT PKs are not as fast as INTEGER PRIMARY KEY. Acceptable for UUID-style IDs with small datasets."
+      },
+      {
+        "id": "IDX-02",
+        "severity": "low",
+        "table": "media",
+        "column": "path",
+        "context": "register_media deduplicates by (filename, path) but only filename is indexed. Composite index on (filename, path) would improve dedup check Q18."
+      },
+      {
+        "id": "IDX-03",
+        "severity": "info",
+        "table": "media",
+        "column": "created_at",
+        "context": "All list_media queries ORDER BY created_at DESC but no index on media.created_at. Low priority for small datasets but will slow down with growth."
+      },
+      {
+        "id": "IDX-04",
+        "severity": "info",
+        "table": "media",
+        "column": "file_type",
+        "context": "list_media filters by file_type (Q22) but no index exists. Low priority for small datasets."
+      }
+    ],
+    "unsafe_transactions": [
+      {
+        "id": "TX-01",
+        "severity": "medium",
+        "file": "src/db/library.py",
+        "symbol": "save_transcription",
+        "description": "Read-then-write (SELECT existing → UPDATE or INSERT) without explicit transaction. Under concurrent access the dedup check could race: two threads could both see no existing record and both INSERT. Mitigated by threading.Lock at call sites but not enforced in the function itself."
+      },
+      {
+        "id": "TX-02",
+        "severity": "medium",
+        "file": "src/db/library.py",
+        "symbol": "register_media",
+        "description": "Same read-then-write race as TX-01: SELECT existing → INSERT without explicit BEGIN/COMMIT wrapper. Mitigated by _db_lock but lock is not acquired in register_media itself."
+      },
+      {
+        "id": "TX-03",
+        "severity": "medium",
+        "file": "src/db/library.py",
+        "symbol": "global",
+        "description": "No WAL journal mode configured. Under concurrent reads/writes (FastAPI thread pool), the default journal mode can cause SQLITE_BUSY errors. Recommend PRAGMA journal_mode=WAL and PRAGMA busy_timeout=5000."
+      },
+      {
+        "id": "TX-04",
+        "severity": "low",
+        "file": "src/db/library.py",
+        "symbol": "update_transcription",
+        "description": "Dynamic SQL field names built from kwargs. Safe because field names come from a hardcoded allowlist, but the pattern should be documented."
+      },
+      {
+        "id": "TX-05",
+        "severity": "low",
+        "file": "src/db/library.py",
+        "symbol": "list_transcriptions",
+        "description": "Dynamic WHERE clause with f-string SQL. Safe because structure is hardcoded and values are parameterized, but f-string SQL is fragile for future modifications."
+      }
+    ],
+    "dynamic_or_unknown": [
+      {
+        "id": "DYN-01",
+        "file": "src/db/library.py",
+        "symbol": "update_transcription",
+        "description": "SET clause built dynamically from kwargs. Allowlist: {title, tags, bpm, needs_review}. Column names are safe (from hardcoded set), values are parameterized."
+      },
+      {
+        "id": "DYN-02",
+        "file": "src/db/library.py",
+        "symbol": "list_transcriptions",
+        "description": "WHERE clause extended with LIKE conditions when search query 'q' is provided. Structure is hardcoded, parameters are bound."
+      }
+    ],
+    "other": [
+      {
+        "id": "OTHER-01",
+        "severity": "info",
+        "description": "media table has no foreign key to transcriptions (e.g., job_id is not an FK). Both tables use job_id as a loose coupling key. This is acceptable for the current use case but means orphaned media records can exist."
+      },
+      {
+        "id": "OTHER-02",
+        "severity": "info",
+        "description": "messages table has no job_id column — the job scoping is done via separate .sqlite files per job (data/output/{job_id}/.chat_history.sqlite). This is a valid isolation strategy."
+      },
+      {
+        "id": "OTHER-03",
+        "severity": "info",
+        "description": "No UNIQUE constraint on transcriptions.source_hash. Deduplication relies on application logic (Q09 check in save_transcription). A UNIQUE index would enforce this at the DB level."
+      },
+      {
+        "id": "OTHER-04",
+        "severity": "info",
+        "description": "No UNIQUE constraint on media (filename, path). Deduplication relies on application logic (Q18 check in register_media). A UNIQUE index would enforce this at the DB level."
+      },
+      {
+        "id": "OTHER-05",
+        "severity": "info",
+        "description": "Boolean columns (has_word_timestamps, needs_review, deleted, taggable, editable) stored as INTEGER with no CHECK constraint. Values could be any integer, not just 0/1."
+      }
+    ]
+  }
+}
