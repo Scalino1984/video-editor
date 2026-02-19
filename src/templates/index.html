@@ -1278,13 +1278,13 @@ if(seg.has_word_timestamps&&seg.words&&seg.words.length){
     if(t>=w.start){
       if(mode==='kf'){
         const pct=Math.min(100,Math.round((t-w.start)/(w.end-w.start)*100));
-        return`<span class="kw fill" style="background:linear-gradient(90deg,${hlC} ${pct}%,${baseC} ${pct}%)">${esc(w.word)} </span>`}
+        return`<span class="kw fill" style="background-image:linear-gradient(90deg,${hlC} ${pct}%,${baseC} ${pct}%)">${esc(w.word)} </span>`}
       return`<span class="kw active">${esc(w.word)} </span>`}
     return`<span class="kw">${esc(w.word)} </span>`}).join('')
 }else{const pct=Math.min(1,(t-seg.start)/(seg.end-seg.start));
   if(mode==='kf'){
     const p=Math.round(pct*100);
-    el.innerHTML=`<span class="kw fill" style="background:linear-gradient(90deg,${hlC} ${p}%,${baseC} ${p}%)">${esc(seg.text)}</span>`
+    el.innerHTML=`<span class="kw fill" style="background-image:linear-gradient(90deg,${hlC} ${p}%,${baseC} ${p}%)">${esc(seg.text)}</span>`
   }else{
     const txt=seg.text,split=Math.floor(txt.length*pct);
     el.innerHTML=`<span class="kw active">${esc(txt.slice(0,split))}</span><span class="kw">${esc(txt.slice(split))}</span>`}}}
@@ -2544,7 +2544,7 @@ function fskRender(){
         else if(t>=w.start){
           if(mode==='kf'){
             const pct=Math.min(100,Math.round((t-w.start)/(w.end-w.start)*100));
-            wH+=`<span class="fsk-word fsk-fill" style="background:linear-gradient(90deg,${hlC} ${pct}%,#fff ${pct}%)">${esc(w.word)} </span>`}
+            wH+=`<span class="fsk-word fsk-fill" style="background-image:linear-gradient(90deg,${hlC} ${pct}%,#fff ${pct}%)">${esc(w.word)} </span>`}
           else{wH+=`<span class="fsk-word hl">${esc(w.word)} </span>`}}
         else{wH+=`<span class="fsk-word">${esc(w.word)} </span>`}}
       txt.innerHTML=wH
