@@ -283,6 +283,22 @@ async def api_upload_asset(pid: str, file: UploadFile = File(...)):
     asset = add_asset(pid, safe_name, dest)
     if not asset:
         raise HTTPException(500, "Failed to add asset")
+
+    # Register in file registry
+    try:
+        from src.db.library import register_file, add_file_reference
+        file_id = register_file(
+            storage_path=str(dest),
+            original_name=safe_name,
+            file_type="project_asset",
+            tool_scope="editor",
+            size=len(content),
+            project_id=pid,
+        )
+        add_file_reference(file_id, "project", pid)
+    except Exception:
+        pass  # non-critical
+
     return asset.to_dict()
 
 
@@ -293,10 +309,36 @@ async def api_remove_asset(pid: str, asset_id: str):
         raise HTTPException(404, "Project not found")
     if asset_id not in p.assets:
         raise HTTPException(404, "Asset not found")
+
+    asset_path = p.assets[asset_id].path
+    thumb_path = p.assets[asset_id].thumbnail
+
     _push_undo(pid)
     # Remove clips using this asset
     p.clips = [c for c in p.clips if c.asset_id != asset_id]
     del p.assets[asset_id]
+
+    # Clean up physical file and file registry if in editor assets dir
+    try:
+        from src.db.library import get_file_by_path, check_file_has_references, delete_registered_file, remove_file_references
+        asset_file = Path(asset_path)
+        editor_assets = EDITOR_DIR / "assets"
+        if asset_file.exists() and asset_file.resolve().is_relative_to(editor_assets.resolve()):
+            # Remove project reference from file registry
+            frec = get_file_by_path(asset_path)
+            if frec:
+                remove_file_references("project", pid)
+                if not check_file_has_references(frec["id"]):
+                    delete_registered_file(frec["id"], hard=True)
+                    asset_file.unlink(missing_ok=True)
+            else:
+                asset_file.unlink(missing_ok=True)
+            # Clean up thumbnail
+            if thumb_path:
+                Path(thumb_path).unlink(missing_ok=True)
+    except Exception:
+        pass  # non-critical
+
     return {"removed": asset_id}
 
 
@@ -315,19 +357,52 @@ async def api_asset_thumbnail(pid: str, asset_id: str):
 
 @router.post("/projects/{pid}/import-job/{job_id}")
 async def api_import_from_job(pid: str, job_id: str):
-    """Import audio + subtitles from a completed karaoke job."""
+    """Import audio + subtitles from a completed karaoke job.
+
+    Files are copied to editor assets dir so they survive job deletion.
+    Cross-references are tracked in the file registry.
+    """
     p = get_project(pid)
     if not p:
         raise HTTPException(404, "Project not found")
 
-    # Check both output dir and uploads dir
-    job_dir = Path("data/output") / job_id
+    # Validate job_id to prevent path traversal
+    job_dir = (Path("data/output") / job_id).resolve()
+    if not job_dir.is_relative_to(Path("data/output").resolve()):
+        raise HTTPException(400, "Invalid job_id")
     upload_dir = Path("data/uploads")
+    assets_dir = EDITOR_DIR / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
 
     if not job_dir.exists():
         raise HTTPException(404, f"Job output not found: {job_id}")
 
     imported = []
+
+    def _copy_and_add(source: Path, track: str) -> dict | None:
+        """Copy file to editor assets dir and add as project asset."""
+        dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{source.name}"
+        shutil.copy2(source, dest)
+        asset = add_asset(pid, source.name, dest)
+        if asset:
+            add_clip(pid, asset.id, track=track, start=0)
+            # Register in file registry with cross-reference
+            try:
+                from src.db.library import register_file, add_file_reference
+                file_id = register_file(
+                    storage_path=str(dest),
+                    original_name=source.name,
+                    file_type="project_asset",
+                    tool_scope="both",
+                    job_id=job_id,
+                    project_id=pid,
+                )
+                add_file_reference(file_id, "project", pid)
+                add_file_reference(file_id, "job", job_id)
+            except Exception:
+                pass  # non-critical
+            return asset.to_dict()
+        return None
 
     # Find audio file — check job output dir first, then uploads
     for search_dir in [job_dir, upload_dir]:
@@ -338,10 +413,9 @@ async def api_import_from_job(pid: str, job_id: str):
                 # For uploads dir, only match files that start with job_id prefix
                 if search_dir == upload_dir and not f.name.startswith(job_id[:8]):
                     continue
-                asset = add_asset(pid, f.name, f)
-                if asset:
-                    imported.append(asset.to_dict())
-                    add_clip(pid, asset.id, track="audio", start=0)
+                result = _copy_and_add(f, "audio")
+                if result:
+                    imported.append(result)
                 break
             if imported and any(a.get("type") == "audio" for a in imported):
                 break
@@ -349,10 +423,9 @@ async def api_import_from_job(pid: str, job_id: str):
     # Find subtitle files — import ALL available formats (.ass, .srt, .vtt, .lrc)
     for ext in (".ass", ".srt", ".vtt", ".lrc"):
         for f in job_dir.glob(f"*{ext}"):
-            asset = add_asset(pid, f.name, f)
-            if asset:
-                imported.append(asset.to_dict())
-                add_clip(pid, asset.id, track="subtitle", start=0)
+            result = _copy_and_add(f, "subtitle")
+            if result:
+                imported.append(result)
             break
 
     return {"imported": len(imported), "assets": imported}
