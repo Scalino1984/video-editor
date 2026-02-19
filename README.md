@@ -2,7 +2,7 @@
 
 **Professioneller Karaoke-Untertitel-Generator mit Video-Editor, KI-Chat und 4 Transkriptions-Backends.**
 
-> **Audio rein → Karaoke-Untertitel raus.** Wortgenau. Automatisch. In Sekunden.
+> **Audio rein → Karaoke-Untertitel raus.** KI-Gesteuert. Automatisch. In Sekunden.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)
