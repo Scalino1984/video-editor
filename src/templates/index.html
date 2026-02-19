@@ -140,6 +140,18 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .karaoke-live .kw.active{color:var(--accent)}
 .karaoke-live .kw.past{color:var(--accent);opacity:.7}
 .karaoke-live .kw.fill{background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:inline}
+/* Offset Control */
+.offset-row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:.65rem;user-select:none}
+.offset-row .offset-btns{display:flex;gap:2px}
+.offset-row .offset-btn{padding:2px 6px;font-size:.6rem;font-family:var(--mono);border-radius:4px;background:var(--bg3);color:var(--dim);border:1px solid var(--border);cursor:pointer;transition:all .15s}
+.offset-row .offset-btn:hover{color:var(--fg);border-color:var(--accent);background:var(--bg4)}
+.offset-row .offset-val{font-family:var(--mono);font-size:.7rem;min-width:52px;text-align:center;font-weight:600;padding:2px 6px;border-radius:4px;transition:color .15s}
+.offset-row .offset-val.neg{color:var(--warn)}
+.offset-row .offset-val.pos{color:var(--accent)}
+.offset-row .offset-val.zero{color:var(--dim)}
+.offset-row .offset-apply{padding:2px 8px;font-size:.6rem;border-radius:4px;background:var(--accent);color:var(--bg);border:none;cursor:pointer;font-weight:600;opacity:.8;transition:opacity .15s}
+.offset-row .offset-apply:hover{opacity:1}
+.offset-row .offset-lbl{color:var(--dim);font-size:.6rem}
 /* Minimap */
 .minimap{height:18px;background:var(--bg);border-radius:4px;position:relative;cursor:pointer;margin-top:4px}
 .mm-seg{position:absolute;top:2px;height:14px;border-radius:2px;background:var(--accent2);opacity:.3;transition:opacity .1s}
@@ -509,6 +521,20 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       </div>
       <div class="spectrum" id="specC"><canvas id="specCv"></canvas></div>
       <div class="minimap" id="mm" onclick="seekMM(event)" title="Klicken zum Spulen (Minimap)"><div class="mm-cur" id="mmCur"></div></div>
+      <div class="offset-row" id="offsetRow">
+        <span class="offset-lbl" title="Subtitle-Offset: Verschiebt die Karaoke/Highlight-Anzeige relativ zum Audio. Negativ = Untertitel früher, Positiv = Untertitel später">⏱ Offset:</span>
+        <div class="offset-btns">
+          <button class="offset-btn" onclick="adjOffset(-50)" title="Untertitel 50ms früher">−50</button>
+          <button class="offset-btn" onclick="adjOffset(-10)" title="Untertitel 10ms früher">−10</button>
+        </div>
+        <span class="offset-val zero" id="offsetVal" title="Aktueller Preview-Offset in Millisekunden (wird beim Anwenden auf die Segmente geschrieben)">0 ms</span>
+        <div class="offset-btns">
+          <button class="offset-btn" onclick="adjOffset(10)" title="Untertitel 10ms später">+10</button>
+          <button class="offset-btn" onclick="adjOffset(50)" title="Untertitel 50ms später">+50</button>
+        </div>
+        <button class="offset-btn" onclick="resetOffset()" title="Offset zurücksetzen (Preview)">↺</button>
+        <button class="offset-apply" onclick="applyOffset()" title="Offset permanent auf alle Segmente anwenden (Time-Shift)">Anwenden</button>
+      </div>
       <div class="karaoke-live" id="kLive" ondblclick="editKaraokeLine()"></div>
     </div>
     <!-- Downloads -->
@@ -1096,7 +1122,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 </div>
 </div>
 <script>
-const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],curFil='all',looping=false,loopSeg=null;
+const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],curFil='all',looping=false,loopSeg=null,subOffset=0;
 const au=document.getElementById('audioEl');
 function toast(m,t='ok'){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toasts').appendChild(e);setTimeout(()=>e.remove(),3500)}
 function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
@@ -1249,6 +1275,14 @@ au.onloadedmetadata=()=>updPT();
 au.ontimeupdate=()=>{updPT();hlSeg();updKaraoke();if(looping&&loopSeg&&au.currentTime>=loopSeg.end)au.currentTime=loopSeg.start}}
 function togglePlay(){au.paused?au.play():au.pause()}
 function skipTo(s){au.currentTime=Math.max(0,au.currentTime+s)}
+function subTime(){return au.currentTime+subOffset}
+function adjOffset(ms){subOffset+=(ms/1000);_updOffsetUI()}
+function resetOffset(){subOffset=0;_updOffsetUI()}
+function _updOffsetUI(){const el=document.getElementById('offsetVal');const ms=Math.round(subOffset*1000);
+el.textContent=(ms>=0?'+':'')+ms+' ms';el.className='offset-val '+(ms<0?'neg':ms>0?'pos':'zero')}
+async function applyOffset(){if(!aJobId||subOffset===0)return;const ms=Math.round(subOffset*1000);
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/time-shift',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset_ms:ms})});
+toast('Offset '+ms+'ms angewendet');subOffset=0;_updOffsetUI();loadSegs(aJobId)}catch(e){toast('Offset-Fehler','err')}}
 function setSpeed(v){au.playbackRate=parseFloat(v)}
 function toggleLoop(){looping=!looping;document.getElementById('loopBtn').style.opacity=looping?'1':'.4';if(!looping)loopSeg=null}
 function updPT(){const c=au.currentTime||0,d=au.duration||0;document.getElementById('pTime').textContent=fmt(c)+' / '+fmt(d);
@@ -1265,7 +1299,7 @@ function seekMM(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentT
 
 // ── Karaoke Live ──
 function _getKaraokeMode(){return document.getElementById('sK').value}
-function updKaraoke(){if(!cSegs.length)return;const t=au.currentTime;const el=document.getElementById('kLive');
+function updKaraoke(){if(!cSegs.length)return;const t=subTime();const el=document.getElementById('kLive');
 const seg=cSegs.find(s=>t>=s.start&&t<=s.end);
 if(!seg){el.innerHTML='<span style="color:var(--dim);font-size:.85rem">—</span>';el.dataset.segIdx='';return}
 el.dataset.segIdx=cSegs.indexOf(seg);
@@ -1308,7 +1342,7 @@ function editKaraokeLine(){
 
 async function saveKaraokeEdit(idx,text){
   if(!aJobId||!cSegs[idx])return;
-  cSegs[idx].text=text;
+  cSegs[idx].text=text;cSegs[idx].words=[];cSegs[idx].has_word_timestamps=false;
   try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx,text})})}catch(e){toast('Fehler','err')}
   renderSegs();updKaraoke();toast('✓ Segment #'+(idx+1)+' gespeichert')}
 
@@ -1326,7 +1360,7 @@ let cls='mm-seg';if((s.confidence||1)<.6)cls+=' mm-low';if(s.pinned)cls+=' mm-pi
 h+=`<div class="${cls}" style="left:${l}%;width:${w}%"></div>`}}
 el.innerHTML=h}
 
-function hlSeg(){const t=au.currentTime;document.querySelectorAll('.si').forEach(el=>{
+function hlSeg(){const t=subTime();document.querySelectorAll('.si').forEach(el=>{
 const i=parseInt(el.dataset.idx);const s=cSegs[i];
 if(s&&t>=s.start&&t<=s.end){el.classList.add('active');if(el.scrollIntoViewIfNeeded)el.scrollIntoViewIfNeeded(false)}
 else el.classList.remove('active')})}
@@ -1370,7 +1404,7 @@ function renderSegs(){
 function setFil(f){curFil=f;document.querySelectorAll('.fil').forEach(e=>e.classList.toggle('on',e.dataset.f===f));renderSegs()}
 
 async function updSeg(i,text){if(!aJobId)return;
-  cSegs[i].text=text;
+  cSegs[i].text=text;cSegs[i].words=[];cSegs[i].has_word_timestamps=false;
   try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
     // Flash save indicator
     const ta=document.querySelector(`[data-idx="${i}"]`);
@@ -2517,7 +2551,7 @@ function toggleFSKaraoke(){
 function fskRender(){
   if(!fskActive)return;
   requestAnimationFrame(fskRender);
-  const t=au.currentTime;
+  const t=subTime();
   const txt=document.getElementById('fskText');
   const nxt=document.getElementById('fskNext');
   const bar=document.getElementById('fskBar');
@@ -2550,9 +2584,10 @@ function fskRender(){
       txt.innerHTML=wH
     }else{txt.innerHTML=`<span class="fsk-word hl">${esc(seg.text)}</span>`}
     nxt.textContent=ci<cSegs.length-1?cSegs[ci+1].text:''}
-  // Progress
-  if(wfDur>0)bar.style.width=(t/wfDur*100)+'%';
-  time.textContent=fmt(t)+' / '+fmt(wfDur||0)}
+  // Progress (use real audio time, not offset-shifted)
+  const rt=au.currentTime;
+  if(wfDur>0)bar.style.width=(rt/wfDur*100)+'%';
+  time.textContent=fmt(rt)+' / '+fmt(wfDur||0)}
 
 // ── Keyboard Shortcuts (extended) ─────────────────────────────────────────────
 document.addEventListener('keydown',e=>{

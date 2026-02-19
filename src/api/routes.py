@@ -364,7 +364,11 @@ async def update_segment(job_id: str, update: SegmentUpdate):
     p, data = _load_segs(job_id)
     idx = update.index
     if idx < 0 or idx >= len(data): raise HTTPException(400, f"Index {idx} out of range")
-    if update.text is not None: data[idx]["text"] = update.text
+    if update.text is not None:
+        data[idx]["text"] = update.text
+        # Clear word timestamps — text changed, old word boundaries are invalid
+        data[idx]["words"] = []
+        data[idx]["has_word_timestamps"] = False
     if update.start is not None: data[idx]["start"] = update.start
     if update.end is not None: data[idx]["end"] = update.end
     if update.speaker is not None: data[idx]["speaker"] = update.speaker
