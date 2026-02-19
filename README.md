@@ -1,228 +1,392 @@
-# Karaoke Sub Tool v3.0 — Handbuch
+# 🎤 Karaoke Sub Tool
 
-## Übersicht
+**Professioneller Karaoke-Untertitel-Generator mit Video-Editor, KI-Chat und 4 Transkriptions-Backends.**
 
-Professioneller Karaoke-Untertitel-Generator mit FastAPI WebUI, 4 Transcription-Backends, Live-Audio-Player, Waveform-Visualisierung und umfangreichem Segment-Editor.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Version](https://img.shields.io/badge/Version-3.2.0-purple)
 
-## Features
+---
 
-### Transcription Backends
+![Karaoke Sub Tool](docs/images/Karaoke-Sub-Tool.png)
 
-| Backend | Beschreibung | Word-Timestamps | Anforderung |
-|---------|-------------|-----------------|-------------|
-| **Voxtral** (Mistral) | Cloud API, gut für Deutsch | ✓ | `MISTRAL_API_KEY` |
-| **OpenAI Whisper** | Cloud API | ✓ | `OPENAI_API_KEY` |
-| **Local Whisper** | Lokal via faster-whisper | ✓ | `pip install faster-whisper` |
-| **WhisperX** | Forced Phoneme Alignment | ✓✓✓ (beste!) | `pip install whisperx torch` |
+## ✨ Features
 
-WhisperX liefert die präzisesten Word-Level-Timestamps durch wav2vec2-basiertes Forced Alignment. Ideal für Karaoke.
+### 🎙️ Transkription
+- **4 Backends**: Voxtral (Mistral AI), OpenAI Whisper, Local Whisper (faster-whisper), WhisperX
+- Wort-Level-Timestamps mit automatischer Silben-Approximation
+- Speaker Diarization (Sprechererkennung)
+- Voice Activity Detection (WebRTC VAD)
+- Vocal Isolation via Demucs
 
-### Export-Formate
+### 🎬 Video-Editor
+- Multi-Track-Timeline (Video, Audio, Subtitle, Overlay)
+- 3 Video-Skalierungsmodi: Füllen (Cover), Einpassen (Contain), Strecken (Stretch)
+- Format-Vorlagen: 16:9 HD, 4K, 9:16 Vertical, 1:1 Square
+- Effekte: Fade, Brightness, Contrast, Blur, Sepia, Vignette, u.v.m.
+- Undo/Redo mit bis zu 50 Schritten
+- Echtzeit-Vorschau mit Untertitel-Overlay
+- ffmpeg-basiertes Rendering
 
+![Video Editor](docs/images/Video-Editor.png)
+
+### 📝 Untertitel-Formate
 - **SRT** — Standard-Untertitel
 - **ASS** — Advanced SubStation Alpha mit Karaoke-Tags (`\k`, `\kf`, `\ko`)
-- **WebVTT** — Web Video Text Tracks
-- **LRC** — Lyrics-Format (Enhanced mit Word-Tags)
+- **VTT** — WebVTT
+- **LRC** — Enhanced LRC mit Wort-Level-Tags
 - **TXT** — Plain Text
-- **ZIP** — Alle Outputs als Download
+- **HTML** — Standalone Karaoke-Player
 
-### Audio Player & Karaoke Preview
+### 🎨 Karaoke-Themes
+6 vordefinierte ASS-Presets mit anpassbaren Farben, Outline, Schatten und Fade-Effekten:
+- Classic, Neon, High Contrast, Landscape 1080p, Portrait 1080×1920, Mobile Safe
 
-- Integrierter Audio-Player mit Waveform-Visualisierung
-- **Live Karaoke Display** — Mitlesendes Lyrics-Highlight bei Wiedergabe
-- **Playback Speed** — 0.5x bis 2x
-- **Loop Segment** — Einzelnes Segment in Schleife abspielen
-- **Minimap** — Übersichtsleiste aller Segmente mit Farbcodierung
+### 🤖 KI-Chat
+- PydanticAI v2 mit Multi-Provider-Support (OpenAI, Anthropic, Mistral, Google)
+- 5 Commands: `correct`, `punctuate`, `structure`, `translate`, `generate`
+- 8 Tools für Segment-Lesen und -Schreiben
+- Reasoning-Model-Erkennung (o1, o3, GPT-5, Claude Opus)
+- Chat-History pro Job
 
-### Segment Editor
+### 🔧 Refinement-Pipeline
+- Text-Bereinigung (Whitespace, Quotes, Custom Dictionary)
+- CPS Auto-Fix (Characters Per Second)
+- Lücken-Management (♪-Fill, Redistribute)
+- BPM-Erkennung + Beat-Snap (Essentia/librosa)
+- Reimschema-Erkennung (DE/EN, Rap-optimiert)
+- Song-Struktur-Erkennung (Verse/Chorus/Bridge/Hook)
+- Textstatistik (TTR, Hapax, Flow-Score)
+- Lyrics-Alignment (Greedy Matching)
 
-- **Inline Timing** — Start/End-Zeiten direkt editierbar
-- **Split/Merge** — Segmente teilen und zusammenführen
-- **Time Shift** — Alle Segmente global verschieben (±ms)
-- **Search & Replace** — Text suchen/ersetzen über alle Segmente
-- **Speaker Labels** — Speaker-Tags zuweisen/bearbeiten
-- **Pin/Bookmark** — Segmente für Review markieren
-- **Confidence Filter** — Nach Confidence filtern (All / Low / Pinned / Overlap)
-- **CPS Warnung** — Echtzeit-CPS pro Segment (>22 = Warnung)
-- **Gap/Overlap Detektor** — Timing-Probleme erkennen und auto-fixen
-- **Custom Dictionary** — Wörter-Korrekturliste (falsch → richtig)
+### 📊 Qualitäts-Report
+- Konfidenz-Bewertung pro Segment
+- Detaillierter JSON/CSV-Report
+- Low-Confidence-Markierung in ASS-Dateien
 
-### Undo/Redo
+---
 
-Bis zu 50 Schritte rückgängig machen. Funktioniert für alle Segment-Operationen.
+##  Installation
 
-### Keyboard Shortcuts
+### Voraussetzungen
 
-| Taste | Aktion |
-|-------|--------|
-| `Space` | Play/Pause |
-| `←` / `→` | ±2 Sekunden |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+F` | Suche fokussieren |
+- **Python ≥ 3.10** (Ziel: 3.12)
+- **ffmpeg** — Audio/Video-Verarbeitung
+- Mindestens ein Transkriptions-Backend (API-Key oder lokales Modell)
 
-### Batch Processing
+### Setup
 
-Mehrere Dateien gleichzeitig hochladen und transkribieren.
+```bash
+# Repository klonen
+git clone https://github.com/Scalino1984/video-editor.git
+cd video-editor
 
-### SSE Live Progress
+# Virtual Environment erstellen
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 
-Echtzeit-Fortschritt via Server-Sent Events — kein Polling nötig.
+# Abhängigkeiten installieren
+pip install -r requirements.txt
+```
 
-### Project Export/Import
+### API-Keys konfigurieren
 
-Kompletten Projektzustand als JSON exportieren/importieren für Backup und Sharing.
+Erstelle eine `.env`-Datei im Projektverzeichnis:
 
-## API Endpoints
+```env
+# Transkription (mindestens einen Key)
+MISTRAL_API_KEY=your-mistral-key        # Voxtral Backend
+OPENAI_API_KEY=sk-your-openai-key       # OpenAI Whisper Backend
+HF_TOKEN=hf_your-token                  # WhisperX Diarization
 
-### Core
-- `GET /api/health` — Server-Status und Backend-Verfügbarkeit
-- `GET /api/presets` — ASS Theme Presets
-- `GET /api/events` — SSE Live-Stream
+# KI-Chat (optional)
+AI_MODEL=openai:gpt-4o                  # oder anthropic:claude-sonnet-4, mistral:*, google:*
+```
 
-### Upload & Files
-- `POST /api/upload` — Datei hochladen
-- `GET /api/files` — Hochgeladene Dateien listen
-- `DELETE /api/files/{name}` — Datei löschen
-- `GET /api/files/{name}/probe` — Audio-Metadaten (Dauer, Codec, Bitrate)
+### Optionale Abhängigkeiten
 
-### Transcription
-- `POST /api/transcribe?filename=` — Job starten
-- `POST /api/transcribe/batch?filenames=` — Batch-Transkription
-- `POST /api/transcribe/upload` — Upload + Transkription in einem Schritt
+```bash
+# WhisperX (präziseste Wort-Timestamps)
+pip install whisperx torch torchaudio
 
-### Jobs
-- `GET /api/jobs` — Alle Jobs listen
-- `GET /api/jobs/{id}` — Job-Status
-- `DELETE /api/jobs/{id}` — Job löschen
+# Local Whisper (kein API-Key nötig)
+pip install faster-whisper
 
-### Downloads
-- `GET /api/jobs/{id}/download/{file}` — Einzeldatei
-- `GET /api/jobs/{id}/download-zip` — Alle als ZIP
-- `GET /api/jobs/{id}/content/{file}` — Text-Content (für Clipboard)
+# Vocal Isolation
+pip install demucs
 
-### Segment Operations
-- `GET /api/jobs/{id}/segments` — Segmente laden
-- `PUT /api/jobs/{id}/segments` — Segment editieren (Text, Timing, Speaker, Pin)
-- `POST /api/jobs/{id}/segments/split` — Segment teilen
-- `POST /api/jobs/{id}/segments/merge` — Segmente zusammenführen
-- `POST /api/jobs/{id}/segments/reorder` — Reihenfolge ändern
-- `POST /api/jobs/{id}/segments/time-shift` — Global verschieben
-- `POST /api/jobs/{id}/segments/search-replace` — Suchen/Ersetzen
-- `POST /api/jobs/{id}/segments/toggle-pin` — Segment pinnen
+# BPM-Erkennung
+pip install essentia  # bevorzugt
+pip install librosa   # Fallback
+```
 
-### Analysis
-- `GET /api/jobs/{id}/stats` — Statistiken (CPS, Wörter, Gaps, Overlaps)
-- `GET /api/jobs/{id}/gaps-overlaps` — Gap/Overlap-Liste
-- `POST /api/jobs/{id}/fix-gaps?strategy=` — Auto-Fix (extend/shrink/split)
-- `GET /api/jobs/{id}/waveform` — Waveform-Daten
-- `GET /api/jobs/{id}/report` — Confidence Report
+---
 
-### Tools
-- `POST /api/jobs/{id}/undo` / `redo` — Undo/Redo
-- `POST /api/jobs/{id}/regenerate-ass` — Formate neu generieren
-- `POST /api/jobs/{id}/apply-dictionary` — Dictionary anwenden
-- `POST /api/jobs/{id}/translate` — Übersetzen (Placeholder)
-- `GET /api/jobs/{id}/speakers` — Speaker-Liste
-- `POST /api/jobs/{id}/speakers/assign` — Speaker zuweisen
+## 🖥️ Verwendung
 
-### Dictionary
-- `GET /api/dictionary` — Custom Dictionary laden
-- `PUT /api/dictionary` — Dictionary speichern
+### Server (WebUI + Video-Editor)
 
-### Project
-- `GET /api/jobs/{id}/project-export` — Projekt als JSON
-- `POST /api/jobs/{id}/project-import` — Projekt importieren
+```bash
+# Direktstart
+python main.py
 
-## Config (config.yaml)
+# Mit Optionen
+python main.py --host 0.0.0.0 --port 8000 --reload
+
+# Via Server-Manager
+./server.sh start
+./server.sh status
+./server.sh log
+./server.sh stop
+```
+
+Öffne im Browser:
+- **WebUI**: [http://localhost:8000](http://localhost:8000)
+- **Video-Editor**: [http://localhost:8000/editor](http://localhost:8000/editor)
+
+### CLI
+
+```bash
+# Transkription
+python -m src.cli transcribe --input audio.mp3 --backend voxtral --ass
+
+# Batch-Verarbeitung
+python -m src.cli transcribe --input ./songs/ --backend whisperx --ass --lrc
+
+# Refinement
+python -m src.cli refine --input subs/ --cps 18
+
+# Export mit Karaoke-Tags
+python -m src.cli export --input subs/ --karaoke-mode kf --preset neon
+
+# Preview-Clip rendern
+python -m src.cli preview --input song.srt --audio song.mp3
+
+# Interaktives Menü
+python -m src.cli menu
+```
+
+---
+
+## ⚙️ Konfiguration
+
+Die Konfiguration erfolgt über `config.yaml` im Projektverzeichnis:
 
 ```yaml
+preprocess:
+  vad:
+    enabled: true
+    aggressiveness: 2          # 0-3
+  normalize:
+    enabled: true
+    target_lufs: -16.0
+  vocal_isolation:
+    enabled: false
+
 transcription:
-  backend: voxtral     # voxtral | openai_whisper | local_whisper | whisperx
-  language: auto       # de | en | auto | fr | es | ja | ko | zh
-whisperx:
-  model_size: large-v3 # tiny | base | small | medium | large-v3
-  compute_type: float16
-  batch_size: 16
+  backend: voxtral             # voxtral | openai_whisper | local_whisper | whisperx
+  language: auto               # de | en | auto
+  word_timestamps: auto
+
 refinement:
-  cps: 18.0            # max characters per second
+  cps: 18.0                    # max Characters Per Second
+  min_duration: 1.0
+  max_duration: 6.0
   max_chars_per_line: 42
-  max_lines: 2
+
 karaoke:
-  mode: kf             # k | kf | ko
+  mode: kf                     # k (fill) | kf (fade) | ko (outline wipe)
+  fade_in_ms: 150
+  fade_out_ms: 100
+
+theme:
+  preset: classic              # classic | neon | high_contrast | ...
 ```
 
-## CLI (Legacy)
+CLI-Overrides via Dot-Notation:
+```bash
+python -m src.cli transcribe --input audio.mp3 \
+  --set transcription.backend=whisperx \
+  --set refinement.cps=20
+```
+
+---
+
+## 📁 Projektstruktur
+
+```
+main.py                          ← FastAPI-App + Uvicorn
+server.sh                        ← Server-Manager-Script
+config.yaml                      ← Konfiguration
+src/
+  cli.py                         ← Typer CLI
+  api/
+    models.py                    ← Pydantic v2 Schemas
+    routes.py                    ← REST-API (60+ Endpunkte)
+    tasks.py                     ← Background-Jobs (SSE, Undo/Redo)
+  transcription/
+    voxtral.py                   ← Mistral AI Voxtral
+    openai_whisper.py            ← OpenAI Whisper API
+    local_whisper.py             ← faster-whisper (lokal)
+    whisperx_backend.py          ← WhisperX + Forced Alignment
+  refine/
+    alignment.py                 ← Wort-Timestamp-Approximation
+    segmentation.py              ← Split/Merge/Gaps/Line-Breaks
+    beatgrid.py                  ← BPM-Erkennung + Beat-Snap
+    confidence.py                ← Qualitäts-Report
+    lyrics_align.py              ← Lyrics→ASR Alignment
+    rhyme.py                     ← Reimschema-Erkennung
+    structure.py                 ← Song-Struktur-Erkennung
+  export/
+    srt_writer.py                ← SRT
+    ass_writer.py                ← ASS mit Karaoke-Tags
+    vtt_writer.py                ← WebVTT
+    lrc_writer.py                ← Enhanced LRC
+    karaoke_html.py              ← Standalone HTML-Player
+    karaoke_tags.py              ← ASS \k/\kf/\ko Generator
+    themes.py                    ← 6 ASS-Presets
+  ai/
+    chat.py                      ← PydanticAI v2 Agent
+    routes.py                    ← Streaming-Chat-API
+  video/
+    editor.py                    ← Timeline-Editor
+    editor_routes.py             ← Editor REST-API
+    render.py                    ← ffmpeg Video-Rendering
+  static/
+    index.html                   ← WebUI SPA
+    editor.html                  ← Video-Editor SPA
+data/
+  uploads/                       ← Hochgeladene Dateien
+  output/{job_id}/               ← Job-Artefakte
+  editor/                        ← Editor Assets & Renders
+  library.sqlite                 ← Library-Datenbank
+```
+
+---
+
+## 🔌 API
+
+Die REST-API läuft unter `/api/` mit 60+ Endpunkten. Vollständige Dokumentation:
+
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Wichtige Endpunkte
+
+| Methode | Pfad | Beschreibung |
+|---------|------|-------------|
+| `POST` | `/api/transcribe` | Neuen Transkriptions-Job starten |
+| `GET` | `/api/jobs/{id}` | Job-Status abfragen |
+| `GET` | `/api/jobs/{id}/segments` | Segmente laden |
+| `PUT` | `/api/jobs/{id}/segments/{idx}` | Segment bearbeiten |
+| `POST` | `/api/jobs/{id}/export` | Export auslösen |
+| `POST` | `/api/chat/{id}` | KI-Chat (NDJSON Streaming) |
+| `POST` | `/api/editor/projects` | Editor-Projekt erstellen |
+| `POST` | `/api/editor/projects/{id}/render` | Video rendern |
+
+---
+
+## 🧪 Tests
 
 ```bash
-python -m src.cli transcribe audio.mp3 --backend whisperx --language de
-python -m src.cli batch ./music/ --backend voxtral --output ./subs/
-python -m src.cli watch ./incoming/ --backend local_whisper
+# Alle Tests
+pytest tests/
+
+# Einzelne Test-Suites
+pytest tests/test_core.py -v        # Core (Serialisierung, Writer, Refinement)
+pytest tests/test_library.py        # Library-DB
+pytest tests/test_v31.py            # v3.1 Features
+
+# Mit Coverage
+pytest tests/ --cov=src --cov-report=html
 ```
 
-## AI Chat (PydanticAI v2)
+Aktuell: **107 Tests**, alle bestanden.
 
-Integrierter KI-Assistent der direkt auf Segmente zugreifen und sie bearbeiten kann.
+---
 
-### Konfiguration (.env)
+## 🎵 Pipeline
+
+```
+Audio → Vocal Isolation? → WAV 16kHz → Normalize? → VAD?
+  → Transkription → Text Cleanup → Word Timestamps → Segmentation
+  → Lyrics Alignment? → BPM Snap? → KI-Korrektur?
+  → Export (SRT/ASS/VTT/LRC/TXT/HTML)
+  → Konfidenz-Report → Preview? → Library
+```
+
+---
+
+## 🎹 Transkriptions-Backends
+
+| Backend | API-Key | Word-Timestamps | Diarization | Bemerkung |
+|---------|---------|-----------------|-------------|-----------|
+| **Voxtral** | `MISTRAL_API_KEY` | ✅ | ✅ | Standard-Backend |
+| **OpenAI Whisper** | `OPENAI_API_KEY` | ✅ | ❌ | `whisper-1` Modell |
+| **Local Whisper** | — | ✅ | ❌ | Kein API-Key, GPU optional |
+| **WhisperX** | `HF_TOKEN` (optional) | ✅✅ | ✅ | Forced Alignment, präziseste Timestamps |
+
+---
+
+## 🎨 Video-Editor
+
+Der integrierte Video-Editor ermöglicht:
+
+- Drag & Drop von Video, Audio, Untertitel und Overlay auf die Timeline
+- Echtzeit-Vorschau mit Untertitel-Rendering
+- 3 Video-Skalierungsmodi pro Projekt
+- Untertitel-Styling (Font, Größe, Farbe, Outline, Position, Zeilen)
+- KI-Assistent für Clip-Bearbeitung
+- Rendering zu MP4 mit libx264
+
+### Format-Presets
+
+| Preset | Auflösung | Verwendung |
+|--------|-----------|-----------|
+| 16:9 HD | 1920×1080 | YouTube, Standard |
+| 4K | 3840×2160 | Ultra HD |
+| 9:16 Vert | 1080×1920 | TikTok, Reels, Shorts |
+| 1:1 Square | 1080×1080 | Instagram |
+
+---
+
+## 🤝 Mitwirken
+
+Beiträge sind willkommen! Bitte beachte:
+
+1. **Code-Sprache**: Englisch (Code + Kommentare), Deutsch (UI + Prompts)
+2. **Linter**: `ruff` mit 120 Zeichen Zeilenlänge
+3. **Type-Hints**: Überall, `X | None` statt `Optional[X]`
+4. **Tests**: `pytest` mit `asyncio_mode = "auto"`
+5. **Imports**: `from __future__ import annotations` in jeder Datei
 
 ```bash
-# Model format: provider:model-name
-AI_MODEL=openai:gpt-4o                         # Standard-Modell
-AI_REASONING_MODEL=openai:o3-mini               # Reasoning (optional)
-# oder:
-AI_MODEL=anthropic:claude-sonnet-4-20250514
-AI_REASONING_MODEL=anthropic:claude-opus-4-20250514
+# Linter
+ruff check src/ tests/
+ruff format src/ tests/
 
-# API Key (passend zum Provider)
-OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
+# Tests
+pytest tests/ -v
 ```
 
-### AI-Befehle
+---
 
-| Befehl | Funktion | Model |
-|--------|----------|-------|
-| 🔧 Korrigieren | Transkriptionsfehler via Reimschema/Kontext fixen | Reasoning |
-| ✏️ Interpunktion | Satzzeichen setzen ohne Wortlaut zu ändern | Standard |
-| 🏗️ Struktur | Verse/Hook/Bridge/Outro erkennen → Speaker-Labels | Reasoning |
-| 🌍 Translate | Lyrics übersetzen mit Reim-/Silbenerhaltung | Reasoning |
-| ✨ Generate | Fehlende Lyrics basierend auf Kontext generieren | Standard |
+## 📄 Lizenz
 
-### API Endpoints
+MIT License — siehe [LICENSE](LICENSE) für Details.
 
-- `GET /api/ai/health` — AI-Konfiguration prüfen
-- `GET /api/ai/chat/{job_id}` — Chat-Verlauf laden
-- `POST /api/ai/chat/{job_id}` — Nachricht senden (Streaming)
-- `DELETE /api/ai/chat/{job_id}` — Chat-Verlauf löschen
+---
 
-### Agent Tools
+## 🙏 Credits
 
-Der AI-Agent hat folgende Tools zur Verfügung:
-- `get_all_segments` — Alle Segmente lesen
-- `get_segment(index)` — Einzelnes Segment lesen
-- `get_low_confidence_segments(threshold)` — Schwache Segmente finden
-- `get_song_metadata` — Metadaten lesen
-- `update_segment_text(index, text)` — Einzelnes Segment ändern
-- `update_multiple_segments(changes)` — Bulk-Änderungen
-- `set_speaker_labels(labels)` — Speaker-Labels setzen
-- `add_to_dictionary(entries)` — Dictionary-Einträge hinzufügen
-
-## BPM Detection (Essentia)
-
-BPM-Erkennung nutzt primär **Essentia** (RhythmExtractor2013, genauer für elektronische Musik und Rap), mit **librosa** als Fallback.
-
-```bash
-pip install essentia    # Empfohlen
-pip install librosa     # Fallback
-```
-
-## Starten
-
-```bash
-cd karaoke-sub-tool
-pip install -r requirements.txt
-python main.py                    # http://localhost:8000
-python main.py --host 0.0.0.0    # LAN-Zugriff
-python main.py --reload           # Dev-Modus
-```
+- [FastAPI](https://fastapi.tiangolo.com/) — Web-Framework
+- [Typer](https://typer.tiangolo.com/) — CLI-Framework
+- [PydanticAI](https://ai.pydantic.dev/) — KI-Agent-Framework
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — Lokale Transkription
+- [WhisperX](https://github.com/m-bain/whisperX) — Forced Alignment
+- [Demucs](https://github.com/facebookresearch/demucs) — Vocal Isolation
+- [Essentia](https://essentia.upf.edu/) — BPM-Erkennung
+- [Rich](https://rich.readthedocs.io/) — Terminal-Formatierung
+- [ffmpeg](https://ffmpeg.org/) — Audio/Video-Verarbeitung

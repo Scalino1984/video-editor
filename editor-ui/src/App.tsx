@@ -7,34 +7,50 @@ import Sidebar from './components/Sidebar/Sidebar'
 import Preview from './components/Preview/Preview'
 import Timeline from './components/Timeline/Timeline'
 import Properties from './components/Properties/Properties'
-import { NewProjectModal, OpenProjectModal } from './components/Modals/Modals'
+import { NewProjectModal, OpenProjectModal, JobImportModal } from './components/Modals/Modals'
+import * as api from './api/editor'
 
 export default function App() {
   const project = useEditorStore(s => s.project)
   const toasts = useEditorStore(s => s.toasts)
-  const { videoRef, audioRef, togglePlay, seek } = usePlayback()
+  const renderResult = useEditorStore(s => s.renderResult)
+  const clearRenderResult = useEditorStore(s => s.clearRenderResult)
+  const loadProject = useEditorStore(s => s.loadProject)
+
+  const { videoRef, audioRef, togglePlay, seek, stop, syncMediaSources } = usePlayback()
   const [showNewProject, setShowNewProject] = useState(false)
   const [showOpenProject, setShowOpenProject] = useState(false)
+  const [showJobModal, setShowJobModal] = useState(false)
 
-  useKeyboardShortcuts(togglePlay)
+  useKeyboardShortcuts(togglePlay, stop, seek)
 
-  // Show new project dialog if no project
+  // ── Auto-load last project on mount ──
   useEffect(() => {
-    if (!project) {
-      // Small delay to let UI render first
-      const t = setTimeout(() => setShowNewProject(true), 300)
-      return () => clearTimeout(t)
-    }
-  }, []) // only on mount
+    (async () => {
+      try {
+        const projects = await api.listProjects()
+        if (projects.length > 0) {
+          const last = projects[projects.length - 1]
+          await loadProject((last as any).id)
+        }
+      } catch { /* no projects yet */ }
+    })()
+  }, []) // eslint-disable-line
 
   return (
     <div className="app">
-      <Header />
+      <Header
+        onNewProject={() => setShowNewProject(true)}
+        onOpenProject={() => setShowOpenProject(true)}
+        onOpenJobModal={() => setShowJobModal(true)}
+      />
 
       {project ? (
         <>
           <Sidebar />
-          <Preview videoRef={videoRef} audioRef={audioRef} togglePlay={togglePlay} seek={seek} />
+          <Preview videoRef={videoRef} audioRef={audioRef}
+            togglePlay={togglePlay} seek={seek} stop={stop}
+            syncMediaSources={syncMediaSources} />
           <Properties />
           <Timeline seek={seek} />
         </>
@@ -44,14 +60,22 @@ export default function App() {
             <h2>🎬 Video Editor</h2>
             <p>Erstelle oder lade ein Projekt um zu starten.</p>
             <div className="welcome-actions">
-              <button className="btn" onClick={() => setShowNewProject(true)}>
-                + Neues Projekt
-              </button>
-              <button className="btn-s" onClick={() => setShowOpenProject(true)}>
-                📂 Projekt öffnen
-              </button>
+              <button className="btn" onClick={() => setShowNewProject(true)}>+ Neues Projekt</button>
+              <button className="btn-s" onClick={() => setShowOpenProject(true)}>📂 Projekt öffnen</button>
+              <button className="btn-s" onClick={() => setShowJobModal(true)}>📥 Job importieren</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Render Result Download Bar */}
+      {renderResult && (
+        <div className="render-bar">
+          <span className="render-file">✅ {renderResult.file}</span>
+          <span className="render-size">{renderResult.size_mb} MB</span>
+          <a href={api.renderDownloadUrl(renderResult.file)} download={renderResult.file}
+            className="render-dl">⬇ Download</a>
+          <button className="render-close" onClick={clearRenderResult}>✕</button>
         </div>
       )}
 
@@ -65,52 +89,7 @@ export default function App() {
       {/* Modals */}
       <NewProjectModal open={showNewProject} onClose={() => setShowNewProject(false)} />
       <OpenProjectModal open={showOpenProject} onClose={() => setShowOpenProject(false)} />
-
-      {/* Style for modal items */}
-      <style>{`
-        .modal-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 10px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: background .12s;
-        }
-        .modal-item:hover { background: var(--bg4); }
-        .welcome-screen {
-          grid-column: 1 / -1;
-          grid-row: 2 / -1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--bg);
-        }
-        .welcome-card {
-          text-align: center;
-          padding: 48px;
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-        }
-        .welcome-card h2 {
-          font-size: 1.6rem;
-          margin-bottom: 8px;
-          background: linear-gradient(135deg, var(--accent), var(--accent2));
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .welcome-card p {
-          color: var(--dim);
-          margin-bottom: 24px;
-          font-size: .88rem;
-        }
-        .welcome-actions {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-        }
-      `}</style>
+      <JobImportModal open={showJobModal} onClose={() => setShowJobModal(false)} />
     </div>
   )
 }

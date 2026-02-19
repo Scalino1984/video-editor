@@ -76,8 +76,10 @@ export interface RenderResult {
 
 export interface SavedProject {
   filename: string
-  size: number
-  modified: string
+  name: string
+  id: string
+  size_kb: number
+  date: string
 }
 
 export interface JobItem {

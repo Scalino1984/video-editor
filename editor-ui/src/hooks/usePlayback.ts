@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useEditorStore } from '../stores/useEditorStore'
+import * as api from '../api/editor'
 
 export function usePlayback() {
   const rafRef = useRef<number>(0)
@@ -10,37 +11,70 @@ export function usePlayback() {
   const playing = useEditorStore(s => s.playing)
   const playbackTime = useEditorStore(s => s.playbackTime)
   const project = useEditorStore(s => s.project)
-  const loopA = useEditorStore(s => s.loopA)
-  const loopB = useEditorStore(s => s.loopB)
+  const playSpeed = useEditorStore(s => s.playSpeed)
   const setPlaybackTime = useEditorStore(s => s.setPlaybackTime)
   const setPlaying = useEditorStore(s => s.setPlaying)
+
+  // ── Sync playback rate on speed change ──
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = playSpeed
+    if (audioRef.current) audioRef.current.playbackRate = playSpeed
+  }, [playSpeed])
 
   const seekMedia = useCallback((t: number) => {
     const vid = videoRef.current
     const au = audioRef.current
+    const proj = useEditorStore.getState().project
     if (vid?.src && vid.readyState >= 1) {
-      const vc = project?.clips.find(c => c.track === 'video' || c.track === 'overlay')
+      const vc = proj?.clips.find(c => c.track === 'video' || c.track === 'overlay')
       if (vc) {
         const off = Math.max(0, t - vc.start) * (vc.speed || 1) + (vc.in_point || 0)
         if (Math.abs(vid.currentTime - off) > 0.15) vid.currentTime = off
       }
     }
     if (au?.src && au.readyState >= 1) {
-      const ac = project?.clips.find(c => c.track === 'audio')
+      const ac = proj?.clips.find(c => c.track === 'audio')
       if (ac) {
         const off = Math.max(0, t - ac.start) * (ac.speed || 1) + (ac.in_point || 0)
         if (Math.abs(au.currentTime - off) > 0.15) au.currentTime = off
       }
     }
-  }, [project])
+  }, [])
+
+  const syncMediaSources = useCallback(() => {
+    const vid = videoRef.current
+    const au = audioRef.current
+    const state = useEditorStore.getState()
+    const proj = state.project
+    const pid = state.pid
+    if (!proj || !pid) return
+
+    const vc = proj.clips.find(c => c.track === 'video' || c.track === 'overlay')
+    const ac = proj.clips.find(c => c.track === 'audio')
+
+    const base = api.apiBase()
+    if (vid && vc) {
+      const url = `${base}/api/editor/projects/${pid}/assets/${vc.asset_id}/file`
+      if (vid.dataset.curSrc !== url) {
+        vid.src = url; vid.dataset.curSrc = url; vid.loop = true; vid.load()
+      }
+      vid.muted = !!ac
+    }
+    if (au && ac) {
+      const url = `${base}/api/editor/projects/${pid}/assets/${ac.asset_id}/file`
+      if (au.dataset.curSrc !== url) {
+        au.src = url; au.dataset.curSrc = url; au.load()
+      }
+    }
+  }, [])
 
   const play = useCallback(() => {
     const vid = videoRef.current
     const au = audioRef.current
-    const hasAudioClip = project?.clips.some(c => c.track === 'audio')
-    if (vid?.src) { vid.muted = !!hasAudioClip; vid.loop = true; vid.play().catch(() => {}) }
-    if (au?.src) { au.play().catch(() => {}) }
-  }, [project])
+    const spd = useEditorStore.getState().playSpeed
+    if (vid?.src) { vid.playbackRate = spd; vid.play().catch(() => {}) }
+    if (au?.src) { au.playbackRate = spd; au.play().catch(() => {}) }
+  }, [])
 
   const pause = useCallback(() => {
     videoRef.current?.pause()
@@ -48,45 +82,56 @@ export function usePlayback() {
   }, [])
 
   const togglePlay = useCallback(() => {
-    if (playing) {
+    if (useEditorStore.getState().playing) {
       setPlaying(false)
       pause()
     } else {
-      seekMedia(playbackTime)
+      syncMediaSources()
+      seekMedia(useEditorStore.getState().playbackTime)
       play()
       setPlaying(true)
     }
-  }, [playing, playbackTime, seekMedia, play, pause, setPlaying])
+  }, [syncMediaSources, seekMedia, play, pause, setPlaying])
 
   const seek = useCallback((t: number) => {
     setPlaybackTime(t)
     seekMedia(t)
   }, [setPlaybackTime, seekMedia])
 
-  // Animation frame loop
+  const stop = useCallback(() => {
+    setPlaying(false)
+    pause()
+    setPlaybackTime(0)
+    seekMedia(0)
+  }, [setPlaying, pause, setPlaybackTime, seekMedia])
+
+  // ── Animation frame loop ──
   useEffect(() => {
     if (!playing) {
       cancelAnimationFrame(rafRef.current)
       return
     }
-    const dur = project?.duration || 0
-    startRef.current = performance.now() - playbackTime * 1000
+    const dur = useEditorStore.getState().project?.duration || 0
+    const spd = useEditorStore.getState().playSpeed
+    startRef.current = performance.now() - playbackTime * 1000 / spd
 
     const tick = () => {
-      if (!useEditorStore.getState().playing) return
-      let t = (performance.now() - startRef.current) / 1000
       const state = useEditorStore.getState()
+      if (!state.playing) return
+      const spd = state.playSpeed
+      let t = (performance.now() - startRef.current) / 1000 * spd
 
       // A/B loop
       if (state.loopA !== null && state.loopB !== null && state.loopA < state.loopB) {
         if (t >= state.loopB) {
           t = state.loopA
-          startRef.current = performance.now() - state.loopA * 1000
+          startRef.current = performance.now() - state.loopA * 1000 / spd
           seekMedia(state.loopA)
         }
       }
       // Loop at project end
-      if (dur > 0 && t >= dur) {
+      const d = state.project?.duration || 0
+      if (d > 0 && t >= d) {
         t = 0
         startRef.current = performance.now()
         seekMedia(0)
@@ -99,5 +144,5 @@ export function usePlayback() {
     return () => cancelAnimationFrame(rafRef.current)
   }, [playing]) // eslint-disable-line
 
-  return { videoRef, audioRef, togglePlay, seek, seekMedia, play, pause }
+  return { videoRef, audioRef, togglePlay, seek, seekMedia, play, pause, stop, syncMediaSources }
 }
