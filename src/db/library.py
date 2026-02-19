@@ -233,51 +233,52 @@ def save_transcription(
     tags: list[str] | None = None,
 ) -> str:
     """Insert or update (dedupe by source_hash). Returns record ID."""
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
-    source_hash = compute_source_hash(source_filename, backend, language)
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
+        source_hash = compute_source_hash(source_filename, backend, language)
 
-    # Check for existing entry with same source hash
-    existing = con.execute(
-        "SELECT id FROM transcriptions WHERE source_hash = ? AND deleted = 0",
-        (source_hash,)
-    ).fetchone()
+        # Check for existing entry with same source hash
+        existing = con.execute(
+            "SELECT id FROM transcriptions WHERE source_hash = ? AND deleted = 0",
+            (source_hash,)
+        ).fetchone()
 
-    if existing:
-        # Update existing
-        rec_id = existing["id"]
+        if existing:
+            # Update existing
+            rec_id = existing["id"]
+            con.execute("""
+                UPDATE transcriptions SET
+                    updated_at=?, duration_sec=?, bpm=?, segments_count=?,
+                    has_word_timestamps=?, needs_review=?, avg_confidence=?,
+                    srt_text=?, ass_text=?, segments_json=?, job_id=?
+                WHERE id=?
+            """, (now, duration_sec, bpm, segments_count, int(has_word_timestamps),
+                  needs_review, avg_confidence, srt_text, ass_text, segments_json,
+                  job_id, rec_id))
+            con.commit()
+            debug(f"Library: updated {rec_id}")
+            return rec_id
+
+        # Insert new
+        rec_id = uuid.uuid4().hex[:12]
+        display_title = title or Path(source_filename).stem.replace("_", " ").replace("-", " ").title()
+
         con.execute("""
-            UPDATE transcriptions SET
-                updated_at=?, duration_sec=?, bpm=?, segments_count=?,
-                has_word_timestamps=?, needs_review=?, avg_confidence=?,
-                srt_text=?, ass_text=?, segments_json=?, job_id=?
-            WHERE id=?
-        """, (now, duration_sec, bpm, segments_count, int(has_word_timestamps),
-              needs_review, avg_confidence, srt_text, ass_text, segments_json,
-              job_id, rec_id))
+            INSERT INTO transcriptions (
+                id, created_at, updated_at, title, source_filename, source_hash,
+                language, backend, duration_sec, bpm, segments_count,
+                has_word_timestamps, needs_review, avg_confidence,
+                srt_text, ass_text, segments_json, job_id, tags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (rec_id, now, now, display_title, source_filename, source_hash,
+              language, backend, duration_sec, bpm, segments_count,
+              int(has_word_timestamps), needs_review, avg_confidence,
+              srt_text, ass_text, segments_json, job_id,
+              json.dumps(tags or [])))
         con.commit()
-        debug(f"Library: updated {rec_id}")
+        info(f"Library: saved {rec_id} '{display_title}'")
         return rec_id
-
-    # Insert new
-    rec_id = uuid.uuid4().hex[:12]
-    display_title = title or Path(source_filename).stem.replace("_", " ").replace("-", " ").title()
-
-    con.execute("""
-        INSERT INTO transcriptions (
-            id, created_at, updated_at, title, source_filename, source_hash,
-            language, backend, duration_sec, bpm, segments_count,
-            has_word_timestamps, needs_review, avg_confidence,
-            srt_text, ass_text, segments_json, job_id, tags
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (rec_id, now, now, display_title, source_filename, source_hash,
-          language, backend, duration_sec, bpm, segments_count,
-          int(has_word_timestamps), needs_review, avg_confidence,
-          srt_text, ass_text, segments_json, job_id,
-          json.dumps(tags or [])))
-    con.commit()
-    info(f"Library: saved {rec_id} '{display_title}'")
-    return rec_id
 
 
 def list_transcriptions(
@@ -311,38 +312,40 @@ def get_transcription(rec_id: str) -> TranscriptionRecord | None:
 
 
 def delete_transcription(rec_id: str, hard: bool = False) -> bool:
-    con = get_con()
-    if hard:
-        cur = con.execute("DELETE FROM transcriptions WHERE id = ?", (rec_id,))
-    else:
-        cur = con.execute(
-            "UPDATE transcriptions SET deleted = 1, updated_at = ? WHERE id = ?",
-            (datetime.now(timezone.utc).isoformat(), rec_id)
-        )
-    con.commit()
-    return cur.rowcount > 0
+    with _db_lock:
+        con = get_con()
+        if hard:
+            cur = con.execute("DELETE FROM transcriptions WHERE id = ?", (rec_id,))
+        else:
+            cur = con.execute(
+                "UPDATE transcriptions SET deleted = 1, updated_at = ? WHERE id = ?",
+                (datetime.now(timezone.utc).isoformat(), rec_id)
+            )
+        con.commit()
+        return cur.rowcount > 0
 
 
 def update_transcription(rec_id: str, **kwargs) -> bool:
     """Update specific fields (title, tags, etc.)."""
-    con = get_con()
-    allowed = {"title", "tags", "bpm", "needs_review"}
-    updates = []
-    params = []
-    for k, v in kwargs.items():
-        if k in allowed:
-            if k == "tags" and isinstance(v, list):
-                v = json.dumps(v)
-            updates.append(f"{k} = ?")
-            params.append(v)
-    if not updates:
-        return False
-    updates.append("updated_at = ?")
-    params.append(datetime.now(timezone.utc).isoformat())
-    params.append(rec_id)
-    con.execute(f"UPDATE transcriptions SET {', '.join(updates)} WHERE id = ?", params)
-    con.commit()
-    return True
+    with _db_lock:
+        con = get_con()
+        allowed = {"title", "tags", "bpm", "needs_review"}
+        updates = []
+        params = []
+        for k, v in kwargs.items():
+            if k in allowed:
+                if k == "tags" and isinstance(v, list):
+                    v = json.dumps(v)
+                updates.append(f"{k} = ?")
+                params.append(v)
+        if not updates:
+            return False
+        updates.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(rec_id)
+        con.execute(f"UPDATE transcriptions SET {', '.join(updates)} WHERE id = ?", params)
+        con.commit()
+        return True
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -403,28 +406,29 @@ def register_media(
     job_id: str = "",
 ) -> str:
     """Register an uploaded file in the media registry. Returns media_id."""
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
-    media_id = uuid.uuid4().hex[:12]
-    file_type, mime, taggable, editable = _classify_file(filename)
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
+        media_id = uuid.uuid4().hex[:12]
+        file_type, mime, taggable, editable = _classify_file(filename)
 
-    # Check for existing by same filename+path
-    existing = con.execute(
-        "SELECT id FROM media WHERE filename = ? AND path = ?",
-        (filename, path)
-    ).fetchone()
-    if existing:
-        return existing["id"]
+        # Check for existing by same filename+path
+        existing = con.execute(
+            "SELECT id FROM media WHERE filename = ? AND path = ?",
+            (filename, path)
+        ).fetchone()
+        if existing:
+            return existing["id"]
 
-    con.execute("""
-        INSERT INTO media (id, filename, original_name, mime, file_type, size,
-            duration, path, hash, taggable, editable, created_at, job_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (media_id, filename, filename, mime, file_type, size,
-          duration, path, file_hash, int(taggable), int(editable), now, job_id))
-    con.commit()
-    debug(f"Media registered: {media_id} {filename} ({file_type})")
-    return media_id
+        con.execute("""
+            INSERT INTO media (id, filename, original_name, mime, file_type, size,
+                duration, path, hash, taggable, editable, created_at, job_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (media_id, filename, filename, mime, file_type, size,
+              duration, path, file_hash, int(taggable), int(editable), now, job_id))
+        con.commit()
+        debug(f"Media registered: {media_id} {filename} ({file_type})")
+        return media_id
 
 
 def get_media(media_id: str) -> dict | None:
@@ -465,10 +469,11 @@ def list_media(file_type: str = "", limit: int = 50) -> list[dict]:
 
 def delete_media(media_id: str) -> bool:
     """Delete a media record."""
-    con = get_con()
-    cur = con.execute("DELETE FROM media WHERE id = ?", (media_id,))
-    con.commit()
-    return cur.rowcount > 0
+    with _db_lock:
+        con = get_con()
+        cur = con.execute("DELETE FROM media WHERE id = ?", (media_id,))
+        con.commit()
+        return cur.rowcount > 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -500,61 +505,64 @@ def register_file(
     if not any(resolved.is_relative_to(b.resolve()) for b in _ALLOWED_BASES):
         raise ValueError(f"Path outside allowed directory: {storage_path}")
 
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
 
-    # Check for existing entry with same storage path
-    existing = con.execute(
-        "SELECT id FROM file_registry WHERE storage_path = ? AND state = 'active'",
-        (storage_path,)
-    ).fetchone()
-    if existing:
-        return existing["id"]
+        # Check for existing entry with same storage path
+        existing = con.execute(
+            "SELECT id FROM file_registry WHERE storage_path = ? AND state = 'active'",
+            (storage_path,)
+        ).fetchone()
+        if existing:
+            return existing["id"]
 
-    file_id = uuid.uuid4().hex[:12]
-    con.execute("""
-        INSERT INTO file_registry (id, storage_path, original_name, file_type, mime, size,
-            tool_scope, state, source_file_id, job_id, project_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
-    """, (file_id, storage_path, original_name, file_type, mime, size,
-          tool_scope, source_file_id or None, job_id or None, project_id or None, now, now))
-    con.commit()
-    debug(f"File registered: {file_id} {original_name} ({file_type}/{tool_scope})")
-    return file_id
+        file_id = uuid.uuid4().hex[:12]
+        con.execute("""
+            INSERT INTO file_registry (id, storage_path, original_name, file_type, mime, size,
+                tool_scope, state, source_file_id, job_id, project_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+        """, (file_id, storage_path, original_name, file_type, mime, size,
+              tool_scope, source_file_id or None, job_id or None, project_id or None, now, now))
+        con.commit()
+        debug(f"File registered: {file_id} {original_name} ({file_type}/{tool_scope})")
+        return file_id
 
 
 def add_file_reference(file_id: str, ref_type: str, ref_id: str) -> str:
     """Add a reference from a job/project/transcription to a file. Returns ref_id."""
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
 
-    # Check for existing reference
-    existing = con.execute(
-        "SELECT id FROM file_references WHERE file_id = ? AND ref_type = ? AND ref_id = ?",
-        (file_id, ref_type, ref_id)
-    ).fetchone()
-    if existing:
-        return existing["id"]
+        # Check for existing reference
+        existing = con.execute(
+            "SELECT id FROM file_references WHERE file_id = ? AND ref_type = ? AND ref_id = ?",
+            (file_id, ref_type, ref_id)
+        ).fetchone()
+        if existing:
+            return existing["id"]
 
-    rid = uuid.uuid4().hex[:12]
-    con.execute(
-        "INSERT INTO file_references (id, file_id, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?)",
-        (rid, file_id, ref_type, ref_id, now)
-    )
-    con.commit()
-    debug(f"File ref added: {file_id} ← {ref_type}:{ref_id}")
-    return rid
+        rid = uuid.uuid4().hex[:12]
+        con.execute(
+            "INSERT INTO file_references (id, file_id, ref_type, ref_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (rid, file_id, ref_type, ref_id, now)
+        )
+        con.commit()
+        debug(f"File ref added: {file_id} ← {ref_type}:{ref_id}")
+        return rid
 
 
 def remove_file_references(ref_type: str, ref_id: str) -> int:
     """Remove all file references for a given ref_type + ref_id. Returns count removed."""
-    con = get_con()
-    cur = con.execute(
-        "DELETE FROM file_references WHERE ref_type = ? AND ref_id = ?",
-        (ref_type, ref_id)
-    )
-    con.commit()
-    return cur.rowcount
+    with _db_lock:
+        con = get_con()
+        cur = con.execute(
+            "DELETE FROM file_references WHERE ref_type = ? AND ref_id = ?",
+            (ref_type, ref_id)
+        )
+        con.commit()
+        return cur.rowcount
 
 
 def get_file_references(file_id: str) -> list[dict]:
@@ -621,26 +629,28 @@ def list_registered_files(
 
 def update_file_state(file_id: str, state: str) -> bool:
     """Update file state (active, deleted, orphaned)."""
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
-    cur = con.execute(
-        "UPDATE file_registry SET state = ?, updated_at = ? WHERE id = ?",
-        (state, now, file_id)
-    )
-    con.commit()
-    return cur.rowcount > 0
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
+        cur = con.execute(
+            "UPDATE file_registry SET state = ?, updated_at = ? WHERE id = ?",
+            (state, now, file_id)
+        )
+        con.commit()
+        return cur.rowcount > 0
 
 
 def update_file_scope(file_id: str, tool_scope: str) -> bool:
     """Update tool_scope of a registered file (e.g. karaoke → both)."""
-    con = get_con()
-    now = datetime.now(timezone.utc).isoformat()
-    cur = con.execute(
-        "UPDATE file_registry SET tool_scope = ?, updated_at = ? WHERE id = ?",
-        (tool_scope, now, file_id)
-    )
-    con.commit()
-    return cur.rowcount > 0
+    with _db_lock:
+        con = get_con()
+        now = datetime.now(timezone.utc).isoformat()
+        cur = con.execute(
+            "UPDATE file_registry SET tool_scope = ?, updated_at = ? WHERE id = ?",
+            (tool_scope, now, file_id)
+        )
+        con.commit()
+        return cur.rowcount > 0
 
 
 def find_orphaned_files() -> list[dict]:
@@ -686,15 +696,16 @@ def check_file_has_references(file_id: str) -> bool:
 
 def delete_registered_file(file_id: str, hard: bool = False) -> bool:
     """Soft-delete or hard-delete a file registry entry."""
-    con = get_con()
-    if hard:
-        con.execute("DELETE FROM file_references WHERE file_id = ?", (file_id,))
-        cur = con.execute("DELETE FROM file_registry WHERE id = ?", (file_id,))
-    else:
-        now = datetime.now(timezone.utc).isoformat()
-        cur = con.execute(
-            "UPDATE file_registry SET state = 'deleted', updated_at = ? WHERE id = ?",
-            (now, file_id)
-        )
-    con.commit()
-    return cur.rowcount > 0
+    with _db_lock:
+        con = get_con()
+        if hard:
+            con.execute("DELETE FROM file_references WHERE file_id = ?", (file_id,))
+            cur = con.execute("DELETE FROM file_registry WHERE id = ?", (file_id,))
+        else:
+            now = datetime.now(timezone.utc).isoformat()
+            cur = con.execute(
+                "UPDATE file_registry SET state = 'deleted', updated_at = ? WHERE id = ?",
+                (now, file_id)
+            )
+        con.commit()
+        return cur.rowcount > 0

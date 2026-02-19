@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
@@ -235,8 +235,7 @@ class JobResult(BaseModel):
     language: str = ""
     word_timestamps_available: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SegmentInfo(BaseModel):

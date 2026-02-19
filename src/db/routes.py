@@ -380,7 +380,9 @@ def _render_job_sync(
 @router.get("/api/render/{job_id}/download")
 async def download_rendered_video(job_id: str):
     """Download the rendered video file."""
-    job_dir = tasks.OUTPUT_DIR / job_id
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
     if not job_dir.exists():
         raise HTTPException(404, "Render job not found")
     videos = list(job_dir.glob("*_video.mp4"))
