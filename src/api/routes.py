@@ -179,6 +179,10 @@ async def probe_audio_file(filename: str):
 async def start_transcription(background_tasks: BackgroundTasks,
     filename: str = Query(...), lyrics_file: str | None = Query(None),
     req: TranscribeRequest = TranscribeRequest()):
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     audio_path = tasks.UPLOAD_DIR / filename
     if not audio_path.exists(): raise HTTPException(404, f"Not found: {filename}")
     if lyrics_file:
@@ -196,6 +200,10 @@ async def start_transcription(background_tasks: BackgroundTasks,
 @router.post("/transcribe/batch")
 async def batch_transcribe(background_tasks: BackgroundTasks,
     filenames: list[str] = Query(...), req: TranscribeRequest = TranscribeRequest()):
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     jobs = []
     for fn in filenames:
         p = tasks.UPLOAD_DIR / fn
@@ -210,6 +218,10 @@ async def batch_transcribe(background_tasks: BackgroundTasks,
 async def transcribe_with_upload(background_tasks: BackgroundTasks,
     file: UploadFile = File(...), backend: str = "voxtral", language: str = "auto",
     generate_ass: bool = True, karaoke_mode: str = "kf", preset: str = "classic"):
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     from src.preprocess.ffmpeg_io import SUPPORTED_FORMATS
     suffix = Path(file.filename).suffix.lower()
     if suffix not in SUPPORTED_FORMATS: raise HTTPException(400, f"Unsupported: {suffix}")
@@ -1403,6 +1415,10 @@ async def start_separation(
     mp3_bitrate: int = Body(320, embed=True),
 ):
     """Start a Demucs separation job."""
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     # Validate inputs
     safe_name = Path(filename).name
     audio_path = tasks.UPLOAD_DIR / safe_name

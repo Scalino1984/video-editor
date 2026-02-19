@@ -4,11 +4,12 @@ All ffmpeg and Demucs subprocess calls MUST go through this module to prevent
 resource exhaustion on laptops / low-core machines.
 
 ENV configuration:
-    MAX_MEDIA_JOBS   — max concurrent heavy media jobs (default 1)
-    FFMPEG_THREADS   — -threads flag for ffmpeg (default 2)
-    MEDIA_NICE       — nice value for subprocesses (default 10, Linux only)
-    MEDIA_IONICE_CLASS — ionice class (default 2 = best-effort, Linux only)
-    MEDIA_IONICE_LEVEL — ionice level (default 7, Linux only)
+    MAX_MEDIA_JOBS         — max concurrent heavy media jobs (default 1)
+    MAX_PENDING_MEDIA_JOBS — max queued+running jobs before 429 backpressure (default 3)
+    FFMPEG_THREADS         — -threads flag for ffmpeg (default 2)
+    MEDIA_NICE             — nice value for subprocesses (default 10, Linux only)
+    MEDIA_IONICE_CLASS     — ionice class (default 2 = best-effort, Linux only)
+    MEDIA_IONICE_LEVEL     — ionice level (default 7, Linux only)
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from src.utils.logging import info, warn, debug, render_log
 # ── Configuration via ENV ─────────────────────────────────────────────────────
 
 MAX_MEDIA_JOBS: int = int(os.environ.get("MAX_MEDIA_JOBS", "1"))
+MAX_PENDING_MEDIA_JOBS: int = int(os.environ.get("MAX_PENDING_MEDIA_JOBS", "3"))
 FFMPEG_THREADS: int = int(os.environ.get("FFMPEG_THREADS", "2"))
 MEDIA_NICE: int = int(os.environ.get("MEDIA_NICE", "10"))
 MEDIA_IONICE_CLASS: int = int(os.environ.get("MEDIA_IONICE_CLASS", "2"))
@@ -94,6 +96,7 @@ def get_media_queue_status() -> dict[str, Any]:
     running = sum(1 for j in jobs if j.status == MediaJobStatus.running)
     return {
         "max_concurrent": MAX_MEDIA_JOBS,
+        "max_pending": MAX_PENDING_MEDIA_JOBS,
         "ffmpeg_threads": FFMPEG_THREADS,
         "nice": MEDIA_NICE,
         "queued": queued,
@@ -105,6 +108,21 @@ def get_media_queue_status() -> dict[str, Any]:
             for j in jobs if j.status in (MediaJobStatus.queued, MediaJobStatus.running)
         ],
     }
+
+
+def check_media_capacity() -> tuple[bool, int, int]:
+    """Check if the media queue can accept a new heavy job.
+
+    Returns:
+        (has_capacity, running_count, queued_count)
+        has_capacity is False when queued + running >= MAX_PENDING_MEDIA_JOBS.
+    """
+    with _stats_lock:
+        jobs = list(_active_jobs.values())
+    queued = sum(1 for j in jobs if j.status == MediaJobStatus.queued)
+    running = sum(1 for j in jobs if j.status == MediaJobStatus.running)
+    has_capacity = (queued + running) < MAX_PENDING_MEDIA_JOBS
+    return has_capacity, running, queued
 
 
 # ── Nice / IONice prefix ─────────────────────────────────────────────────────

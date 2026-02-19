@@ -524,6 +524,10 @@ async def api_update_sub_settings(pid: str, data: dict | None = None):
 
 @router.post("/projects/{pid}/render")
 async def api_render_project(pid: str):
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     p = get_project(pid)
     if not p or not p.clips:
         raise HTTPException(400, "No clips to render")
@@ -544,6 +548,10 @@ _render_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="render")
 @router.post("/projects/{pid}/render-stream")
 async def api_render_stream(pid: str):
     """Render with real-time SSE progress (percent + phase text)."""
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     p = get_project(pid)
     if not p or not p.clips:
         raise HTTPException(400, "No clips to render")
@@ -596,6 +604,10 @@ async def api_render_loop(
     width: int = Form(1920),
     height: int = Form(1080),
 ):
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     p = get_project(pid)
     if not p or asset_id not in p.assets:
         raise HTTPException(404, "Asset not found")

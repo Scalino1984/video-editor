@@ -93,6 +93,7 @@ class TestQueueStatus:
         from src.utils.media_executor import get_media_queue_status
         status = get_media_queue_status()
         assert "max_concurrent" in status
+        assert "max_pending" in status
         assert "ffmpeg_threads" in status
         assert "queued" in status
         assert "running" in status
@@ -103,6 +104,65 @@ class TestQueueStatus:
         from src.utils.media_executor import get_media_queue_status, MAX_MEDIA_JOBS
         status = get_media_queue_status()
         assert status["max_concurrent"] == MAX_MEDIA_JOBS
+
+
+# ── Backpressure / capacity check ─────────────────────────────────────────────
+
+class TestBackpressure:
+    """Verify check_media_capacity backpressure logic."""
+
+    def test_has_capacity_when_idle(self):
+        from src.utils.media_executor import check_media_capacity
+        has_cap, running, queued = check_media_capacity()
+        assert has_cap is True
+
+    def test_no_capacity_when_full(self):
+        from src.utils import media_executor as me
+        old_max = me.MAX_PENDING_MEDIA_JOBS
+        old_jobs = me._active_jobs.copy()
+        try:
+            me.MAX_PENDING_MEDIA_JOBS = 2
+            # Simulate 2 running jobs
+            me._active_jobs["fake-1"] = me.MediaJobInfo(
+                id="fake-1", tool="ffmpeg", description="test1",
+                status=me.MediaJobStatus.running,
+            )
+            me._active_jobs["fake-2"] = me.MediaJobInfo(
+                id="fake-2", tool="demucs", description="test2",
+                status=me.MediaJobStatus.queued,
+            )
+            has_cap, running, queued = me.check_media_capacity()
+            assert has_cap is False
+            assert running == 1
+            assert queued == 1
+        finally:
+            me._active_jobs.clear()
+            me._active_jobs.update(old_jobs)
+            me.MAX_PENDING_MEDIA_JOBS = old_max
+
+    def test_capacity_respects_only_active_statuses(self):
+        from src.utils import media_executor as me
+        old_max = me.MAX_PENDING_MEDIA_JOBS
+        old_jobs = me._active_jobs.copy()
+        try:
+            me.MAX_PENDING_MEDIA_JOBS = 2
+            # Finished jobs should not count
+            me._active_jobs["done-1"] = me.MediaJobInfo(
+                id="done-1", tool="ffmpeg", description="done",
+                status=me.MediaJobStatus.done,
+            )
+            me._active_jobs["failed-1"] = me.MediaJobInfo(
+                id="failed-1", tool="ffmpeg", description="failed",
+                status=me.MediaJobStatus.failed,
+            )
+            has_cap, running, queued = me.check_media_capacity()
+            assert has_cap is True
+            assert running == 0
+            assert queued == 0
+        finally:
+            me._active_jobs.clear()
+            me._active_jobs.update(old_jobs)
+            me.MAX_PENDING_MEDIA_JOBS = old_max
 
 
 # ── Concurrency enforcement ──────────────────────────────────────────────────
