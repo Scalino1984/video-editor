@@ -108,8 +108,23 @@ async def update_library_item(rec_id: str, req: LibraryUpdateRequest):
 
 @router.delete("/api/library/{rec_id}")
 async def delete_library_item(rec_id: str, hard: bool = Query(False)):
-    """Delete transcription (soft by default, hard=true for permanent)."""
-    from src.db.library import delete_transcription
+    """Delete transcription (soft by default, hard=true for permanent).
+
+    Cascades: removes file registry references for the associated job.
+    """
+    from src.db.library import delete_transcription, get_transcription, remove_file_references
+    rec = get_transcription(rec_id)
+    if not rec:
+        raise HTTPException(404, "Not found")
+
+    # Remove file references for this transcription
+    try:
+        remove_file_references("transcription", rec_id)
+        if rec.job_id:
+            remove_file_references("job", rec.job_id)
+    except Exception:
+        pass  # non-critical
+
     ok = delete_transcription(rec_id, hard=hard)
     if not ok:
         raise HTTPException(404, "Not found")
@@ -489,3 +504,66 @@ async def update_media_tags(media_id: str, req: dict):
     except Exception as e:
         error(f"Tag write failed: {e}")
         raise HTTPException(500, f"Tag write error: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FILE REGISTRY — Central file tracking & cleanup
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/file-registry")
+async def list_file_registry(
+    tool_scope: str = Query("", description="Filter: karaoke, editor, both"),
+    file_type: str = Query("", description="Filter: original, derived, project_asset"),
+    state: str = Query("active", description="Filter: active, deleted, orphaned"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """List all files tracked in the central file registry."""
+    from src.db.library import list_registered_files
+    files = list_registered_files(
+        tool_scope=tool_scope, file_type=file_type, state=state, limit=limit
+    )
+    return {"items": files, "total": len(files)}
+
+
+@router.get("/api/file-registry/{file_id}")
+async def get_file_registry_item(file_id: str):
+    """Get a file registry entry with its references."""
+    from src.db.library import get_registered_file, get_file_references
+    frec = get_registered_file(file_id)
+    if not frec:
+        raise HTTPException(404, "File not found in registry")
+    refs = get_file_references(file_id)
+    return {**frec, "references": refs}
+
+
+@router.get("/api/file-registry/orphaned/list")
+async def list_orphaned_files():
+    """Find files with no remaining references (cleanup candidates)."""
+    from src.db.library import find_orphaned_files
+    orphans = find_orphaned_files()
+    return {"items": orphans, "total": len(orphans)}
+
+
+@router.post("/api/file-registry/cleanup")
+async def cleanup_orphaned_files(dry_run: bool = Query(True)):
+    """Clean up orphaned files (no references). Use dry_run=false to actually delete."""
+    from src.db.library import find_orphaned_files, delete_registered_file
+    orphans = find_orphaned_files()
+    cleaned = []
+    errors = []
+
+    for f in orphans:
+        file_path = Path(f["storage_path"])
+        if dry_run:
+            cleaned.append({"id": f["id"], "path": f["storage_path"], "action": "would_delete"})
+        else:
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+                delete_registered_file(f["id"], hard=True)
+                cleaned.append({"id": f["id"], "path": f["storage_path"], "action": "deleted"})
+                info(f"Cleanup: deleted orphaned file {f['storage_path']}")
+            except Exception as e:
+                errors.append({"id": f["id"], "path": f["storage_path"], "error": str(e)})
+
+    return {"dry_run": dry_run, "cleaned": cleaned, "errors": errors, "total": len(cleaned)}

@@ -102,6 +102,19 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception:
         pass  # non-critical
 
+    # Register in file registry
+    try:
+        from src.db.library import register_file
+        register_file(
+            storage_path=str(dest),
+            original_name=dest.name,
+            file_type="original",
+            tool_scope="karaoke",
+            size=len(content),
+        )
+    except Exception:
+        pass  # non-critical
+
     return {
         "filename": dest.name, "size": len(content),
         "media_id": media_id, "taggable": taggable, "editable": editable,
@@ -127,6 +140,19 @@ async def delete_file(filename: str):
         raise HTTPException(400, "Invalid filename")
     if not path.exists(): raise HTTPException(404, "File not found")
     path.unlink()
+
+    # Clean up media registry entry
+    try:
+        from src.db.library import get_media_by_filename, delete_media, get_file_by_path, delete_registered_file
+        rec = get_media_by_filename(filename)
+        if rec:
+            delete_media(rec["id"])
+        frec = get_file_by_path(str(path))
+        if frec:
+            delete_registered_file(frec["id"], hard=True)
+    except Exception:
+        pass  # non-critical cleanup
+
     return {"deleted": filename}
 
 
@@ -243,6 +269,24 @@ async def cancel_job(job_id: str):
 async def delete_job(job_id: str):
     job = tasks.get_job(job_id)
     if not job: raise HTTPException(404, "Job not found")
+
+    # Clean up file registry references before deleting files
+    try:
+        from src.db.library import (
+            find_files_for_job, remove_file_references, get_file_references,
+            update_file_state, delete_registered_file,
+        )
+        job_files = find_files_for_job(job_id)
+        # Remove all references pointing to this job
+        remove_file_references("job", job_id)
+        # Mark unreferenced files as deleted
+        for f in job_files:
+            refs = get_file_references(f["id"])
+            if not refs:
+                update_file_state(f["id"], "deleted")
+    except Exception:
+        pass  # non-critical
+
     d = tasks.OUTPUT_DIR / job_id
     if d.exists(): shutil.rmtree(d)
     with tasks._jobs_lock:
