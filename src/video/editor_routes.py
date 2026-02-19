@@ -56,6 +56,9 @@ async def api_list_loop_videos(width: int = 0, height: int = 0):
     """List available loop videos, optionally filtered by project resolution."""
     result: dict[str, list[dict]] = {}
 
+    if not LOOP_VIDEOS_DIR.is_dir():
+        return {}
+
     if width > 0 and height > 0:
         folder_name = _LOOP_FOLDER_MAP.get(_aspect_ratio(width, height))
         folders = [folder_name] if folder_name else []
@@ -85,20 +88,24 @@ async def api_list_loop_videos(width: int = 0, height: int = 0):
     return result
 
 
+_VIDEO_MTYPE = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
+
+
 @router.get("/loop-videos/{folder}/{filename}")
 async def api_serve_loop_video(folder: str, filename: str):
     """Serve a loop video file for preview / playback."""
-    path = LOOP_VIDEOS_DIR / folder / filename
-    if not path.exists() or ".." in folder or ".." in filename:
+    path = (LOOP_VIDEOS_DIR / folder / filename).resolve()
+    if not path.is_relative_to(LOOP_VIDEOS_DIR.resolve()) or not path.exists():
         raise HTTPException(404, "Not found")
-    return FileResponse(path, media_type="video/mp4", filename=filename)
+    mt = _VIDEO_MTYPE.get(path.suffix.lower(), "video/mp4")
+    return FileResponse(path, media_type=mt, filename=filename)
 
 
 @router.get("/loop-videos/{folder}/{filename}/thumb")
 async def api_loop_video_thumb(folder: str, filename: str):
     """Generate and serve a thumbnail for a loop video."""
-    path = LOOP_VIDEOS_DIR / folder / filename
-    if not path.exists() or ".." in folder or ".." in filename:
+    path = (LOOP_VIDEOS_DIR / folder / filename).resolve()
+    if not path.is_relative_to(LOOP_VIDEOS_DIR.resolve()) or not path.exists():
         raise HTTPException(404, "Not found")
     # Cache thumbnail in EDITOR_DIR/assets
     thumb_name = f"loopthumb_{folder}_{Path(filename).stem}.jpg"
@@ -129,8 +136,8 @@ async def api_import_loop_video(
     p = get_project(pid)
     if not p:
         raise HTTPException(404, "Project not found")
-    src_path = LOOP_VIDEOS_DIR / folder / filename
-    if not src_path.exists() or ".." in folder or ".." in filename:
+    src_path = (LOOP_VIDEOS_DIR / folder / filename).resolve()
+    if not src_path.is_relative_to(LOOP_VIDEOS_DIR.resolve()) or not src_path.exists():
         raise HTTPException(404, "Loop video not found")
 
     # Copy to assets dir
@@ -233,8 +240,8 @@ async def api_list_saved_projects():
 @router.post("/load-project/{filename}")
 async def api_load_project(filename: str):
     """Load a saved project from disk."""
-    path = EDITOR_DIR / "projects" / filename
-    if not path.exists():
+    path = (EDITOR_DIR / "projects" / filename).resolve()
+    if not path.is_relative_to((EDITOR_DIR / "projects").resolve()) or not path.exists():
         raise HTTPException(404, "Project file not found")
     proj = load_project(path)
     if not proj:
@@ -266,7 +273,7 @@ async def api_upload_asset(pid: str, file: UploadFile = File(...)):
 
     # Save uploaded file
     assets_dir = EDITOR_DIR / "assets"
-    safe_name = file.filename.replace("/", "_").replace("\\", "_")
+    safe_name = (file.filename or "upload").replace("/", "_").replace("\\", "_")
     dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
     with open(dest, "wb") as f:
         content = await file.read()
@@ -372,9 +379,15 @@ async def api_add_clip(
     return clip.to_dict()
 
 
+_CLIP_ALLOWED = {"start", "duration", "in_point", "out_point", "volume", "speed", "loop", "z_index", "sub_style", "sub_position", "track"}
+
+
 @router.put("/projects/{pid}/clips/{clip_id}")
 async def api_update_clip(pid: str, clip_id: str, body: dict):
-    clip = update_clip(pid, clip_id, **body)
+    filtered = {k: v for k, v in body.items() if k in _CLIP_ALLOWED}
+    if not filtered:
+        raise HTTPException(400, "No valid fields")
+    clip = update_clip(pid, clip_id, **filtered)
     if not clip:
         raise HTTPException(404, "Clip not found")
     return clip.to_dict()
@@ -416,13 +429,14 @@ async def api_remove_effect(pid: str, clip_id: str, idx: int):
 # ── Render ────────────────────────────────────────────────────────────────────
 
 @router.put("/projects/{pid}/sub-settings")
-async def api_update_sub_settings(pid: str, data: dict = None):
+async def api_update_sub_settings(pid: str, data: dict | None = None):
     """Update subtitle rendering settings."""
     p = get_project(pid)
     if not p:
         raise HTTPException(404, "Project not found")
     if not data:
         raise HTTPException(400, "No data")
+    _push_undo(pid)
     allowed = {
         "sub_font", "sub_size", "sub_color", "sub_outline_color",
         "sub_outline_width", "sub_position", "sub_margin_v", "sub_lines",
@@ -529,8 +543,8 @@ async def api_render_loop(
 
 @router.get("/renders/{filename}")
 async def api_download_render(filename: str):
-    path = EDITOR_DIR / "renders" / filename
-    if not path.exists():
+    path = (EDITOR_DIR / "renders" / filename).resolve()
+    if not path.is_relative_to((EDITOR_DIR / "renders").resolve()) or not path.exists():
         raise HTTPException(404)
     return FileResponse(
         path, media_type="video/mp4", filename=filename,

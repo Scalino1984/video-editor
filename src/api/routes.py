@@ -126,7 +126,9 @@ async def delete_file(filename: str):
 @router.get("/files/{filename}/probe", response_model=AudioProbeInfo)
 async def probe_audio_file(filename: str):
     from src.preprocess.ffmpeg_io import probe_audio
-    path = tasks.UPLOAD_DIR / filename
+    path = (tasks.UPLOAD_DIR / filename).resolve()
+    if not path.is_relative_to(tasks.UPLOAD_DIR.resolve()):
+        raise HTTPException(400, "Invalid filename")
     if not path.exists(): raise HTTPException(404, "File not found")
     info = probe_audio(path)
     fmt = info.get("format", {})
@@ -223,13 +225,21 @@ async def get_job(job_id: str):
     if not job: raise HTTPException(404, "Job not found")
     return job
 
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a running job."""
+    if not tasks.cancel_job(job_id):
+        raise HTTPException(400, "Job cannot be cancelled (not running or not found)")
+    return {"cancelled": job_id}
+
 @router.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
     job = tasks.get_job(job_id)
     if not job: raise HTTPException(404, "Job not found")
     d = tasks.OUTPUT_DIR / job_id
     if d.exists(): shutil.rmtree(d)
-    del tasks._jobs[job_id]
+    with tasks._jobs_lock:
+        tasks._jobs.pop(job_id, None)
     return {"deleted": job_id}
 
 
@@ -264,19 +274,6 @@ async def download_result(job_id: str, filename: str):
     return FileResponse(fp, filename=filename, media_type=mt)
 
 
-@router.get("/jobs/{job_id}/download-zip")
-async def download_zip(job_id: str):
-    """Download all job outputs as ZIP."""
-    job_dir = tasks.OUTPUT_DIR / job_id
-    if not job_dir.exists(): raise HTTPException(404, "Job not found")
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in job_dir.iterdir():
-            if f.is_file() and f.name not in ("segments.json", "waveform.json"):
-                zf.write(f, f.name)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={job_id}_output.zip"})
 
 
 @router.get("/jobs/{job_id}/content/{filename}")
@@ -354,8 +351,8 @@ async def merge_segments(job_id: str, req: SegmentMerge):
     a, b = min(req.index_a, req.index_b), max(req.index_a, req.index_b)
     if a < 0 or b >= len(data): raise HTTPException(400, "Index out of range")
     merged = {"start": data[a]["start"], "end": data[b]["end"],
-              "text": data[a]["text"] + " " + data[b]["text"],
-              "confidence": min(data[a].get("confidence",1), data[b].get("confidence",1)),
+              "text": " ".join(data[i]["text"] for i in range(a, b + 1)),
+              "confidence": min(data[i].get("confidence", 1) for i in range(a, b + 1)),
               "has_word_timestamps": False, "words": []}
     data[a:b+1] = [merged]
     _save_segs(p, data, job_id)
@@ -410,12 +407,15 @@ async def search_replace_segments(job_id: str, req: SearchReplace):
     for seg in data:
         orig = seg["text"]
         if req.regex:
-            flags = 0 if req.case_sensitive else re.IGNORECASE
-            seg["text"] = re.sub(req.search, req.replace, seg["text"], flags=flags)
+            try:
+                flags = 0 if req.case_sensitive else re.IGNORECASE
+                seg["text"] = re.sub(req.search, req.replace, seg["text"], flags=flags)
+            except re.error as exc:
+                raise HTTPException(400, f"Invalid regex: {exc}")
         elif req.case_sensitive:
             seg["text"] = seg["text"].replace(req.search, req.replace)
         else:
-            seg["text"] = re.sub(re.escape(req.search), req.replace, seg["text"], flags=re.IGNORECASE)
+            seg["text"] = re.sub(re.escape(req.search), lambda m: req.replace, seg["text"], flags=re.IGNORECASE)
         if seg["text"] != orig: count += 1
     _save_segs(p, data, job_id)
     return {"replaced_in_segments": count}
@@ -644,13 +644,19 @@ async def import_project(job_id: str, file: UploadFile = File(...)):
 
 @router.post("/jobs/{job_id}/undo")
 async def undo_action(job_id: str):
-    if tasks.undo(job_id): return {"status": "undone"}
-    raise HTTPException(400, "Nothing to undo")
+    if not tasks.undo(job_id):
+        raise HTTPException(400, "Nothing to undo")
+    p, data = _load_segs(job_id)
+    _sync_srt(job_id, data)
+    return {"status": "undone"}
 
 @router.post("/jobs/{job_id}/redo")
 async def redo_action(job_id: str):
-    if tasks.redo(job_id): return {"status": "redone"}
-    raise HTTPException(400, "Nothing to redo")
+    if not tasks.redo(job_id):
+        raise HTTPException(400, "Nothing to redo")
+    p, data = _load_segs(job_id)
+    _sync_srt(job_id, data)
+    return {"status": "redone"}
 
 
 # ── Regenerate / Stats ────────────────────────────────────────────────────────
@@ -746,6 +752,48 @@ async def get_report(job_id: str):
     raise HTTPException(404, "Report not found")
 
 
+# ── BPM Subtitle Params ──────────────────────────────────────────────────────
+
+@router.get("/bpm-params")
+async def get_bpm_subtitle_params(bpm: float, format: str = "ass"):
+    """Calculate recommended CPS/MaxChars/Duration from BPM + format."""
+    if bpm <= 0:
+        raise HTTPException(400, "BPM must be positive")
+    from src.refine.beatgrid import calculate_subtitle_params
+    params = calculate_subtitle_params(bpm, format)
+    return params.to_dict()
+
+
+@router.post("/jobs/{job_id}/detect-bpm")
+async def detect_bpm_for_job(job_id: str):
+    """Detect BPM from the job's audio file and return subtitle params."""
+    job_dir = tasks.OUTPUT_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(404, "Job not found")
+    # Find the audio file in the job directory
+    audio_path = None
+    for ext in (".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".wma", ".mp4", ".webm"):
+        for f in job_dir.glob(f"*{ext}"):
+            audio_path = f
+            break
+        if audio_path:
+            break
+    if not audio_path:
+        raise HTTPException(404, "No audio file found for job")
+    from src.refine.beatgrid import detect_bpm, calculate_subtitle_params
+    bpm = detect_bpm(audio_path)
+    if not bpm or bpm <= 0:
+        raise HTTPException(422, "Could not detect BPM from audio")
+    # Return BPM + recommended params for both SRT and ASS
+    srt_params = calculate_subtitle_params(bpm, "srt")
+    ass_params = calculate_subtitle_params(bpm, "ass")
+    return {
+        "bpm": round(bpm, 1),
+        "srt": srt_params.to_dict(),
+        "ass": ass_params.to_dict(),
+    }
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _sync_srt(job_id: str, data: list[dict]) -> None:
@@ -755,12 +803,18 @@ def _sync_srt(job_id: str, data: list[dict]) -> None:
     job_dir = tasks.OUTPUT_DIR / job_id
     for f in job_dir.glob("*.srt"):
         write_srt(segs, f); break
-    # Also sync ASS if it exists on disk
+    # Also sync ASS if it exists on disk — preserve real word timestamps
     for f in job_dir.glob("*.ass"):
         try:
             from src.refine.alignment import ensure_word_timestamps
             from src.export.ass_writer import write_ass
-            segs_wt = ensure_word_timestamps(segs)
+            # Only approximate word timestamps for segments that don't have them
+            segs_wt = []
+            for s in segs:
+                if s.has_word_timestamps and s.words:
+                    segs_wt.append(s)
+                else:
+                    segs_wt.extend(ensure_word_timestamps([s]))
             # Read karaoke_mode + preset from report.json if available
             k_mode, k_preset = "kf", "classic"
             for rp in job_dir.glob("*.report.json"):
@@ -1115,7 +1169,7 @@ async def export_markers(job_id: str, format: str):
 # ── Clipboard Lyrics Import ──────────────────────────────────────────────────
 
 @router.post("/jobs/{job_id}/paste-lyrics")
-async def paste_lyrics_align(job_id: str, text: str = ""):
+async def paste_lyrics_align(job_id: str, text: str = Body("")):
     """Paste lyrics text and align to existing segments.
 
     Replaces segment text with pasted lyrics while keeping timing.
@@ -1222,7 +1276,7 @@ async def save_snapshot(job_id: str, name: str = ""):
 
     from datetime import datetime, timezone
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    label = name or ts
+    label = Path(name or ts).name.replace("/", "_").replace("..", "_")
     snap_path = snap_dir / f"snap_{label}.json"
     shutil.copy2(seg_path, snap_path)
     return {"snapshot": snap_path.name, "label": label}
@@ -1244,7 +1298,8 @@ async def list_snapshots(job_id: str):
 @router.post("/jobs/{job_id}/snapshot/restore/{name}")
 async def restore_snapshot(job_id: str, name: str):
     """Restore a saved snapshot."""
-    snap_path = tasks.OUTPUT_DIR / job_id / "snapshots" / f"{name}.json"
+    safe_name = Path(name).name
+    snap_path = tasks.OUTPUT_DIR / job_id / "snapshots" / f"{safe_name}.json"
     if not snap_path.exists():
         raise HTTPException(404, "Snapshot not found")
     seg_path = tasks.OUTPUT_DIR / job_id / "segments.json"
@@ -1253,3 +1308,194 @@ async def restore_snapshot(job_id: str, name: str):
     data = json.loads(seg_path.read_text())
     _sync_srt(job_id, data)
     return {"restored": name, "segments": len(data)}
+
+
+# ── Vocal Separation (Demucs) ────────────────────────────────────────────────
+
+@router.get("/separation/check")
+async def check_separation():
+    """Check if Demucs is available for vocal separation."""
+    from src.preprocess.vocals import check_demucs_available
+    available, msg = check_demucs_available()
+    return {"available": available, "message": msg}
+
+
+@router.get("/separation/audio-files")
+async def list_audio_files():
+    """List audio files in uploads directory for separation."""
+    audio_exts = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".wma", ".mp4", ".webm"}
+    files = []
+    for f in sorted(tasks.UPLOAD_DIR.iterdir()):
+        if f.is_file() and f.suffix.lower() in audio_exts:
+            files.append({
+                "filename": f.name,
+                "size": f.stat().st_size,
+                "modified": f.stat().st_mtime,
+            })
+    return {"files": files}
+
+
+@router.post("/separation/start")
+async def start_separation(
+    background_tasks: BackgroundTasks,
+    filename: str = Body(..., embed=True),
+    model: str = Body("htdemucs", embed=True),
+    device: str = Body("cpu", embed=True),
+    stems: str = Body("vocals", embed=True),
+    shifts: int = Body(1, embed=True),
+    overlap: float = Body(0.25, embed=True),
+    mp3: bool = Body(False, embed=True),
+    mp3_bitrate: int = Body(320, embed=True),
+):
+    """Start a Demucs separation job."""
+    # Validate inputs
+    safe_name = Path(filename).name
+    audio_path = tasks.UPLOAD_DIR / safe_name
+    if not audio_path.exists():
+        raise HTTPException(404, f"Audio file not found: {safe_name}")
+    if stems not in ("vocals", "all"):
+        raise HTTPException(400, "stems must be 'vocals' or 'all'")
+    if device not in ("auto", "cpu", "cuda"):
+        raise HTTPException(400, "device must be 'auto', 'cpu', or 'cuda'")
+
+    # Create job
+    job = tasks.create_job(f"separate_{safe_name}")
+    job_id = job.job_id
+
+    # Run in background
+    async def _run():
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            tasks._executor, _separation_sync,
+            job_id, audio_path, model, device, stems, shifts, overlap, mp3, mp3_bitrate
+        )
+
+    background_tasks.add_task(_run)
+    return {"job_id": job_id, "filename": safe_name}
+
+
+def _separation_sync(job_id: str, audio_path: Path, model: str, device: str,
+                     stems: str, shifts: int, overlap: float,
+                     mp3: bool, mp3_bitrate: int) -> None:
+    """Run Demucs separation in thread pool."""
+    from src.preprocess.vocals import VocalSeparator
+    from src.utils.logging import info, error
+
+    try:
+        tasks.update_job(job_id, status=JobStatus.preprocessing, progress=0.05,
+                         stage="Demucs wird geladen...")
+        tasks._check_cancel(job_id)
+
+        sep = VocalSeparator(model=model, device=device)
+        if not sep.is_available():
+            raise RuntimeError("Demucs nicht verfügbar. Installieren mit: pip install demucs torch")
+
+        job_output = tasks.OUTPUT_DIR / job_id
+        job_output.mkdir(parents=True, exist_ok=True)
+
+        tasks.update_job(job_id, progress=0.1, stage=f"Separation läuft ({model}, {stems})...")
+        tasks._check_cancel(job_id)
+
+        result = sep.separate(
+            audio_path=str(audio_path),
+            output_dir=str(job_output / "stems"),
+            stems=stems,
+            shifts=shifts,
+            overlap=overlap,
+            mp3=mp3,
+            mp3_bitrate=mp3_bitrate,
+        )
+
+        tasks._check_cancel(job_id)
+
+        # Process results
+        stem_files: dict[str, str] = {}
+        if stems == "vocals" and result.vocals:
+            stem_files["vocals"] = result.vocals
+        elif stems == "all" and result.stems:
+            stem_files = result.stems
+
+        if not stem_files:
+            raise RuntimeError("Demucs hat keine Stems erzeugt")
+
+        # Register stems in library
+        try:
+            from src.db.library import register_media
+            for stem_name, stem_path in stem_files.items():
+                register_media(Path(stem_path))
+        except Exception as e:
+            from src.utils.logging import warn
+            warn(f"[{job_id}] Could not register stems in library: {e}")
+
+        # Save result info
+        result_info = {
+            "source": audio_path.name,
+            "model": model,
+            "device": device,
+            "stems_mode": stems,
+            "stems": {k: str(Path(v).name) for k, v in stem_files.items()},
+            "stem_paths": stem_files,
+        }
+        result_path = job_output / "separation_result.json"
+        result_path.write_text(json.dumps(result_info, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        tasks.update_job(
+            job_id,
+            status=JobStatus.completed,
+            progress=1.0,
+            stage="Separation abgeschlossen",
+            completed_at=datetime.now(timezone.utc),
+            result=tasks.JobResult(
+                segments_count=len(stem_files),
+                backend=f"demucs/{model}",
+            ),
+        )
+        tasks._emit_sse({
+            "type": "job_completed", "job_id": job_id,
+            "stems": list(stem_files.keys()),
+        })
+        info(f"[{job_id}] Separation complete: {list(stem_files.keys())}")
+
+    except tasks.JobCancelled:
+        info(f"[{job_id}] Separation cancelled")
+    except Exception as e:
+        error(f"[{job_id}] Separation failed: {e}")
+        tasks.update_job(
+            job_id,
+            status=JobStatus.failed,
+            stage="Fehler",
+            error=str(e),
+            completed_at=datetime.now(timezone.utc),
+        )
+        tasks._emit_sse({"type": "job_failed", "job_id": job_id, "error": str(e)})
+
+
+@router.get("/separation/{job_id}/stems")
+async def get_separation_stems(job_id: str):
+    """Get the stems from a completed separation job."""
+    result_path = tasks.OUTPUT_DIR / job_id / "separation_result.json"
+    if not result_path.exists():
+        raise HTTPException(404, "Separation result not found")
+    data = json.loads(result_path.read_text(encoding="utf-8"))
+    return data
+
+
+@router.get("/separation/{job_id}/download/{stem}")
+async def download_stem(job_id: str, stem: str):
+    """Download a specific stem file from a separation job."""
+    result_path = tasks.OUTPUT_DIR / job_id / "separation_result.json"
+    if not result_path.exists():
+        raise HTTPException(404, "Separation result not found")
+    data = json.loads(result_path.read_text(encoding="utf-8"))
+    stem_paths = data.get("stem_paths", {})
+    # Validate stem name against whitelist
+    if stem not in ("vocals", "drums", "bass", "other"):
+        raise HTTPException(400, "Invalid stem name")
+    stem_file = stem_paths.get(stem)
+    if not stem_file:
+        raise HTTPException(404, f"Stem '{stem}' not found in results")
+    stem_path = Path(stem_file)
+    if not stem_path.exists():
+        raise HTTPException(404, f"Stem file not found on disk")
+    return FileResponse(stem_path, filename=f"{stem}{stem_path.suffix}",
+                        media_type="audio/wav" if stem_path.suffix == ".wav" else "audio/mpeg")

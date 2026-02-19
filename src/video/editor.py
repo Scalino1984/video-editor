@@ -435,6 +435,7 @@ def remove_clip(pid: str, clip_id: str) -> bool:
 
 
 def update_clip(pid: str, clip_id: str, **kwargs) -> Clip | None:
+    _READONLY_CLIP_FIELDS = frozenset({"end", "id"})
     p = _projects.get(pid)
     if not p:
         return None
@@ -442,6 +443,8 @@ def update_clip(pid: str, clip_id: str, **kwargs) -> Clip | None:
         if c.id == clip_id:
             _push_undo(pid)
             for k, v in kwargs.items():
+                if k in _READONLY_CLIP_FIELDS:
+                    continue
                 if hasattr(c, k):
                     setattr(c, k, v)
             return c
@@ -456,16 +459,17 @@ def split_clip(pid: str, clip_id: str, at_time: float) -> tuple[Clip, Clip] | No
     for i, c in enumerate(p.clips):
         if c.id == clip_id and c.start < at_time < c.end:
             _push_undo(pid)
+            speed = c.speed if c.speed else 1.0
             dur1 = at_time - c.start
             dur2 = c.end - at_time
             # First half
             c.duration = round(dur1, 3)
-            c.out_point = c.in_point + dur1 / c.speed
+            c.out_point = c.in_point + dur1 / speed
             # Second half
             c2 = Clip(
                 id=_uid(), asset_id=c.asset_id, track=c.track,
                 start=round(at_time, 3), duration=round(dur2, 3),
-                in_point=c.out_point, out_point=c.out_point + dur2 / c.speed,
+                in_point=c.out_point, out_point=c.out_point + dur2 / speed,
                 volume=c.volume, speed=c.speed, loop=c.loop,
                 effects=copy.deepcopy(c.effects),
             )

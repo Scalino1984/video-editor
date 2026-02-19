@@ -32,11 +32,42 @@ _jobs_lock = threading.Lock()
 _sse_subscribers: list[asyncio.Queue] = []
 _loop: asyncio.AbstractEventLoop | None = None  # captured on first SSE subscribe
 
+# Cancellation
+_cancel_events: dict[str, threading.Event] = {}
+
 # Undo/Redo
 _undo_stacks: dict[str, deque[str]] = {}
 _redo_stacks: dict[str, deque[str]] = {}
 _undo_lock = threading.Lock()
 MAX_UNDO = 50
+
+
+class JobCancelled(Exception):
+    """Raised when a job cancel checkpoint is hit."""
+
+
+def cancel_job(job_id: str) -> bool:
+    """Request cancellation of a running job. Returns True if job was cancellable."""
+    job = _jobs.get(job_id)
+    if not job:
+        return False
+    if job.status in (JobStatus.completed, JobStatus.failed, JobStatus.cancelled):
+        return False
+    ev = _cancel_events.get(job_id)
+    if ev:
+        ev.set()
+    update_job(job_id, status=JobStatus.cancelled, stage="Abgebrochen",
+               completed_at=datetime.now(timezone.utc))
+    _emit_sse({"type": "job_cancelled", "job_id": job_id})
+    info(f"[{job_id}] ⛔ Cancellation requested")
+    return True
+
+
+def _check_cancel(job_id: str) -> None:
+    """Checkpoint — call at the start of each pipeline stage. Raises JobCancelled."""
+    ev = _cancel_events.get(job_id)
+    if ev and ev.is_set():
+        raise JobCancelled(f"Job {job_id} cancelled by user")
 
 
 def get_jobs() -> dict[str, JobInfo]:
@@ -53,6 +84,7 @@ def create_job(filename: str) -> JobInfo:
         status=JobStatus.pending, progress=0.0, stage="queued",
         created_at=datetime.now(timezone.utc),
     )
+    _cancel_events[job_id] = threading.Event()
     with _jobs_lock:
         _jobs[job_id] = job
     _emit_sse({"type": "job_created", "job_id": job_id, "filename": filename})
@@ -196,6 +228,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
 
         info(f"[{job_id}] Getting duration...")
         duration = get_duration(audio_path)
+        _check_cancel(job_id)
         update_job(job_id, status=JobStatus.preprocessing, progress=0.05, stage="Preprocessing")
 
         with tempfile.TemporaryDirectory(prefix="karaoke_") as tmp:
@@ -203,6 +236,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
             current = audio_path
             time_mapping = None
 
+            _check_cancel(job_id)
             if req.vocal_isolation:
                 update_job(job_id, progress=0.07, stage="Vocal isolation")
                 info(f"[{job_id}] Vocal isolation...")
@@ -240,6 +274,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
                 update_job(job_id, progress=0.22, stage="VAD done")
 
             # ── Transcription (API call) ──────────────────────────────────
+            _check_cancel(job_id)
             info(f"[{job_id}] Starting transcription with {req.backend.value}...")
             update_job(job_id, status=JobStatus.transcribing, progress=0.25, stage=f"Transcribing ({req.backend.value})")
 
@@ -268,6 +303,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
             raise RuntimeError("No segments transcribed")
 
         # ── Refinement ────────────────────────────────────────────────────
+        _check_cancel(job_id)
         info(f"[{job_id}] Refining segments...")
         update_job(job_id, status=JobStatus.refining, progress=0.60, stage="Refining")
 
@@ -351,6 +387,14 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
                 max_duration=req.max_duration, max_chars_per_line=req.max_chars_per_line,
                 max_lines=req.max_lines,
             )
+        else:
+            # Lyrics-aligned: still apply essential refinement (gaps, CPS, merge)
+            from src.refine.segmentation import ensure_gaps, merge_short_segments, add_line_breaks
+            segments = ensure_gaps(segments)
+            segments = merge_short_segments(segments, min_duration=req.min_duration,
+                                            max_chars=req.max_chars_per_line * req.max_lines)
+            for seg in segments:
+                seg.text = add_line_breaks(seg, req.max_chars_per_line, req.max_lines)
 
         bpm_value = 0.0
         if req.snap_to_beat and req.bpm:
@@ -380,6 +424,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
         update_job(job_id, progress=0.75, stage="Refined")
 
         # ── Export ────────────────────────────────────────────────────────
+        _check_cancel(job_id)
         info(f"[{job_id}] Exporting formats...")
         update_job(job_id, status=JobStatus.exporting, progress=0.80, stage="Exporting")
         # stem already defined above
@@ -489,12 +534,17 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
         info(f"[{job_id}] ✅ Completed: {len(segments)} segments")
         info(f"[{job_id}] 📁 Output: {job_output}")
 
+    except JobCancelled:
+        info(f"[{job_id}] ⛔ Job cancelled")
+        # status already set by cancel_job()
     except Exception as e:
         error(f"[{job_id}] ❌ Failed: {e}")
         traceback.print_exc()
         update_job(job_id, status=JobStatus.failed, stage="Error", error=str(e),
                    completed_at=datetime.now(timezone.utc))
         _emit_sse({"type": "job_failed", "job_id": job_id, "error": str(e)})
+    finally:
+        _cancel_events.pop(job_id, None)
 
 
 async def run_refine_job(job_id: str, srt_path: Path, req: RefineRequest) -> None:
@@ -519,7 +569,7 @@ def _refine_sync(job_id: str, srt_path: Path, req: RefineRequest) -> None:
         out_path = job_output / srt_path.name
         write_srt(segments, out_path)
         seg_data = [s.to_dict() for s in segments]
-        (job_output / "segments.json").write_text(json.dumps(seg_data, indent=2, ensure_ascii=False))
+        (job_output / "segments.json").write_text(json.dumps(seg_data, indent=2, ensure_ascii=False), encoding="utf-8")
         result = JobResult(srt_file=out_path.name, segments_count=len(segments))
         update_job(job_id, status=JobStatus.completed, progress=1.0, stage="Done",
                    completed_at=datetime.now(timezone.utc), result=result)

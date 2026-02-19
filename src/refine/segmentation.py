@@ -112,13 +112,64 @@ def merge_short_segments(segments: list[TranscriptSegment],
 
 
 def ensure_gaps(segments: list[TranscriptSegment], min_gap_ms: int = 80) -> list[TranscriptSegment]:
+    """Ensure minimum gap between adjacent segments, adjusting word timestamps too."""
     gap = min_gap_ms / 1000
     for i in range(1, len(segments)):
         if segments[i].start - segments[i - 1].end < gap:
             mid = (segments[i - 1].end + segments[i].start) / 2
-            segments[i - 1].end = mid - gap / 2
-            segments[i].start = mid + gap / 2
+            new_end_prev = mid - gap / 2
+            new_start_curr = mid + gap / 2
+
+            # Shift word timestamps in previous segment if its end was trimmed
+            delta_prev = new_end_prev - segments[i - 1].end
+            if delta_prev != 0 and segments[i - 1].words:
+                _clamp_words_to_segment(segments[i - 1].words,
+                                        segments[i - 1].start, new_end_prev)
+
+            # Shift word timestamps in current segment if its start was pushed later
+            delta_curr = new_start_curr - segments[i].start
+            if delta_curr != 0 and segments[i].words:
+                _clamp_words_to_segment(segments[i].words,
+                                        new_start_curr, segments[i].end)
+
+            segments[i - 1].end = new_end_prev
+            segments[i].start = new_start_curr
     return segments
+
+
+def _clamp_words_to_segment(words: list[WordInfo], seg_start: float, seg_end: float) -> None:
+    """Clamp word timestamps to lie within [seg_start, seg_end].
+
+    If words fall outside the new boundary they are proportionally compressed
+    so relative ordering and durations are preserved as much as possible.
+    """
+    if not words:
+        return
+
+    w_start = words[0].start
+    w_end = words[-1].end
+
+    # Nothing to do if all words already fit
+    if w_start >= seg_start and w_end <= seg_end:
+        return
+
+    # Proportional rescale of all word timestamps into [seg_start, seg_end]
+    old_span = w_end - w_start
+    new_span = seg_end - seg_start
+    if old_span <= 0 or new_span <= 0:
+        # Degenerate case: stack all words at seg_start
+        for w in words:
+            w.start = seg_start
+            w.end = seg_end
+        return
+
+    scale = new_span / old_span
+    for w in words:
+        w.start = seg_start + (w.start - w_start) * scale
+        w.end = seg_start + (w.end - w_start) * scale
+        # Ensure minimum word duration
+        if w.end <= w.start:
+            w.end = w.start + 0.02
 
 
 def add_line_breaks(segment: TranscriptSegment, max_chars_per_line: int = 42,

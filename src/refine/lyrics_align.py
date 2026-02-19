@@ -109,23 +109,46 @@ def align_lyrics_to_segments(
         )
 
         if best_start_idx is None:
-            # No good match found — use time-proportional position
+            # No good match found — interpolate from neighbours for smooth timing
             if result:
                 seg_start = result[-1].end + 0.05
             elif word_idx < len(all_words):
                 seg_start = all_words[word_idx].start
             else:
                 seg_start = segments[-1].end if segments else 0
-            # Estimate duration from average chars/sec
-            est_duration = max(1.0, len(lyrics_line) / 15.0)
+
+            # Estimate duration: use average of surrounding segments if available
+            if result and line_num + 1 < len(lyrics_lines):
+                avg_dur = sum(s.end - s.start for s in result) / len(result)
+                est_duration = max(0.8, min(avg_dur, 4.0))
+            else:
+                est_duration = max(1.0, len(lyrics_line) / 15.0)
             seg_end = seg_start + est_duration
+
+            # Build approximate word timestamps from text distribution
+            line_tokens = lyrics_line.split()
+            total_chars = max(sum(len(t) for t in line_tokens), 1)
+            pseudo_words: list[WordInfo] = []
+            cursor = seg_start
+            for token in line_tokens:
+                frac = len(token) / total_chars
+                w_dur = est_duration * frac
+                pseudo_words.append(WordInfo(
+                    start=round(cursor, 3),
+                    end=round(cursor + w_dur, 3),
+                    word=token,
+                    confidence=0.3,
+                ))
+                cursor += w_dur
+
             warn(f"  Line {line_num+1}: no match, estimated timing {seg_start:.1f}s-{seg_end:.1f}s")
             result.append(TranscriptSegment(
                 start=round(seg_start, 3),
                 end=round(seg_end, 3),
                 text=lyrics_line,
+                words=pseudo_words,
                 confidence=0.3,
-                has_word_timestamps=False,
+                has_word_timestamps=True,
             ))
             continue
 
@@ -141,16 +164,30 @@ def align_lyrics_to_segments(
             if _word_match(w_norm, t_norm, similarity_threshold):
                 consumed_words.append(all_words[scan_idx])
                 tokens_remaining.pop(0)
+                scan_idx += 1
             elif w_norm:
-                # Maybe the transcription split/merged words differently
-                # Try to consume anyway if we're close
+                # Non-matching word — only allow limited slack after we started matching
                 if len(consumed_words) > 0:
-                    # We've already started matching — allow some slack
-                    consumed_words.append(all_words[scan_idx])
-            scan_idx += 1
+                    # Allow max 2 consecutive non-matching words as slack
+                    # Look ahead to see if next target token matches soon
+                    slack_ok = False
+                    for lookahead in range(1, min(3, len(all_words) - scan_idx)):
+                        future_norm = _normalize_word(all_words[scan_idx + lookahead].word)
+                        if _word_match(future_norm, t_norm, similarity_threshold):
+                            slack_ok = True
+                            break
+                    if slack_ok:
+                        consumed_words.append(all_words[scan_idx])
+                        scan_idx += 1
+                    else:
+                        break  # Stop consuming — we've diverged from the lyrics
+                else:
+                    scan_idx += 1
+            else:
+                scan_idx += 1
 
             # Safety: don't consume way more words than the line has
-            if len(consumed_words) > len(target_tokens) * 2 + 3:
+            if len(consumed_words) > len(target_tokens) * 2:
                 break
 
         if consumed_words:
@@ -255,14 +292,15 @@ def _build_line_words(
 ) -> list[WordInfo]:
     """Map consumed transcription words to lyrics line words.
 
-    Distributes timing from consumed_words across the lyrics_line words
-    so karaoke word-animation matches the provided text exactly.
+    Uses best-effort 1:1 matching when counts differ — distributes excess
+    consumed words across output tokens proportionally, averaging their timing
+    rather than purely character-based interpolation.
     """
     line_tokens = lyrics_line.split()
     if not line_tokens or not consumed_words:
         return []
 
-    # If counts match roughly, map 1:1
+    # If counts match, map 1:1
     if len(line_tokens) == len(consumed_words):
         return [
             WordInfo(
@@ -274,29 +312,58 @@ def _build_line_words(
             for i in range(len(line_tokens))
         ]
 
-    # Otherwise: distribute timing proportionally by character count
-    total_chars = sum(len(t) for t in line_tokens)
-    if total_chars == 0:
-        return []
-
-    total_start = consumed_words[0].start
-    total_end = consumed_words[-1].end
-    total_dur = total_end - total_start
-
+    n_out = len(line_tokens)
+    n_in = len(consumed_words)
     result = []
-    cursor = total_start
-    for token in line_tokens:
-        frac = len(token) / total_chars
-        word_dur = total_dur * frac
-        word_end = cursor + word_dur
-        # Find closest consumed word for confidence
-        closest = min(consumed_words, key=lambda w: abs(w.start - cursor))
-        result.append(WordInfo(
-            start=round(cursor, 3),
-            end=round(word_end, 3),
-            word=token,
-            confidence=closest.confidence,
-        ))
-        cursor = word_end
+
+    if n_in >= n_out:
+        # More consumed words than lyrics tokens — group consumed words per token
+        # Distribute evenly, with remainder going to later tokens
+        base_per_token = n_in // n_out
+        remainder = n_in % n_out
+        idx = 0
+        for i, token in enumerate(line_tokens):
+            count = base_per_token + (1 if i < remainder else 0)
+            group = consumed_words[idx:idx + count]
+            idx += count
+            if group:
+                avg_conf = sum(w.confidence for w in group) / len(group)
+                result.append(WordInfo(
+                    start=group[0].start,
+                    end=group[-1].end,
+                    word=token,
+                    confidence=round(avg_conf, 3),
+                ))
+            else:
+                # Should not happen, but safety fallback
+                prev_end = result[-1].end if result else consumed_words[0].start
+                result.append(WordInfo(
+                    start=prev_end,
+                    end=prev_end + 0.05,
+                    word=token,
+                    confidence=0.3,
+                ))
+    else:
+        # Fewer consumed words than lyrics tokens — split consumed words across tokens
+        # Use character-proportional timing from the consumed word spans
+        total_start = consumed_words[0].start
+        total_end = consumed_words[-1].end
+        total_dur = max(total_end - total_start, 0.1)
+        total_chars = max(sum(len(t) for t in line_tokens), 1)
+
+        cursor = total_start
+        for token in line_tokens:
+            frac = len(token) / total_chars
+            word_dur = total_dur * frac
+            word_end = cursor + word_dur
+            # Find closest consumed word for confidence
+            closest = min(consumed_words, key=lambda w: abs(w.start - cursor))
+            result.append(WordInfo(
+                start=round(cursor, 3),
+                end=round(word_end, 3),
+                word=token,
+                confidence=closest.confidence,
+            ))
+            cursor = word_end
 
     return result

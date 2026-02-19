@@ -71,7 +71,7 @@ def analyze_confidence(segments: list[TranscriptSegment],
             avg_conf=round(avg_conf, 3),
             min_conf=round(min_conf, 3),
             needs_review=needs_review,
-            word_timestamps_real=seg.has_word_timestamps and all(
+            word_timestamps_real=seg.has_word_timestamps and len(seg.words) > 0 and all(
                 w.confidence > 0.5 for w in seg.words
             ),
             low_conf_words=low_words,
@@ -133,7 +133,7 @@ def generate_report(file_report: FileReport, fmt: str = "json") -> str:
             ])
         return output.getvalue()
 
-    return ""
+    raise ValueError(f"Unknown report format: {fmt!r}. Use 'json' or 'csv'.")
 
 
 def save_report(file_report: FileReport, output_path: Path, fmt: str = "json") -> Path:

@@ -86,6 +86,7 @@ class JobStatus(str, Enum):
     rendering_preview = "rendering_preview"
     completed = "completed"
     failed = "failed"
+    cancelled = "cancelled"
 
 
 # ── Request Models ────────────────────────────────────────────────────────────

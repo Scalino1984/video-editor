@@ -3,9 +3,117 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 
 from src.transcription.base import TranscriptSegment
 from src.utils.logging import info, debug, warn
+
+
+@dataclass
+class BPMSubtitleParams:
+    """Recommended subtitle parameters derived from BPM + format."""
+    bpm: float
+    cps: float
+    max_chars_per_line: int
+    max_lines: int
+    min_duration: float
+    max_duration: float
+    min_gap_ms: int
+    rationale: str
+
+    def to_dict(self) -> dict:
+        return {
+            "bpm": self.bpm,
+            "cps": round(self.cps, 1),
+            "max_chars_per_line": self.max_chars_per_line,
+            "max_lines": self.max_lines,
+            "min_duration": round(self.min_duration, 2),
+            "max_duration": round(self.max_duration, 2),
+            "min_gap_ms": self.min_gap_ms,
+            "rationale": self.rationale,
+        }
+
+
+def calculate_subtitle_params(bpm: float, format: str = "ass") -> BPMSubtitleParams:
+    """Calculate optimal subtitle parameters from BPM and export format.
+
+    The idea: faster BPM → faster text delivery → higher CPS limit and shorter lines.
+    For karaoke (ASS), word-level timing makes higher CPS acceptable.
+
+    BPM ranges (approximate genre mapping):
+        60-80   → Ballad / Slow R&B
+        80-100  → Pop / Reggae
+        100-130 → Dance / Electronic / Pop-Rap
+        130-160 → Drum & Bass / Fast Rap
+        160+    → Hardcore / Speed-Rap
+    """
+    # Base beat interval in seconds
+    beat_sec = 60.0 / max(bpm, 40)
+
+    # ── CPS: scales with BPM ──────────────────────────────────────────────
+    # Slow songs: ~14 CPS, fast songs: up to ~28 CPS
+    # Karaoke (ASS) can afford ~20% higher CPS since words highlight individually
+    if bpm <= 80:
+        cps = 14.0
+    elif bpm <= 100:
+        cps = 14.0 + (bpm - 80) * 0.15  # 14 → 17
+    elif bpm <= 130:
+        cps = 17.0 + (bpm - 100) * 0.13  # 17 → 20.9
+    elif bpm <= 160:
+        cps = 21.0 + (bpm - 130) * 0.1   # 21 → 24
+    else:
+        cps = min(28.0, 24.0 + (bpm - 160) * 0.08)
+
+    if format == "ass":
+        cps *= 1.2  # karaoke word-level = more readable at higher CPS
+
+    # ── Max chars per line: inversely related to speed ────────────────────
+    if bpm <= 80:
+        max_chars = 48
+    elif bpm <= 120:
+        max_chars = 42
+    elif bpm <= 150:
+        max_chars = 36
+    else:
+        max_chars = 30
+
+    # ── Max lines: 2 for most, 1 for very fast ───────────────────────────
+    max_lines = 1 if bpm > 150 else 2
+
+    # ── Duration: based on beat groupings ─────────────────────────────────
+    # min_duration = 2 beats, max_duration = 8 beats (capped)
+    min_duration = max(0.8, beat_sec * 2)
+    max_duration = min(8.0, beat_sec * 8)
+
+    # ── Gap: at least half a beat, minimum 40ms ──────────────────────────
+    min_gap_ms = max(40, int(beat_sec * 500))  # half a beat in ms
+
+    # Rationale string
+    if bpm <= 80:
+        tempo = "langsam"
+    elif bpm <= 120:
+        tempo = "mittel"
+    elif bpm <= 150:
+        tempo = "schnell"
+    else:
+        tempo = "sehr schnell"
+
+    rationale = (
+        f"{bpm:.0f} BPM ({tempo}): "
+        f"CPS={cps:.0f}, {max_chars} Zeichen/Zeile × {max_lines} Zeilen, "
+        f"Dauer {min_duration:.1f}–{max_duration:.1f}s, Gap {min_gap_ms}ms"
+    )
+
+    return BPMSubtitleParams(
+        bpm=bpm,
+        cps=round(cps, 1),
+        max_chars_per_line=max_chars,
+        max_lines=max_lines,
+        min_duration=round(min_duration, 2),
+        max_duration=round(max_duration, 2),
+        min_gap_ms=min_gap_ms,
+        rationale=rationale,
+    )
 
 
 def detect_bpm(audio_path) -> float | None:

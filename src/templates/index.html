@@ -17,6 +17,7 @@
 :root{
   --bg:#0c0e14;--bg2:#13161f;--bg3:#191d29;--bg4:#1e2333;--border:#262b3d;
   --text:#e2e4ea;--dim:#7a7f94;--accent:#00e5a0;--accent2:#00b8ff;
+  --fg:#e2e4ea;--surface:#191d29;
   --danger:#ff4466;--warn:#ffaa22;--purple:#a855f7;--r:10px;
   --font:'Outfit',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
 }
@@ -76,6 +77,7 @@
 .fsk-time{position:fixed;bottom:12px;right:20px;font-family:var(--mono);font-size:.8rem;color:rgba(255,255,255,.3)}
 .fsk-word{display:inline-block;transition:color .1s}
 .fsk-word.hl{color:var(--accent);text-shadow:0 0 20px var(--accent)}
+.fsk-word.fsk-fill{background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none}
 html{font-size:14px}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
 a{color:var(--accent2);text-decoration:none}
@@ -116,9 +118,12 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .jic.r{background:rgba(0,184,255,.12);color:var(--accent2)}
 .jic.c{background:rgba(0,229,160,.12);color:var(--accent)}
 .jic.f{background:rgba(255,68,102,.12);color:var(--danger)}
+.jic.x{background:rgba(255,68,102,.08);color:var(--dim)}
 .jm{flex:1;min-width:0}
 .jn{font-weight:500;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .js{font-size:.65rem;color:var(--dim)}
+.ji-cancel{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;padding:2px 6px;border-radius:4px;opacity:.6;transition:all .15s;flex-shrink:0}
+.ji-cancel:hover{opacity:1;color:var(--danger);background:rgba(255,68,102,.12)}
 .pb{height:3px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
 .pf{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
 .player{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px}
@@ -133,7 +138,8 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .karaoke-live:hover::after{content:'✏️ Doppelklick zum Bearbeiten';position:absolute;top:2px;right:8px;font-size:.55rem;color:var(--dim);font-weight:400}
 .karaoke-live .kw{display:inline;transition:color .15s}
 .karaoke-live .kw.active{color:var(--accent)}
-.karaoke-live .kw.past{color:var(--accent);opacity:.6}
+.karaoke-live .kw.past{color:var(--accent);opacity:.7}
+.karaoke-live .kw.fill{background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:inline}
 /* Minimap */
 .minimap{height:18px;background:var(--bg);border-radius:4px;position:relative;cursor:pointer;margin-top:4px}
 .mm-seg{position:absolute;top:2px;height:14px;border-radius:2px;background:var(--accent2);opacity:.3;transition:opacity .1s}
@@ -374,6 +380,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
   </div>
   <div style="display:flex;gap:3px;margin-left:6px" id="bb"></div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    <button class="btn-s btn-sm" onclick="clearAll()" title="Alles zurücksetzen" style="color:var(--danger)">🗑️ Clear</button>
     <button class="btn-s btn-sm" onclick="toggleTapToTime()" title="Tap-to-Time Modus (T)">🎤 Tap</button>
     <button class="btn-s btn-sm" onclick="toggleFSKaraoke()" title="Fullscreen Karaoke (F)">🖥️</button>
     <button class="lib-btn" onclick="toggleLibrary()" title="Library">📚</button>
@@ -430,7 +437,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       <div><label>Mode</label><select id="sK"><option value="kf">Fill (progressiv)</option><option value="k">Highlight (sofort)</option><option value="ko">Outline-Wipe</option></select></div>
       <div><label>Preset</label><select id="sP"><option value="classic">Classic</option><option value="neon">Neon</option><option value="high_contrast">Hi-Con</option><option value="landscape_1080p">Land</option><option value="portrait_1080x1920">Port</option><option value="mobile_safe">Mobile</option></select></div>
       <div class="f"><label>CPS / Max Chars</label>
-        <div style="display:flex;gap:5px"><input type="number" id="sC" value="18" min="5" max="40" style="width:50%"><input type="number" id="sMC" value="42" min="20" max="80" style="width:50%"></div>
+        <div style="display:flex;gap:5px;align-items:center"><input type="number" id="sC" value="18" min="5" max="40" style="width:40%"><input type="number" id="sMC" value="42" min="20" max="80" style="width:40%"><button type="button" class="btn-s" id="btnAutoBpm" onclick="autoBpmParams()" title="CPS/Chars automatisch aus BPM berechnen" style="width:20%;font-size:.6rem;padding:2px 4px">⚡BPM</button></div>
       </div>
       <label class="tg f"><input type="checkbox" id="sVAD" checked> VAD</label>
       <label class="tg f"><input type="checkbox" id="sN" checked> Normalize</label>
@@ -439,6 +446,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       <label class="tg f"><input type="checkbox" id="sLRC"> +LRC</label>
       <label class="tg f"><input type="checkbox" id="sTXT"> +TXT</label>
       <label class="tg f"><input type="checkbox" id="sVO"> Vocal Iso</label>
+      <button type="button" class="btn-s" onclick="openDemucsModal()" style="width:100%;margin-top:2px;font-size:.6rem;padding:2px 4px">🎵 Demucs Separation</button>
       <label class="tg f"><input type="checkbox" id="sBT"> BPM Snap</label>
       <label class="tg f"><input type="checkbox" id="sAI"> AI Correct</label>
     </div>
@@ -739,6 +747,81 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 
 <!-- Video Render Section in sidebar -->
 
+<!-- Demucs Separation Modal -->
+<div class="modal-bg" id="demucsModal" onclick="if(event.target===this)closeDemucsModal()">
+  <div class="modal" style="max-width:560px;width:95%">
+    <div class="modal-head"><h2 style="font-size:1rem">🎵 Vocal Separation (Demucs)</h2>
+      <div class="modal-close" onclick="closeDemucsModal()">✕</div>
+    </div>
+    <div class="modal-body" style="padding:16px">
+      <div id="demucsStatus" style="font-size:.7rem;color:var(--dim);margin-bottom:10px"></div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:.75rem;color:var(--dim);display:block;margin-bottom:4px">Audio-Datei</label>
+        <select id="demucsFile" style="width:100%;padding:6px 8px;font-size:.78rem;border-radius:6px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+          <option value="">— Datei wählen —</option>
+        </select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Stems</label>
+          <select id="demucsStemMode" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+            <option value="vocals" selected>Nur Vocals</option>
+            <option value="all">Alle (Vocals/Drums/Bass/Other)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Modell</label>
+          <select id="demucsModel" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+            <option value="htdemucs" selected>htdemucs (Standard)</option>
+            <option value="htdemucs_ft">htdemucs_ft (Fine-tuned)</option>
+            <option value="mdx_extra">mdx_extra</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Device</label>
+          <select id="demucsDevice" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+            <option value="cpu" selected>CPU</option>
+            <option value="cuda">GPU (CUDA)</option>
+            <option value="auto">Auto</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Shifts (Qualität)</label>
+          <input type="number" id="demucsShifts" value="1" min="1" max="10" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+        </div>
+      </div>
+
+      <label style="font-size:.7rem;display:flex;align-items:center;gap:5px;color:var(--dim);margin-bottom:12px">
+        <input type="checkbox" id="demucsMp3"> Ausgabe als MP3 (statt WAV)
+      </label>
+
+      <!-- Progress -->
+      <div id="demucsProgress" style="display:none;margin-bottom:10px">
+        <div style="background:var(--bg3);border-radius:6px;overflow:hidden;height:20px;border:1px solid var(--border)">
+          <div id="demucsBar" style="height:100%;background:var(--accent);width:0%;transition:width .3s;font-size:.6rem;line-height:20px;text-align:center;color:#000"></div>
+        </div>
+        <div id="demucsStage" style="font-size:.65rem;color:var(--dim);margin-top:3px;text-align:center"></div>
+      </div>
+
+      <!-- Results -->
+      <div id="demucsResults" style="display:none;margin-bottom:10px">
+        <div style="font-size:.78rem;font-weight:600;margin-bottom:6px;color:var(--accent)">✅ Stems</div>
+        <div id="demucsStemList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-s" onclick="closeDemucsModal()">Schließen</button>
+        <button class="btn" id="demucsStartBtn" onclick="startDemucs()">🎵 Separation starten</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- AI Chat Panel -->
 <div class="chat-panel" id="chatPanel">
   <div class="chat-head">
@@ -1016,6 +1099,7 @@ const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],c
 const au=document.getElementById('audioEl');
 function toast(m,t='ok'){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toasts').appendChild(e);setTimeout(()=>e.remove(),3500)}
 function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
+function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function fmt(s){if(!s&&s!==0)return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+String(sec).padStart(2,'0')}
 function fmtMs(s){const m=Math.floor(s/60),sec=(s%60).toFixed(2);return m+':'+sec.padStart(5,'0')}
 
@@ -1118,21 +1202,30 @@ const j=await r.json();if(r.ok){toast('Job gestartet'+(lyricsFile?' (mit Lyrics)
 function startPoll(){if(poll)clearInterval(poll);poll=setInterval(refreshJobs,2500);refreshJobs()}
 async function refreshJobs(){try{const jobs=await(await fetch(B+'/api/jobs')).json();rJL(jobs);
 if(aJobId){const j=jobs.find(j=>j.job_id===aJobId);if(j)rDetail(j)}
-if(!jobs.some(j=>!['completed','failed'].includes(j.status))&&poll){clearInterval(poll);poll=null}}catch(e){}}
+if(!jobs.some(j=>!['completed','failed','cancelled'].includes(j.status))&&poll){clearInterval(poll);poll=null}}catch(e){}}
 function rJL(jobs){const el=document.getElementById('jl');if(!jobs.length){el.innerHTML='<div style="font-size:.7rem;color:var(--dim);padding:5px">Keine Jobs</div>';return}
-const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
-el.innerHTML=jobs.map(j=>{const c=['completed'].includes(j.status)?'c':['failed'].includes(j.status)?'f':['pending','queued'].includes(j.status)?'p':'r';
-return`<div class="ji${j.job_id===aJobId?' active':''}" onclick="selJob('${j.job_id}')"><div class="jic ${c}">${ic[j.status]||'⏳'}</div><div class="jm"><div class="jn">${esc(j.filename)}</div><div class="js">${j.stage} ${Math.round(j.progress*100)}%</div>${j.progress>0&&j.progress<1?`<div class="pb"><div class="pf" style="width:${j.progress*100}%"></div></div>`:''}</div></div>`}).join('')}
+const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌',cancelled:'⛔'};
+el.innerHTML=jobs.map(j=>{const c=['completed'].includes(j.status)?'c':['failed'].includes(j.status)?'f':['cancelled'].includes(j.status)?'x':['pending','queued'].includes(j.status)?'p':'r';
+const running=['pending','queued','preprocessing','transcribing','refining','exporting','rendering_preview'].includes(j.status);
+const cancelBtn=running?`<button class="ji-cancel" onclick="event.stopPropagation();cancelJob('${j.job_id}')" title="Abbrechen">✕</button>`:'';
+return`<div class="ji${j.job_id===aJobId?' active':''}" onclick="selJob('${j.job_id}')"><div class="jic ${c}">${ic[j.status]||'⏳'}</div><div class="jm"><div class="jn">${esc(j.filename)}</div><div class="js">${j.stage} ${Math.round(j.progress*100)}%</div>${j.progress>0&&j.progress<1?`<div class="pb"><div class="pf" style="width:${j.progress*100}%"></div></div>`:''}</div>${cancelBtn}</div>`}).join('')}
 function selJob(id){aJobId=id;_persistSession({job_id:id});document.getElementById('es').style.display='none';const jd=document.getElementById('jd');jd.style.display='flex';jd.style.flexDirection='column';jd.style.gap='12px';refreshJobs();if(!poll)startPoll()}
 
+async function cancelJob(id){
+  if(!confirm('Job wirklich abbrechen?'))return;
+  try{const r=await fetch(B+'/api/jobs/'+id+'/cancel',{method:'POST'});
+    if(r.ok){toast('Job abgebrochen');refreshJobs()}
+    else{const d=await r.json();toast(d.detail||'Fehler','err')}}
+  catch(e){toast('Fehler: '+e.message,'err')}}
+
 async function rDetail(j){
-const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
+const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌',cancelled:'⛔'};
 document.getElementById('dI').textContent=ic[j.status]||'⏳';
 document.getElementById('dF').textContent=j.filename;
 document.getElementById('dS').textContent=j.status;
 document.getElementById('dP').style.width=(j.progress*100)+'%';
 const st=document.getElementById('dSt');st.textContent=j.error?'Error: '+j.error:j.stage;
-st.style.color=j.status==='failed'?'var(--danger)':'var(--dim)';
+st.style.color=j.status==='failed'?'var(--danger)':j.status==='cancelled'?'var(--warn)':'var(--dim)';
 if(j.status==='completed'&&j.result){
   setupPlayer(j);
   // downloads
@@ -1170,15 +1263,30 @@ function seekWF(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentT
 function seekMM(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentTime=(ev.clientX-r.left)/r.width*wfDur}
 
 // ── Karaoke Live ──
+function _getKaraokeMode(){return document.getElementById('sK').value}
 function updKaraoke(){if(!cSegs.length)return;const t=au.currentTime;const el=document.getElementById('kLive');
 const seg=cSegs.find(s=>t>=s.start&&t<=s.end);
 if(!seg){el.innerHTML='<span style="color:var(--dim);font-size:.85rem">—</span>';el.dataset.segIdx='';return}
 el.dataset.segIdx=cSegs.indexOf(seg);
+const mode=_getKaraokeMode();
+const hlC=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00e5a0';
+const baseC=getComputedStyle(el).color||'var(--text)';
 if(seg.has_word_timestamps&&seg.words&&seg.words.length){
-  el.innerHTML=seg.words.map(w=>{const c=t>=w.end?'past':t>=w.start?'active':'';return`<span class="kw ${c}">${esc(w.word)} </span>`}).join('')
+  el.innerHTML=seg.words.map(w=>{
+    if(t>=w.end)return`<span class="kw past">${esc(w.word)} </span>`;
+    if(t>=w.start){
+      if(mode==='kf'){
+        const pct=Math.min(100,Math.round((t-w.start)/(w.end-w.start)*100));
+        return`<span class="kw fill" style="background:linear-gradient(90deg,${hlC} ${pct}%,${baseC} ${pct}%)">${esc(w.word)} </span>`}
+      return`<span class="kw active">${esc(w.word)} </span>`}
+    return`<span class="kw">${esc(w.word)} </span>`}).join('')
 }else{const pct=Math.min(1,(t-seg.start)/(seg.end-seg.start));
-  const txt=seg.text,split=Math.floor(txt.length*pct);
-  el.innerHTML=`<span class="kw active">${esc(txt.slice(0,split))}</span><span class="kw">${esc(txt.slice(split))}</span>`}}
+  if(mode==='kf'){
+    const p=Math.round(pct*100);
+    el.innerHTML=`<span class="kw fill" style="background:linear-gradient(90deg,${hlC} ${p}%,${baseC} ${p}%)">${esc(seg.text)}</span>`
+  }else{
+    const txt=seg.text,split=Math.floor(txt.length*pct);
+    el.innerHTML=`<span class="kw active">${esc(txt.slice(0,split))}</span><span class="kw">${esc(txt.slice(split))}</span>`}}}
 
 function editKaraokeLine(){
   if(!cSegs.length||!aJobId)return;
@@ -1187,7 +1295,7 @@ function editKaraokeLine(){
   if(isNaN(idx)||!cSegs[idx])return;
   const seg=cSegs[idx];
   const wasPlaying=!au.paused;if(wasPlaying)au.pause();
-  el.innerHTML=`<input type="text" id="kEditInput" value="${esc(seg.text)}" 
+  el.innerHTML=`<input type="text" id="kEditInput" value="${escAttr(seg.text)}" 
     style="width:90%;font-size:1.1rem;font-weight:500;text-align:center;background:var(--bg3);color:var(--fg);border:2px solid var(--accent);border-radius:6px;padding:8px 12px;outline:none">`;
   const inp=document.getElementById('kEditInput');
   inp._cancelled=false;inp._wasPlaying=wasPlaying;
@@ -1676,6 +1784,45 @@ map.innerHTML=pairsH;
 toast(`Reimschema: ${r.scheme.slice(0,20)}... (${r.pairs.length} Paare, ${(r.density*100).toFixed(0)}%)`)
 }catch(e){el.innerHTML=`<div style="color:var(--danger)">${e.message}</div>`}}
 
+// ── Auto BPM → CPS/MaxChars ──
+async function autoBpmParams(){
+  const btn=document.getElementById('btnAutoBpm');
+  const fmt=document.getElementById('sA')?.checked?'ass':'srt';
+  // If we have a loaded job, detect BPM from its audio
+  if(aJobId){
+    btn.disabled=true;btn.textContent='⏳';
+    try{
+      const r=await(await fetch(B+'/api/jobs/'+aJobId+'/detect-bpm',{method:'POST'})).json();
+      const p=fmt==='ass'?r.ass:r.srt;
+      document.getElementById('sC').value=p.cps;
+      document.getElementById('sMC').value=p.max_chars_per_line;
+      toast(`BPM ${r.bpm}: CPS=${p.cps}, Chars=${p.max_chars_per_line} (${p.rationale})`);
+    }catch(e){
+      // Fallback: ask user for BPM manually
+      const bpm=parseFloat(prompt('BPM konnte nicht erkannt werden.\nBPM manuell eingeben:','120'));
+      if(bpm>0){
+        try{
+          const r=await(await fetch(B+'/api/bpm-params?bpm='+bpm+'&format='+fmt)).json();
+          document.getElementById('sC').value=r.cps;
+          document.getElementById('sMC').value=r.max_chars_per_line;
+          toast(`BPM ${bpm}: CPS=${r.cps}, Chars=${r.max_chars_per_line}`);
+        }catch(e2){toast('BPM Params: '+e2.message,'err')}
+      }
+    }finally{btn.disabled=false;btn.textContent='⚡BPM'}
+  }else{
+    const bpm=parseFloat(prompt('BPM eingeben:','120'));
+    if(!bpm||bpm<=0)return;
+    btn.disabled=true;btn.textContent='⏳';
+    try{
+      const r=await(await fetch(B+'/api/bpm-params?bpm='+bpm+'&format='+fmt)).json();
+      document.getElementById('sC').value=r.cps;
+      document.getElementById('sMC').value=r.max_chars_per_line;
+      toast(`BPM ${bpm}: CPS=${r.cps}, Chars=${r.max_chars_per_line}`);
+    }catch(e){toast('BPM Params: '+e.message,'err')}
+    finally{btn.disabled=false;btn.textContent='⚡BPM'}
+  }
+}
+
 // ── Auto CPS Fix ──
 async function doAutoFixCps(){
 if(!aJobId)return;
@@ -1881,7 +2028,7 @@ const bpm=it.bpm>0?`<span style="color:var(--accent)">${it.bpm.toFixed(0)}♩</s
 const div=document.createElement('div');div.className='lib-item';
 div.innerHTML=`<div class="li-title" title="${esc(it.source_filename)}">${esc(it.title)}</div>
 <div class="li-meta">${esc(it.backend)} · ${esc(it.language||'?')} · ${dur} ${conf} ${bpm} ${rev} · ${ds}</div>
-<button class="li-del" onclick="event.stopPropagation();delLib('${it.id}','${esc(it.title)}')" title="Löschen">🗑</button>`;
+<button class="li-del" onclick="event.stopPropagation();delLib('${it.id}','${escAttr(it.title)}')" title="Löschen">🗑</button>`;
 div.onclick=()=>openLib(it);el.appendChild(div)}
 }catch(e){toast('Library: '+e.message,'err')}}
 
@@ -2007,6 +2154,36 @@ else toast(j.detail||'Err','err')
 // ── Session Persistence ──
 function _persistSession(s){try{localStorage.setItem('kst-session',JSON.stringify(s))}catch(e){}}
 function _clearSession(){try{localStorage.removeItem('kst-session')}catch(e){}}
+function clearAll(){
+  if(!confirm('Seite vollständig zurücksetzen? Alle geladenen Daten werden verworfen.'))return;
+  // Stop audio
+  au.pause();au.removeAttribute('src');au.load();
+  // Clear state
+  uploaded=[];aJobId=null;wfPeaks=null;wfDur=0;cSegs=[];curFil='all';looping=false;loopSeg=null;
+  curMediaId='';curMediaEditable=false;lyricsFile=null;
+  // Stop polling
+  if(poll){clearInterval(poll);poll=null}
+  // Clear session & localStorage
+  _clearSession();
+  // Reset UI
+  document.getElementById('jd').style.display='none';
+  document.getElementById('es').style.display='';
+  document.getElementById('jl').innerHTML='';
+  document.getElementById('kLive').innerHTML='';
+  document.getElementById('segL').innerHTML='';
+  document.getElementById('segCnt').textContent='';
+  // Reset waveform
+  const wfC=document.querySelector('.waveform canvas');if(wfC){const cx=wfC.getContext('2d');cx.clearRect(0,0,wfC.width,wfC.height)}
+  // Reset lyrics
+  document.getElementById('lyLabel').textContent='Lyrics (.txt/.lrc) hochladen';
+  document.getElementById('lyHint').textContent='Zeilenstruktur wird für SRT/ASS übernommen';
+  document.getElementById('lyDel').style.display='none';
+  document.getElementById('lyOpts').style.display='none';
+  // Reset minimap
+  const mm=document.getElementById('mm');if(mm)mm.innerHTML='';
+  // Refresh
+  startPoll();
+  toast('Seite zurückgesetzt')}
 async function _restoreSession(){
   let s;try{s=JSON.parse(localStorage.getItem('kst-session'))}catch(e){return}
   if(!s)return;
@@ -2026,6 +2203,122 @@ async function _restoreSession(){
       _persistSession({lib_id:match.id,job_id:s.job_id});
       await loadFromLibrary(full);return}}catch(e){}}
   _clearSession()}
+
+// ── Demucs Separation Modal ──
+let demucsJobId=null;
+let demucsPollTimer=null;
+
+async function openDemucsModal(){
+  const m=document.getElementById('demucsModal');
+  m.classList.add('open');
+  document.getElementById('demucsResults').style.display='none';
+  document.getElementById('demucsProgress').style.display='none';
+  document.getElementById('demucsStartBtn').disabled=false;
+  demucsJobId=null;
+  // Check availability
+  const st=document.getElementById('demucsStatus');
+  try{
+    const r=await(await fetch(B+'/api/separation/check')).json();
+    st.textContent=r.available?'✅ Demucs verfügbar':'❌ '+r.message;
+    st.style.color=r.available?'var(--ok)':'var(--err)';
+    document.getElementById('demucsStartBtn').disabled=!r.available;
+  }catch(e){st.textContent='Prüfung fehlgeschlagen';st.style.color='var(--err)'}
+  // Load audio file list
+  try{
+    const r=await(await fetch(B+'/api/separation/audio-files')).json();
+    const sel=document.getElementById('demucsFile');
+    sel.innerHTML='<option value="">— Datei wählen —</option>';
+    for(const f of r.files){
+      const o=document.createElement('option');o.value=f.filename;
+      o.textContent=f.filename+' ('+_fmtSize(f.size)+')';
+      sel.appendChild(o);
+    }
+  }catch(e){console.warn('Audio files:',e)}
+}
+
+function _fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB'}
+
+function closeDemucsModal(){
+  document.getElementById('demucsModal').classList.remove('open');
+  if(demucsPollTimer){clearInterval(demucsPollTimer);demucsPollTimer=null}
+}
+
+async function startDemucs(){
+  const filename=document.getElementById('demucsFile').value;
+  if(!filename){toast('Bitte Audio-Datei wählen','err');return}
+  const body={
+    filename,
+    model:document.getElementById('demucsModel').value,
+    device:document.getElementById('demucsDevice').value,
+    stems:document.getElementById('demucsStemMode').value,
+    shifts:parseInt(document.getElementById('demucsShifts').value)||1,
+    overlap:0.25,
+    mp3:document.getElementById('demucsMp3').checked,
+    mp3_bitrate:320,
+  };
+  document.getElementById('demucsStartBtn').disabled=true;
+  document.getElementById('demucsProgress').style.display='block';
+  document.getElementById('demucsResults').style.display='none';
+  document.getElementById('demucsBar').style.width='5%';
+  document.getElementById('demucsStage').textContent='Job wird gestartet...';
+  try{
+    const r=await(await fetch(B+'/api/separation/start',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+    })).json();
+    demucsJobId=r.job_id;
+    toast('Separation gestartet: '+r.job_id);
+    // Poll for progress
+    demucsPollTimer=setInterval(()=>pollDemucsJob(r.job_id),1500);
+  }catch(e){
+    toast('Fehler: '+e.message,'err');
+    document.getElementById('demucsStartBtn').disabled=false;
+    document.getElementById('demucsProgress').style.display='none';
+  }
+}
+
+async function pollDemucsJob(jobId){
+  try{
+    const j=await(await fetch(B+'/api/jobs/'+jobId)).json();
+    const bar=document.getElementById('demucsBar');
+    const stage=document.getElementById('demucsStage');
+    bar.style.width=Math.round(j.progress*100)+'%';
+    bar.textContent=Math.round(j.progress*100)+'%';
+    stage.textContent=j.stage||'';
+    if(j.status==='completed'){
+      clearInterval(demucsPollTimer);demucsPollTimer=null;
+      document.getElementById('demucsProgress').style.display='none';
+      document.getElementById('demucsStartBtn').disabled=false;
+      bar.style.width='100%';
+      // Load stems
+      try{
+        const stems=await(await fetch(B+'/api/separation/'+jobId+'/stems')).json();
+        showDemucsResults(jobId,stems);
+      }catch(e){toast('Stems laden: '+e.message,'err')}
+      toast('✅ Separation abgeschlossen!');
+    }else if(j.status==='failed'||j.status==='cancelled'){
+      clearInterval(demucsPollTimer);demucsPollTimer=null;
+      document.getElementById('demucsStartBtn').disabled=false;
+      stage.textContent='❌ '+(j.error||j.status);
+      toast('Separation fehlgeschlagen: '+(j.error||j.status),'err');
+    }
+  }catch(e){console.warn('Poll demucs:',e)}
+}
+
+function showDemucsResults(jobId,data){
+  const list=document.getElementById('demucsStemList');
+  list.innerHTML='';
+  const stemNames=Object.keys(data.stems||{});
+  const labels={vocals:'🎤 Vocals',drums:'🥁 Drums',bass:'🎸 Bass',other:'🎹 Other'};
+  for(const name of stemNames){
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:6px;background:var(--bg3);padding:6px 10px;border-radius:6px;border:1px solid var(--border)';
+    div.innerHTML=`<span style="font-size:.8rem">${labels[name]||name}</span>
+      <a href="${B}/api/separation/${jobId}/download/${name}" target="_blank"
+         style="font-size:.65rem;color:var(--accent);text-decoration:none" title="Download">⬇️</a>`;
+    list.appendChild(div);
+  }
+  document.getElementById('demucsResults').style.display='block';
+}
 
 // ── Init ──
 checkH();checkAI();setInterval(checkH,30000);connectSSE();startPoll();
@@ -2205,7 +2498,7 @@ function applyTapTimings(){
       cSegs[i].end=Math.round((cSegs[i].start+avgDur)*1000)/1000}}
   // Save to server
   if(aJobId){
-    fetch(B+'/api/jobs/'+aJobId+'/segments',{
+    fetch(B+'/api/jobs/'+aJobId+'/segments/bulk',{
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(cSegs)}).then(()=>loadSegs(aJobId))}
   renderSegs();drawMM();
@@ -2242,10 +2535,17 @@ function fskRender(){
     const seg=cSegs[ci];
     // Word-level highlighting if available
     if(seg.words&&seg.words.length>1){
+      const mode=_getKaraokeMode();
+      const hlC=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00e5a0';
       let wH='';
       for(const w of seg.words){
-        const hl=t>=w.start&&t<w.end;
-        wH+=`<span class="fsk-word${hl?' hl':''}">${esc(w.word)} </span>`}
+        if(t>=w.end){wH+=`<span class="fsk-word hl">${esc(w.word)} </span>`}
+        else if(t>=w.start){
+          if(mode==='kf'){
+            const pct=Math.min(100,Math.round((t-w.start)/(w.end-w.start)*100));
+            wH+=`<span class="fsk-word fsk-fill" style="background:linear-gradient(90deg,${hlC} ${pct}%,#fff ${pct}%)">${esc(w.word)} </span>`}
+          else{wH+=`<span class="fsk-word hl">${esc(w.word)} </span>`}}
+        else{wH+=`<span class="fsk-word">${esc(w.word)} </span>`}}
       txt.innerHTML=wH
     }else{txt.innerHTML=`<span class="fsk-word hl">${esc(seg.text)}</span>`}
     nxt.textContent=ci<cSegs.length-1?cSegs[ci+1].text:''}

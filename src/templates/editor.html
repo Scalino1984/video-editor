@@ -17,6 +17,7 @@
 :root{
   --bg:#0c0e14;--bg2:#13161f;--bg3:#191d29;--bg4:#1e2333;--border:#262b3d;
   --text:#e2e4ea;--dim:#7a7f94;--accent:#00e5a0;--accent2:#00b8ff;
+  --fg:#e2e4ea;--surface:#191d29;
   --danger:#ff4466;--warn:#ffaa22;--purple:#a855f7;--r:10px;
   --font:'Outfit',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
   --track-h:52px;--ruler-h:28px;--sidebar-w:280px;--props-w:300px;
@@ -279,6 +280,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   <div class="hdr-group">
     <button class="btn btn-sm" onclick="renderProject()" id="renderBtn">🎬 Render</button>
     <button class="btn-s btn-sm" onclick="renderLoop()" title="Loop Video rendern">🔁 Loop</button>
+    <button class="btn-s btn-sm" onclick="clearEditor()" title="Editor zurücksetzen" style="color:var(--danger)">🗑️ Clear</button>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <div class="theme-sw">
@@ -296,6 +298,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 <aside class="sidebar">
   <div class="sb-tabs">
     <div class="sb-tab on" data-tab="assets" onclick="sbTab('assets')">📁 Assets</div>
+    <div class="sb-tab" data-tab="loops" onclick="sbTab('loops')">🎬 Loops</div>
     <div class="sb-tab" data-tab="jobs" onclick="sbTab('jobs')">📋 Jobs</div>
     <div class="sb-tab" data-tab="templates" onclick="sbTab('templates')">⚡ Quick</div>
   </div>
@@ -315,6 +318,14 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   <div class="sb-content" id="sbJobs" style="display:none">
     <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">Abgeschlossene Karaoke-Jobs importieren:</div>
     <div id="jobList"><div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">Lade Jobs...</div></div>
+  </div>
+
+  <!-- Loops Tab -->
+  <div class="sb-content" id="sbLoops" style="display:none">
+    <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">Loop-Videos passend zum Projekt-Format:</div>
+    <div id="loopVideoGrid" class="loop-grid">
+      <div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>
+    </div>
   </div>
 
   <!-- Templates Tab -->
@@ -497,12 +508,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
           <option value="stretch">Strecken (Stretch)</option>
         </select></div>
       </div>
-      <div class="prop-section">
-        <h4>🎞️ Loop-Video Bibliothek</h4>
-        <div id="loopVideoGrid" class="loop-grid">
-          <div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>
-        </div>
-      </div>
+
       <div class="prop-section">
         <h4>💬 Untertitel-Stil</h4>
         <div class="prop-row"><label>Font</label><select id="ppSubFont" onchange="updateSubSetting('sub_font',this.value)">
@@ -643,6 +649,7 @@ function setTheme(t){
 // ── Format helpers ──
 function fmt(s){if(!s||s<0)s=0;const m=Math.floor(s/60);const sec=(s%60).toFixed(1);return m+':'+sec.padStart(4,'0')}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PROJECT MANAGEMENT
@@ -661,23 +668,42 @@ async function showNewProject(){
     toast('Projekt erstellt: '+r.name)
   }catch(e){toast('Fehler: '+e.message,'err')}}
 
+function clearEditor(){
+  if(!confirm('Editor vollständig zurücksetzen? Nicht gespeicherte Änderungen gehen verloren.'))return;
+  // Stop media
+  const vid=document.getElementById('previewVid');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
+  const aud=document.getElementById('previewAu');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
+  // Reset state
+  PID=null;PROJ=null;SEL_CLIP=null;PLAYBACK_TIME=0;PLAYING=false;AI_HISTORY=[];
+  if(PLAY_RAF){cancelAnimationFrame(PLAY_RAF);PLAY_RAF=0}
+  // Clear localStorage
+  try{localStorage.removeItem('kst-editor-pid')}catch(e){}
+  // Full UI reset
+  _resetEditorUI();
+  document.getElementById('projName').textContent='Kein Projekt';
+  // Clear timeline ruler canvas
+  const cv=document.getElementById('rulerCanvas');if(cv){const cx=cv.getContext('2d');cx.clearRect(0,0,cv.width,cv.height)}
+  toast('Editor zurückgesetzt')}
+
 function _resetEditorUI(){
   // Clear assets list
   const al=document.getElementById('assetList');if(al)al.innerHTML='';
   // Clear timeline tracks
-  for(const id of ['trackVideo','trackAudio','trackSub','trackOverlay']){
-    const el=document.getElementById(id);if(el)el.innerHTML=''}
+  document.querySelectorAll('.tl-track').forEach(el=>el.innerHTML='');
   // Clear preview media
   const vid=document.getElementById('previewVid');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
   const aud=document.getElementById('previewAu');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
   document.getElementById('previewEmpty').style.display='block';
   // Clear subtitle overlay
-  const subOv=document.getElementById('subtitleOverlay');if(subOv)subOv.textContent='';
+  const subOv=document.getElementById('subOverlay');if(subOv)subOv.textContent='';
   // Reset AI chat
-  const chatLog=document.getElementById('chatLog');if(chatLog)chatLog.innerHTML='';
+  const chatLog=document.getElementById('aiMsgs');if(chatLog)chatLog.innerHTML='';
   AI_HISTORY=[];
   // Clear props panel
-  const propsC=document.getElementById('propsContent');if(propsC)propsC.innerHTML='<div style="color:var(--dim);font-size:.7rem;padding:8px">Kein Element ausgewählt</div>';
+  const propsC=document.getElementById('clipPropsContent');if(propsC)propsC.innerHTML='';
+  const propsE=document.getElementById('clipPropsEmpty');if(propsE)propsE.style.display='';
+  // Reset loop video grid
+  const lg=document.getElementById('loopVideoGrid');if(lg)lg.innerHTML='<div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>';
 }
 
 async function loadProjectData(){
@@ -751,9 +777,9 @@ function dragAsset(ev,id,type){
   ev.dataTransfer.setData('asset_type',type);
   ev.dataTransfer.effectAllowed='copy'}
 
-function selectAsset(id){
+function selectAsset(id){  
   document.querySelectorAll('.asset-item').forEach(e=>e.classList.remove('sel'));
-  event.currentTarget.classList.add('sel')}
+  if(window.event&&window.event.currentTarget)window.event.currentTarget.classList.add('sel')}
 
 function _syncClipDurations(){
   // Auto-extend video/image clips to match audio track length
@@ -800,9 +826,11 @@ async function addAssetToTimeline(assetId){
 function sbTab(t){
   document.querySelectorAll('.sidebar .sb-tab').forEach(e=>e.classList.toggle('on',e.dataset.tab===t));
   document.getElementById('sbAssets').style.display=t==='assets'?'':'none';
+  document.getElementById('sbLoops').style.display=t==='loops'?'':'none';
   document.getElementById('sbJobs').style.display=t==='jobs'?'':'none';
   document.getElementById('sbTemplates').style.display=t==='templates'?'':'none';
-  if(t==='jobs')loadJobs()}
+  if(t==='jobs')loadJobs();
+  if(t==='loops')loadLoopVideos()}
 
 let _jobCache=[];
 async function loadJobs(){
@@ -1054,11 +1082,12 @@ function drawRuler(){
   // Draw A/B loop region
   if(LOOP_A!==null&&LOOP_B!==null&&LOOP_A<LOOP_B){
     const la=LOOP_A*ZOOM,lb=LOOP_B*ZOOM;
+    const _accentColor=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00e5a0';
     ctx.fillStyle='rgba(0,230,150,.15)';ctx.fillRect(la,0,lb-la,cv.height);
-    ctx.strokeStyle='var(--accent)';ctx.lineWidth=2;
+    ctx.strokeStyle=_accentColor;ctx.lineWidth=2;
     ctx.beginPath();ctx.moveTo(la,0);ctx.lineTo(la,cv.height);ctx.stroke();
     ctx.beginPath();ctx.moveTo(lb,0);ctx.lineTo(lb,cv.height);ctx.stroke();
-    ctx.font='bold 10px sans-serif';ctx.fillStyle='var(--accent)';
+    ctx.font='bold 10px sans-serif';ctx.fillStyle=_accentColor;
     ctx.fillText('A',la+3,10);ctx.fillText('B',lb+3,10)}}
 
 function updatePlayhead(){
@@ -1294,8 +1323,8 @@ async function loadLoopVideos(w,h){
     let html='';
     for(const folder of folders){
       for(const v of r[folder]){
-        html+=`<div class="loop-card ${cardClass}" onclick="importLoopVideo('${v.folder}','${v.filename}')" title="${v.display_name} (${v.size_mb} MB)">
-          <img src="${B}${v.thumb_url}" alt="${v.display_name}" loading="lazy">
+        html+=`<div class="loop-card ${cardClass}" onclick="importLoopVideo('${escAttr(v.folder)}','${escAttr(v.filename)}')" title="${escAttr(v.display_name)} (${v.size_mb} MB)">
+          <img src="${B}${v.thumb_url}" alt="${escAttr(v.display_name)}" loading="lazy">
           <div class="loop-label">${esc(v.display_name)}</div>
         </div>`}}
     grid.innerHTML=html;
@@ -1959,8 +1988,8 @@ function addChatMsg(text,role){
   document.getElementById('aiMsgs').scrollTop=999999;return el}
 
 function renderMd(text){
-  // Simple markdown rendering
-  return text
+  // Simple markdown rendering — escape HTML first to prevent XSS
+  return esc(text)
     .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
     .replace(/`([^`]+)`/g,'<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
