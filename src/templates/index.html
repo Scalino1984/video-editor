@@ -392,7 +392,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
   </div>
 </header>
 <aside class="side">
-  <div class="dz" id="dz" onclick="document.getElementById('fi').click()">
+  <div class="dz" id="dz" onclick="document.getElementById('fi').click()" title="Audio-Datei(en) hier ablegen oder klicken — unterstützt MP3, WAV, FLAC, M4A, OGG, AAC. Auch SRT/VTT/LRC zum Reimport.">
     <span class="ic">📂</span><b>Audio hochladen</b>
     <div class="hn">mp3 wav flac m4a ogg • Drag & Drop</div>
     <input type="file" id="fi" accept=".mp3,.wav,.flac,.m4a,.aac,.ogg,.srt,.vtt,.lrc" multiple hidden>
@@ -402,68 +402,69 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <span style="font-size:.58rem;color:var(--dim)">optional</span>
     <div style="flex:1;height:1px;background:var(--border)"></div>
   </div>
-  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg3);border:1px dashed var(--border);border-radius:6px;cursor:pointer;transition:all .15s" onclick="document.getElementById('lyFi').click()" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border)'">
+  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg3);border:1px dashed var(--border);border-radius:6px;cursor:pointer;transition:all .15s" onclick="document.getElementById('lyFi').click()" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border)'" title="Lyrics-Textdatei hochladen — Zeilenstruktur wird für Untertitel übernommen, Wörter werden an ASR-Timestamps aligned">
     <span style="font-size:.9rem">📝</span>
     <div style="flex:1;min-width:0">
       <div style="font-size:.7rem;font-weight:600" id="lyLabel">Lyrics (.txt/.lrc) hochladen</div>
       <div style="font-size:.55rem;color:var(--dim)" id="lyHint">Zeilenstruktur wird für SRT/ASS übernommen</div>
     </div>
-    <button style="font-size:.55rem;padding:2px 5px;display:none;background:var(--bg4);color:var(--dim);border:1px solid var(--border);border-radius:3px" id="lyDel" onclick="event.stopPropagation();clearLyrics()">✕</button>
+    <button style="font-size:.55rem;padding:2px 5px;display:none;background:var(--bg4);color:var(--dim);border:1px solid var(--border);border-radius:3px" id="lyDel" onclick="event.stopPropagation();clearLyrics()" title="Hochgeladene Lyrics entfernen">✕</button>
     <input type="file" id="lyFi" accept=".txt,.lrc" hidden>
   </div>
   <div id="lyOpts" style="display:none;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-top:-2px;font-size:.65rem">
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
       <label style="color:var(--dim)">Template</label>
-      <select id="sLTM" style="flex:1;font-size:.65rem"><option value="lyrics_source_of_truth">Source of Truth</option><option value="layout_only_reflow">Layout Only</option><option value="hybrid_mark_differences">Hybrid</option></select>
+      <select id="sLTM" style="flex:1;font-size:.65rem"><option value="lyrics_source_of_truth" title="Lyrics-Text wird 1:1 übernommen, ASR-Timestamps zugeordnet">Source of Truth</option><option value="layout_only_reflow" title="ASR-Text beibehalten, nur Zeilenumbrüche aus Lyrics übernehmen">Layout Only</option><option value="hybrid_mark_differences" title="Lyrics-Text verwenden, Abweichungen zum ASR markieren">Hybrid</option></select>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <label style="color:var(--dim)">Match</label>
-      <select id="sMatch" style="flex:1;font-size:.65rem"><option value="lenient">Lenient</option><option value="strict">Strict</option></select>
-      <label class="tg" style="font-size:.6rem"><input type="checkbox" id="sEL"> Empty Lines</label>
+      <select id="sMatch" style="flex:1;font-size:.65rem"><option value="lenient" title="Tolerantes Matching — leichte Schreib-Unterschiede werden akzeptiert">Lenient</option><option value="strict" title="Striktes Matching — Wörter müssen exakt übereinstimmen">Strict</option></select>
+      <label class="tg" style="font-size:.6rem" title="Leere Zeilen in Lyrics als Segment-Trenner beibehalten"><input type="checkbox" id="sEL"> Empty Lines</label>
     </div>
   </div>
-  <button class="btn-s" id="tagBtn" style="display:none;width:100%;margin-top:3px;font-size:.65rem" onclick="openTagModal()">🏷️ Tags bearbeiten</button>
+  <button class="btn-s" id="tagBtn" style="display:none;width:100%;margin-top:3px;font-size:.65rem" onclick="openTagModal()" title="ID3/MP4/Vorbis-Tags der Audio-Datei lesen und bearbeiten">🏷️ Tags bearbeiten</button>
   <div class="card">
     <div class="card-h">⚙ Settings</div>
     <div class="sg">
-      <div><label>Backend</label><select id="sB">
-        <option value="voxtral">Voxtral</option><option value="openai_whisper">OpenAI</option>
-        <option value="local_whisper">Local Whisper</option><option value="whisperx">WhisperX</option>
+      <div title="Transkriptions-Engine: Voxtral (Mistral AI), OpenAI Whisper, Local Whisper (offline), WhisperX (beste Word-Timestamps)"><label>Backend</label><select id="sB">
+        <option value="voxtral" title="Mistral AI Voxtral — schnell, gute Qualität, Cloud">Voxtral</option><option value="openai_whisper" title="OpenAI Whisper API — zuverlässig, Cloud">OpenAI</option>
+        <option value="local_whisper" title="faster-whisper lokal — kein API-Key, GPU optional">Local Whisper</option><option value="whisperx" title="WhisperX — präziseste Word-Timestamps, Forced Alignment">WhisperX</option>
       </select></div>
-      <div><label>Sprache</label><select id="sL">
+      <div title="Sprache des Audios. Auto erkennt automatisch."><label>Sprache</label><select id="sL">
         <option value="auto">Auto</option><option value="de">DE</option><option value="en">EN</option>
         <option value="fr">FR</option><option value="es">ES</option><option value="ja">JA</option>
       </select></div>
-      <div><label>Mode</label><select id="sK"><option value="kf">Fill (progressiv)</option><option value="k">Highlight (sofort)</option><option value="ko">Outline-Wipe</option></select></div>
-      <div><label>Preset</label><select id="sP"><option value="classic">Classic</option><option value="neon">Neon</option><option value="high_contrast">Hi-Con</option><option value="landscape_1080p">Land</option><option value="portrait_1080x1920">Port</option><option value="mobile_safe">Mobile</option></select></div>
-      <div class="f"><label>CPS / Max Chars</label>
-        <div style="display:flex;gap:5px;align-items:center"><input type="number" id="sC" value="18" min="5" max="40" style="width:40%"><input type="number" id="sMC" value="42" min="20" max="80" style="width:40%"><button type="button" class="btn-s" id="btnAutoBpm" onclick="autoBpmParams()" title="CPS/Chars automatisch aus BPM berechnen" style="width:20%;font-size:.6rem;padding:2px 4px">⚡BPM</button></div>
+      <div title="Karaoke-Modus: Fill füllt Wörter progressiv, Highlight markiert sofort, Outline-Wipe wischt den Umriss"><label>Mode</label><select id="sK"><option value="kf" title="Progressives Füllen — Wort wird von links nach rechts eingefärbt">Fill (progressiv)</option><option value="k" title="Sofort-Highlight — ganzes Wort wird auf einmal markiert">Highlight (sofort)</option><option value="ko" title="Outline-Wipe — Umriss wird progressiv sichtbar">Outline-Wipe</option></select></div>
+      <div title="ASS-Preset: Schriftart, Größe, Auflösung, Farben. Beeinflusst das Aussehen der Untertitel."><label>Preset</label><select id="sP"><option value="classic" title="Klassisch — weiß auf schwarz, gut lesbar">Classic</option><option value="neon" title="Neon — leuchtende Farben, dunkler Hintergrund">Neon</option><option value="high_contrast" title="Hoher Kontrast — maximale Lesbarkeit">Hi-Con</option><option value="landscape_1080p" title="Landscape 1920×1080 — YouTube Standard">Land</option><option value="portrait_1080x1920" title="Portrait 1080×1920 — TikTok/Reels/Shorts">Port</option><option value="mobile_safe" title="Mobilsicher — große Schrift, wenig Text">Mobile</option></select></div>
+      <div class="f" title="CPS = Characters Per Second (Lesegeschwindigkeit). Max Chars = maximale Zeichen pro Zeile. Segmente werden automatisch gesplittet wenn überschritten.">
+        <label>CPS / Max Chars</label>
+        <div style="display:flex;gap:5px;align-items:center"><input type="number" id="sC" value="18" min="5" max="40" style="width:40%" title="CPS-Limit: 12–18 für Untertitel, 20–25 für Rap/Karaoke"><input type="number" id="sMC" value="42" min="20" max="80" style="width:40%" title="Max Zeichen pro Zeile. Bei 2 Zeilen: max 84 Zeichen gesamt."><button type="button" class="btn-s" id="btnAutoBpm" onclick="autoBpmParams()" title="CPS und Max Chars automatisch aus BPM berechnen — erkennt BPM aus Audio oder manuelle Eingabe" style="width:20%;font-size:.6rem;padding:2px 4px">⚡BPM</button></div>
       </div>
-      <label class="tg f"><input type="checkbox" id="sVAD" checked> VAD</label>
-      <label class="tg f"><input type="checkbox" id="sN" checked> Normalize</label>
-      <label class="tg f"><input type="checkbox" id="sA" checked> ASS</label>
-      <label class="tg f"><input type="checkbox" id="sVTT"> +VTT</label>
-      <label class="tg f"><input type="checkbox" id="sLRC"> +LRC</label>
-      <label class="tg f"><input type="checkbox" id="sTXT"> +TXT</label>
-      <label class="tg f"><input type="checkbox" id="sVO"> Vocal Iso</label>
-      <button type="button" class="btn-s" onclick="openDemucsModal()" style="width:100%;margin-top:2px;font-size:.6rem;padding:2px 4px">🎵 Demucs Separation</button>
-      <label class="tg f"><input type="checkbox" id="sBT"> BPM Snap</label>
-      <label class="tg f"><input type="checkbox" id="sAI"> AI Correct</label>
+      <label class="tg f" title="Voice Activity Detection — erkennt Sprachpausen und schneidet Stille heraus. Verbessert Transkription bei langen Pausen/Intros."><input type="checkbox" id="sVAD" checked> VAD</label>
+      <label class="tg f" title="Lautstärke-Normalisierung auf -16 LUFS. Gleicht leise/laute Aufnahmen aus für bessere Erkennung."><input type="checkbox" id="sN" checked> Normalize</label>
+      <label class="tg f" title="ASS-Untertitel mit Karaoke-Tags erzeugen. Enthält Wort-für-Wort-Highlighting."><input type="checkbox" id="sA" checked> ASS</label>
+      <label class="tg f" title="Zusätzlich WebVTT-Format exportieren — kompatibel mit HTML5 Video und Web-Playern."><input type="checkbox" id="sVTT"> +VTT</label>
+      <label class="tg f" title="Zusätzlich Enhanced LRC-Format — für Karaoke-Apps und Musik-Player mit Lyrics-Anzeige."><input type="checkbox" id="sLRC"> +LRC</label>
+      <label class="tg f" title="Zusätzlich reinen Text exportieren — ohne Zeitmarken, nur der transkribierte Text."><input type="checkbox" id="sTXT"> +TXT</label>
+      <label class="tg f" title="Vocal Isolation via Demucs — trennt Gesang von Instrumenten vor der Transkription. Hilft bei lauter Musik."><input type="checkbox" id="sVO"> Vocal Iso</label>
+      <button type="button" class="btn-s" onclick="openDemucsModal()" title="Eigenständige Stem-Separation: Vocals, Drums, Bass, Other als separate Dateien extrahieren" style="width:100%;margin-top:2px;font-size:.6rem;padding:2px 4px">🎵 Demucs Separation</button>
+      <label class="tg f" title="Beat-Grid Snap — erkennt BPM und richtet Segment-/Wort-Grenzen am Beat aus. Für Rap/Songs mit klarem Rhythmus."><input type="checkbox" id="sBT"> BPM Snap</label>
+      <label class="tg f" title="AI-Korrektur — nutzt ein LLM um Lyrics zu korrigieren (Rechtschreibung, fehlende Wörter, Interpunktion)."><input type="checkbox" id="sAI"> AI Correct</label>
     </div>
-    <button class="btn-s" onclick="document.getElementById('vrZone').classList.toggle('show')" style="width:100%;margin-top:4px;font-size:.65rem">🎬 Video Render ▾</button>
+    <button class="btn-s" onclick="document.getElementById('vrZone').classList.toggle('show')" style="width:100%;margin-top:4px;font-size:.65rem" title="Karaoke-Video mit Hintergrund und eingebrannten Untertiteln rendern">🎬 Video Render ▾</button>
     <div class="vr-zone" id="vrZone">
-      <div class="vr-row"><label>BG</label><input type="file" id="vrBg" accept="image/*,video/*"></div>
-      <div class="vr-row"><label>Audio</label><input type="file" id="vrAudio" accept="audio/*"></div>
-      <div class="vr-row"><label>Preset</label><select id="vrPreset"><option value="youtube">YouTube</option><option value="mobile">Mobile</option><option value="draft">Draft</option></select>
-      <label style="margin-left:4px">Pos</label><select id="vrPos"><option value="bottom">Bottom</option><option value="middle">Middle</option><option value="top">Top</option></select></div>
-      <button class="btn" onclick="startRender()" style="width:100%;margin-top:4px;font-size:.72rem">🎬 Render Video</button>
+      <div class="vr-row" title="Hintergrundbild oder -video für das gerenderte Karaoke-Video"><label>BG</label><input type="file" id="vrBg" accept="image/*,video/*"></div>
+      <div class="vr-row" title="Audio-Datei die im Video verwendet wird (optional — sonst wird das Job-Audio genommen)"><label>Audio</label><input type="file" id="vrAudio" accept="audio/*"></div>
+      <div class="vr-row"><label title="Render-Qualität: YouTube (1080p), Mobile (720p vertikal), Draft (schnell, niedrige Qualität)">Preset</label><select id="vrPreset"><option value="youtube" title="1920×1080, hohe Qualität">YouTube</option><option value="mobile" title="1080×1920, für TikTok/Reels">Mobile</option><option value="draft" title="Schnelle Vorschau, niedrige Qualität">Draft</option></select>
+      <label style="margin-left:4px" title="Vertikale Position der Untertitel im Video">Pos</label><select id="vrPos"><option value="bottom" title="Untertitel am unteren Rand">Bottom</option><option value="middle" title="Untertitel in der Mitte">Middle</option><option value="top" title="Untertitel am oberen Rand">Top</option></select></div>
+      <button class="btn" onclick="startRender()" style="width:100%;margin-top:4px;font-size:.72rem" title="Rendert ein Video mit eingebrannten Karaoke-Untertiteln (ffmpeg)">🎬 Render Video</button>
     </div>
     <div id="wxO" style="display:none;margin-top:6px"><div class="sg">
-      <div><label>Model</label><select id="sWXM"><option value="large-v3">large-v3</option><option value="medium">medium</option><option value="small">small</option></select></div>
-      <div><label>Compute</label><select id="sWXC"><option value="float16">fp16</option><option value="int8">int8</option></select></div>
+      <div title="WhisperX Modellgröße: large-v3 = beste Qualität, medium = schneller, small = am schnellsten"><label>Model</label><select id="sWXM"><option value="large-v3" title="Größtes Modell — beste Erkennung, braucht ~6 GB VRAM">large-v3</option><option value="medium" title="Mittleres Modell — guter Kompromiss aus Qualität und Geschwindigkeit">medium</option><option value="small" title="Kleinstes Modell — schnell, weniger genau">small</option></select></div>
+      <div title="Rechengenauigkeit: fp16 = schneller auf GPU, int8 = weniger VRAM-Verbrauch"><label>Compute</label><select id="sWXC"><option value="float16" title="Float16 — Standard, schnell auf GPU">fp16</option><option value="int8" title="Int8-Quantisierung — weniger VRAM, etwas langsamer">int8</option></select></div>
     </div></div>
   </div>
-  <button class="btn" style="width:100%;padding:9px" id="btnGo" disabled>▶ Start</button>
+  <button class="btn" style="width:100%;padding:9px" id="btnGo" disabled title="Transkription starten — Audio hochladen und mit gewähltem Backend verarbeiten">▶ Start</button>
   <div style="flex:1;overflow-y:auto">
     <div class="card-h" style="padding:0 0 5px">📋 Jobs</div>
     <div id="jl"></div>
@@ -485,21 +486,21 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <!-- Player -->
     <div class="player" id="playerSec" style="display:none">
       <div class="player-row">
-        <button class="btn-s btn-sm" onclick="togglePlay()" title="Space">⏯</button>
-        <button class="btn-s btn-sm" onclick="skipTo(-5)">-5s</button>
-        <button class="btn-s btn-sm" onclick="skipTo(5)">+5s</button>
-        <select id="pbSpeed" onchange="setSpeed(this.value)" style="width:55px;padding:3px;font-size:.65rem">
+        <button class="btn-s btn-sm" onclick="togglePlay()" title="Play/Pause (Leertaste)">⏯</button>
+        <button class="btn-s btn-sm" onclick="skipTo(-5)" title="5 Sekunden zurückspulen">-5s</button>
+        <button class="btn-s btn-sm" onclick="skipTo(5)" title="5 Sekunden vorspulen">+5s</button>
+        <select id="pbSpeed" onchange="setSpeed(this.value)" style="width:55px;padding:3px;font-size:.65rem" title="Wiedergabegeschwindigkeit">
           <option value="0.5">0.5x</option><option value="0.75">0.75x</option>
           <option value="1" selected>1x</option><option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option><option value="2">2x</option>
         </select>
-        <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8" style="width:60px" oninput="au.volume=this.value">
+        <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8" style="width:60px" oninput="au.volume=this.value" title="Lautstärke">
         <span class="player-time" id="pTime">0:00 / 0:00</span>
-        <button class="btn-s btn-sm" id="loopBtn" onclick="toggleLoop()" style="opacity:.4">🔁</button>
+        <button class="btn-s btn-sm" id="loopBtn" onclick="toggleLoop()" style="opacity:.4" title="A/B-Loop: Markierten Bereich endlos wiederholen (L)">🔁</button>
         <button class="btn-s btn-sm" onclick="clearABLoop()" id="abClear" style="display:none;opacity:.6" title="A/B Loop löschen">✕AB</button>
-        <button class="btn-s btn-sm" onclick="splitAtPlayhead()" title="Split bei Playhead (S)">✂️</button>
+        <button class="btn-s btn-sm" onclick="splitAtPlayhead()" title="Segment an der aktuellen Playhead-Position teilen (S)">✂️</button>
       </div>
-      <div class="waveform" id="wfC" onclick="seekWF(event)" onmousedown="loopDragStart(event)" onmousemove="loopDragMove(event)" onmouseup="loopDragEnd(event)">
+      <div class="waveform" id="wfC" onclick="seekWF(event)" onmousedown="loopDragStart(event)" onmousemove="loopDragMove(event)" onmouseup="loopDragEnd(event)" title="Klicken zum Spulen · Ziehen für A/B-Loop">
         <canvas id="wfCv"></canvas>
         <div class="wf-cursor" id="wfCur" style="left:0"></div>
         <div class="loop-region" id="loopRegion" style="display:none"></div>
@@ -507,26 +508,26 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <span class="loop-label" id="loopLabelB" style="display:none">B</span>
       </div>
       <div class="spectrum" id="specC"><canvas id="specCv"></canvas></div>
-      <div class="minimap" id="mm" onclick="seekMM(event)"><div class="mm-cur" id="mmCur"></div></div>
+      <div class="minimap" id="mm" onclick="seekMM(event)" title="Klicken zum Spulen (Minimap)"><div class="mm-cur" id="mmCur"></div></div>
       <div class="karaoke-live" id="kLive" ondblclick="editKaraokeLine()"></div>
     </div>
     <!-- Downloads -->
     <div id="dlSec" style="display:none">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span class="card-h" style="margin:0">💾 Downloads</span>
-        <a class="dl" id="zipDl" style="margin-left:auto"><span class="x">ZIP</span>Alle</a>
+        <a class="dl" id="zipDl" style="margin-left:auto" title="Alle Job-Dateien als ZIP herunterladen"><span class="x">ZIP</span>Alle</a>
       </div>
       <div class="dls" id="dlBtns"></div>
     </div>
     <!-- Editor -->
     <div id="edSec" style="display:none">
       <div class="tabs">
-        <div class="tab on" data-tab="seg" onclick="stab('seg')">Segments</div>
-        <div class="tab" data-tab="stats" onclick="stab('stats')">Stats</div>
-        <div class="tab" data-tab="rhyme" onclick="stab('rhyme')">Rhyme</div>
-        <div class="tab" data-tab="quick" onclick="stab('quick')">⚡ Actions</div>
-        <div class="tab" data-tab="dict" onclick="stab('dict')">Dictionary</div>
-        <div class="tab" data-tab="rep" onclick="stab('rep')">Report</div>
+        <div class="tab on" data-tab="seg" onclick="stab('seg')" title="Segment-Liste: Bearbeiten, Timing, Text, Split, Merge">Segments</div>
+        <div class="tab" data-tab="stats" onclick="stab('stats')" title="Statistiken: CPS, Wörter, Confidence, Gaps, Overlaps">Stats</div>
+        <div class="tab" data-tab="rhyme" onclick="stab('rhyme')" title="Reimschema-Analyse für DE/EN Lyrics">Rhyme</div>
+        <div class="tab" data-tab="quick" onclick="stab('quick')" title="Schnellzugriff: Export-Presets, CPS Fix, Heatmap, Gap Filler">⚡ Actions</div>
+        <div class="tab" data-tab="dict" onclick="stab('dict')" title="Eigenes Wörterbuch: Falsche→Korrekte Wörter definieren">Dictionary</div>
+        <div class="tab" data-tab="rep" onclick="stab('rep')" title="Qualitäts-Report: Confidence-Scores pro Segment">Report</div>
       </div>
       <!-- Segments Tab -->
       <div id="tSeg" style="margin-top:8px">
@@ -534,30 +535,30 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
           <span style="font-size:.75rem;color:var(--dim)" id="segCnt"></span>
           <div class="sep"></div>
           <div class="filters" id="filBar">
-            <div class="fil on" data-f="all" onclick="setFil('all')">Alle</div>
-            <div class="fil" data-f="low" onclick="setFil('low')">⚠ Low</div>
-            <div class="fil" data-f="pinned" onclick="setFil('pinned')">📌 Pinned</div>
-            <div class="fil" data-f="overlap" onclick="setFil('overlap')">🔴 Overlap</div>
+            <div class="fil on" data-f="all" onclick="setFil('all')" title="Alle Segmente anzeigen">Alle</div>
+            <div class="fil" data-f="low" onclick="setFil('low')" title="Nur Segmente mit Confidence < 80% (unsichere Erkennung)">⚠ Low</div>
+            <div class="fil" data-f="pinned" onclick="setFil('pinned')" title="Nur manuell angepinnte Segmente">📌 Pinned</div>
+            <div class="fil" data-f="overlap" onclick="setFil('overlap')" title="Nur Segmente mit Zeitüberlappungen oder negativen Gaps">🔴 Overlap</div>
           </div>
           <div class="sep"></div>
           <div class="search-box">
-            <input type="text" id="srchIn" placeholder="Suchen...">
-            <input type="text" id="replIn" placeholder="Ersetzen...">
-            <button class="btn-s btn-sm" onclick="doReplace()">⇄</button>
+            <input type="text" id="srchIn" placeholder="Suchen..." title="Suchbegriff in Segmenten">
+            <input type="text" id="replIn" placeholder="Ersetzen..." title="Ersetzungstext">
+            <button class="btn-s btn-sm" onclick="doReplace()" title="Suchen & Ersetzen in allen Segmenten">⇄</button>
           </div>
           <div class="sep"></div>
           <button class="btn-s btn-sm" onclick="doUndo()" title="Ctrl+Z">↩</button>
           <button class="btn-s btn-sm" onclick="doRedo()" title="Ctrl+Y">↪</button>
-          <button class="btn-s btn-sm" onclick="tShift()">⏱ Shift</button>
-          <button class="btn-s btn-sm" onclick="fixGaps()">🔧 Fix Gaps</button>
-          <button class="btn-s btn-sm" onclick="applyDict()">📖 Dict</button>
+          <button class="btn-s btn-sm" onclick="tShift()" title="Alle Timestamps um X Millisekunden verschieben (positiv/negativ)">⏱ Shift</button>
+          <button class="btn-s btn-sm" onclick="fixGaps()" title="Lücken zwischen Segmenten automatisch mit Mindestabstand (80ms) korrigieren">🔧 Fix Gaps</button>
+          <button class="btn-s btn-sm" onclick="applyDict()" title="Custom Dictionary auf alle Segmente anwenden (falsch→korrekt)">📖 Dict</button>
           <div style="margin-left:auto;display:flex;gap:3px">
             <button class="btn btn-sm" onclick="openSubEditor()" title="Subtitle-Editor öffnen">📝 Editor</button>
-            <button class="btn-s btn-sm" onclick="regenFmt()">🔄 Regen</button>
-            <button class="btn-s btn-sm" onclick="copyC('srt')">📋SRT</button>
-            <button class="btn-s btn-sm" onclick="copyC('ass')">📋ASS</button>
-            <button class="btn-s btn-sm" onclick="downloadJobZip()" title="Gesamten Ordner als ZIP herunterladen">📦 ZIP</button>
-            <button class="btn-s btn-sm" onclick="exportProject()">💾 Export</button>
+            <button class="btn-s btn-sm" onclick="regenFmt()" title="ASS/VTT/LRC aus aktuellen Segmenten neu generieren">🔄 Regen</button>
+            <button class="btn-s btn-sm" onclick="copyC('srt')" title="SRT-Untertitel in die Zwischenablage kopieren">📋SRT</button>
+            <button class="btn-s btn-sm" onclick="copyC('ass')" title="ASS-Untertitel in die Zwischenablage kopieren">📋ASS</button>
+            <button class="btn-s btn-sm" onclick="downloadJobZip()" title="Alle Job-Dateien (SRT, ASS, Audio, Report) als ZIP herunterladen">📦 ZIP</button>
+            <button class="btn-s btn-sm" onclick="exportProject()" title="Projekt-Daten als JSON exportieren (Segments + Metadaten)">💾 Export</button>
           </div>
         </div>
         <div class="segs" id="segList"></div>
@@ -569,7 +570,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <div class="card">
           <div class="card-h" style="display:flex;align-items:center;gap:8px">
             🎵 Reimschema-Analyse
-            <button class="btn-s btn-sm" onclick="analyzeRhyme()" style="margin-left:auto">Analysieren</button>
+            <button class="btn-s btn-sm" onclick="analyzeRhyme()" style="margin-left:auto" title="Reimschema in den Lyrics erkennen (Paarreim, Kreuzreim, etc.)">Analysieren</button>
           </div>
           <div id="rhymeScheme" style="margin-top:8px"></div>
           <div id="rhymeStats" style="margin-top:8px"></div>
@@ -581,87 +582,87 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <div class="card">
           <div class="card-h">⚡ Quick Actions</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px">
-            <button class="qa-btn" onclick="doAutoFixCps()">
+            <button class="qa-btn" onclick="doAutoFixCps()" title="Segmente die das CPS-Limit überschreiten automatisch intelligent splitten">
               <span class="qa-icon">🏎️</span>
               <span class="qa-label">Auto CPS Fix</span>
               <span class="qa-desc">Schnelle Segmente splitten</span>
             </button>
-            <button class="qa-btn" onclick="doKaraokeHtml('dark')">
+            <button class="qa-btn" onclick="doKaraokeHtml('dark')" title="Standalone HTML-Datei mit eingebautem Karaoke-Player (dunkles Theme)">
               <span class="qa-icon">🎤</span>
               <span class="qa-label">Karaoke HTML</span>
               <span class="qa-desc">Standalone Player (Dark)</span>
             </button>
-            <button class="qa-btn" onclick="doKaraokeHtml('neon')">
+            <button class="qa-btn" onclick="doKaraokeHtml('neon')" title="Standalone HTML-Datei mit eingebautem Karaoke-Player (Neon-Glow)">
               <span class="qa-icon">💜</span>
               <span class="qa-label">Neon Karaoke</span>
               <span class="qa-desc">Standalone Player (Neon)</span>
             </button>
-            <button class="qa-btn" onclick="doKaraokeHtml('cinema')">
+            <button class="qa-btn" onclick="doKaraokeHtml('cinema')" title="Standalone HTML-Datei mit eingebautem Karaoke-Player (Gold auf Schwarz)">
               <span class="qa-icon">🎬</span>
               <span class="qa-label">Cinema Karaoke</span>
               <span class="qa-desc">Gold auf Schwarz</span>
             </button>
-            <button class="qa-btn" onclick="applyPreset('youtube')">
+            <button class="qa-btn" onclick="applyPreset('youtube')" title="SRT exportieren, max 42 Zeichen/Zeile, CPS auf 20 — optimiert für YouTube-Untertitel">
               <span class="qa-icon">▶️</span>
               <span class="qa-label">YouTube Export</span>
               <span class="qa-desc">SRT, max 42 chars, 20 CPS</span>
             </button>
-            <button class="qa-btn" onclick="applyPreset('tiktok')">
+            <button class="qa-btn" onclick="applyPreset('tiktok')" title="ASS bold zentriert, 1 Zeile — optimiert für TikTok/Instagram Reels/YouTube Shorts">
               <span class="qa-icon">📱</span>
               <span class="qa-label">TikTok/Reels</span>
               <span class="qa-desc">ASS bold center, 1 Zeile</span>
             </button>
-            <button class="qa-btn" onclick="applyPreset('spotify')">
+            <button class="qa-btn" onclick="applyPreset('spotify')" title="Enhanced LRC mit Wort-Level-Tags — kompatibel mit Spotify Synced Lyrics">
               <span class="qa-icon">🎧</span>
               <span class="qa-label">Spotify LRC</span>
               <span class="qa-desc">Synced Lyrics</span>
             </button>
-            <button class="qa-btn" onclick="applyPreset('karaoke')">
+            <button class="qa-btn" onclick="applyPreset('karaoke')" title="Alle Karaoke-Formate auf einmal: ASS + SRT + LRC + Standalone HTML">
               <span class="qa-icon">✨</span>
               <span class="qa-label">Karaoke Full</span>
               <span class="qa-desc">ASS+SRT+LRC+HTML</span>
             </button>
-            <button class="qa-btn" onclick="doGapScan()">
+            <button class="qa-btn" onclick="doGapScan()" title="Zeitlücken > 500ms und Überlappungen zwischen Segmenten finden und anzeigen">
               <span class="qa-icon">🔍</span>
               <span class="qa-label">Gap Scanner</span>
               <span class="qa-desc">Lücken &amp; Overlaps finden</span>
             </button>
-            <button class="qa-btn" onclick="doSegHeatmap()">
+            <button class="qa-btn" onclick="doSegHeatmap()" title="Visuelle Darstellung der Lesegeschwindigkeit über die gesamte Timeline">
               <span class="qa-icon">🌡️</span>
               <span class="qa-label">CPS Heatmap</span>
               <span class="qa-desc">Confidence + Speed Map</span>
             </button>
-            <button class="qa-btn" onclick="doFillGaps()">
+            <button class="qa-btn" onclick="doFillGaps()" title="Stille Lücken zwischen Segmenten mit ♪-Platzhaltern auffüllen">
               <span class="qa-icon">🔗</span>
               <span class="qa-label">Gap Filler</span>
               <span class="qa-desc">Lücken mit ♪ füllen</span>
             </button>
-            <button class="qa-btn" onclick="doRedistribute()">
+            <button class="qa-btn" onclick="doRedistribute()" title="Segment-Timestamps gleichmäßig über die Audiodauer neu verteilen">
               <span class="qa-icon">⏱️</span>
               <span class="qa-label">Timing Reset</span>
               <span class="qa-desc">Timestamps neu verteilen</span>
             </button>
-            <button class="qa-btn" onclick="doTextStats()">
+            <button class="qa-btn" onclick="doTextStats()" title="Textstatistik: Type-Token-Ratio, Hapax, Silbenzahl, Flow-Score">
               <span class="qa-icon">📊</span>
               <span class="qa-label">Text Analyse</span>
               <span class="qa-desc">Wortschatz, Flow, Silben</span>
             </button>
-            <button class="qa-btn" onclick="doRemoveShort()">
+            <button class="qa-btn" onclick="doRemoveShort()" title="Extrem kurze Segmente löschen (unter 2 Zeichen oder 0.3 Sekunden)">
               <span class="qa-icon">🧹</span>
               <span class="qa-label">Kurze entfernen</span>
               <span class="qa-desc">&lt;2 Zeichen / &lt;0.3s</span>
             </button>
-            <button class="qa-btn" onclick="doNormalizeText()">
+            <button class="qa-btn" onclick="doNormalizeText()" title="Großschreibung am Satzanfang, doppelte Leerzeichen bereinigen, Interpunktion">
               <span class="qa-icon">✏️</span>
               <span class="qa-label">Text normalisieren</span>
               <span class="qa-desc">Groß/Klein, Interpunktion</span>
             </button>
-            <button class="qa-btn" onclick="applyPreset('translation')">
+            <button class="qa-btn" onclick="applyPreset('translation')" title="SRT + TXT + VTT exportieren — für Übersetzungsworkflows">
               <span class="qa-icon">🌍</span>
               <span class="qa-label">Übersetzer-Export</span>
               <span class="qa-desc">SRT+TXT+VTT</span>
             </button>
-            <button class="qa-btn" onclick="doExportAll()">
+            <button class="qa-btn" onclick="doExportAll()" title="Alle Untertitel-Formate auf einmal generieren und herunterladen">
               <span class="qa-icon">📦</span>
               <span class="qa-label">Alle Formate</span>
               <span class="qa-desc">SRT+ASS+VTT+LRC+TXT+HTML</span>
@@ -676,7 +677,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <!-- CPS Heatmap -->
         <div id="heatmapCard" style="display:none;margin-top:8px" class="card">
           <div class="card-h">🌡️ CPS Heatmap</div>
-          <canvas id="heatCv" style="width:100%;height:60px;border-radius:6px;cursor:pointer" onclick="seekHM(event)"></canvas>
+          <canvas id="heatCv" style="width:100%;height:60px;border-radius:6px;cursor:pointer" onclick="seekHM(event)" title="CPS-Heatmap — Klicken zum Spulen"></canvas>
           <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--dim);margin-top:2px">
             <span>🟢 &lt;15 CPS</span><span>🟡 15-20</span><span>🟠 20-25</span><span>🔴 &gt;25</span>
           </div>
@@ -694,8 +695,8 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <div class="card">
           <div class="card-h">📖 Custom Dictionary</div>
           <div id="dictList"></div>
-          <button class="btn-s btn-sm" onclick="addDictRow()" style="margin-top:6px">+ Eintrag</button>
-          <button class="btn btn-sm" onclick="saveDict()" style="margin-top:6px;margin-left:6px">Speichern</button>
+          <button class="btn-s btn-sm" onclick="addDictRow()" style="margin-top:6px" title="Neues Wort-Paar hinzufügen (Falsch → Korrekt)">+ Eintrag</button>
+          <button class="btn btn-sm" onclick="saveDict()" style="margin-top:6px;margin-left:6px" title="Dictionary auf Server speichern (custom_words.txt)">Speichern</button>
         </div>
       </div>
       <!-- Report Tab -->
@@ -713,14 +714,14 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <div class="modal-bg" id="tagModal" onclick="if(event.target===this)closeTagModal()">
   <div class="modal" style="max-width:480px;width:90%">
     <div class="modal-head"><h2 style="font-size:1rem">🏷️ Media Tags</h2>
-      <div class="modal-close" onclick="closeTagModal()">✕</div>
+      <div class="modal-close" onclick="closeTagModal()" title="Schließen">✕</div>
     </div>
     <div class="modal-body" style="padding:12px">
       <div id="tagStatus" style="font-size:.65rem;color:var(--dim);margin-bottom:8px"></div>
       <div class="tag-form" id="tagForm"></div>
       <div class="tag-actions" id="tagActions" style="display:none">
-        <button class="btn-s" onclick="closeTagModal()">Abbrechen</button>
-        <button class="btn" onclick="saveTags()">💾 Speichern</button>
+        <button class="btn-s" onclick="closeTagModal()" title="Tag-Bearbeitung abbrechen und schließen">Abbrechen</button>
+        <button class="btn" onclick="saveTags()" title="Media-Tags in die Datei schreiben">💾 Speichern</button>
       </div>
     </div>
   </div>
@@ -730,16 +731,16 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <div class="modal-bg" id="libModal" onclick="if(event.target===this)toggleLibrary()">
   <div class="modal" style="max-width:650px;width:95%">
     <div class="modal-head"><h2 style="font-size:1rem">📚 Transcriptions Library</h2>
-      <div class="modal-close" onclick="toggleLibrary()">✕</div>
+      <div class="modal-close" onclick="toggleLibrary()" title="Schließen">✕</div>
     </div>
     <div class="modal-body" style="padding:12px">
-      <input type="text" class="lib-search" id="libSearch" placeholder="Suche nach Titel, Datei, Backend..."
+      <input type="text" class="lib-search" id="libSearch" placeholder="Suche nach Titel, Datei, Backend..." title="Library nach Titel, Datei oder Backend durchsuchen"
         oninput="clearTimeout(libST);libST=setTimeout(loadLibrary,400)" style="width:100%;padding:7px 10px;font-size:.78rem;border-radius:6px">
       <div class="lib-list" id="libList"><div class="lib-empty">Lade...</div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.65rem;color:var(--dim)">
         <span id="libCount">—</span>
-        <div><button class="btn-s btn-sm" onclick="libPage=Math.max(0,libPage-1);loadLibrary()" id="libPrev" disabled>◂ Prev</button>
-        <button class="btn-s btn-sm" onclick="libPage++;loadLibrary()" id="libNext">Next ▸</button></div>
+        <div><button class="btn-s btn-sm" onclick="libPage=Math.max(0,libPage-1);loadLibrary()" id="libPrev" disabled title="Vorherige Seite">◂ Prev</button>
+        <button class="btn-s btn-sm" onclick="libPage++;loadLibrary()" id="libNext" title="Nächste Seite">Next ▸</button></div>
       </div>
     </div>
   </div>
@@ -751,14 +752,14 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <div class="modal-bg" id="demucsModal" onclick="if(event.target===this)closeDemucsModal()">
   <div class="modal" style="max-width:560px;width:95%">
     <div class="modal-head"><h2 style="font-size:1rem">🎵 Vocal Separation (Demucs)</h2>
-      <div class="modal-close" onclick="closeDemucsModal()">✕</div>
+      <div class="modal-close" onclick="closeDemucsModal()" title="Schließen">✕</div>
     </div>
     <div class="modal-body" style="padding:16px">
       <div id="demucsStatus" style="font-size:.7rem;color:var(--dim);margin-bottom:10px"></div>
 
       <div style="margin-bottom:10px">
         <label style="font-size:.75rem;color:var(--dim);display:block;margin-bottom:4px">Audio-Datei</label>
-        <select id="demucsFile" style="width:100%;padding:6px 8px;font-size:.78rem;border-radius:6px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+        <select id="demucsFile" style="width:100%;padding:6px 8px;font-size:.78rem;border-radius:6px;background:var(--bg3);color:var(--text);border:1px solid var(--border)" title="Audio-Datei für Stem-Separation wählen">
           <option value="">— Datei wählen —</option>
         </select>
       </div>
@@ -766,14 +767,14 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
           <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Stems</label>
-          <select id="demucsStemMode" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+          <select id="demucsStemMode" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)" title="Stem-Modus: Nur Vocals oder alle Stems">
             <option value="vocals" selected>Nur Vocals</option>
             <option value="all">Alle (Vocals/Drums/Bass/Other)</option>
           </select>
         </div>
         <div>
           <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Modell</label>
-          <select id="demucsModel" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+          <select id="demucsModel" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)" title="Demucs-Modell: htdemucs (Standard), Fine-tuned, mdx_extra">
             <option value="htdemucs" selected>htdemucs (Standard)</option>
             <option value="htdemucs_ft">htdemucs_ft (Fine-tuned)</option>
             <option value="mdx_extra">mdx_extra</option>
@@ -784,7 +785,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
           <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Device</label>
-          <select id="demucsDevice" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+          <select id="demucsDevice" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)" title="Rechengerät: CPU, GPU (CUDA) oder Auto">
             <option value="cpu" selected>CPU</option>
             <option value="cuda">GPU (CUDA)</option>
             <option value="auto">Auto</option>
@@ -792,12 +793,12 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         </div>
         <div>
           <label style="font-size:.7rem;color:var(--dim);display:block;margin-bottom:3px">Shifts (Qualität)</label>
-          <input type="number" id="demucsShifts" value="1" min="1" max="10" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)">
+          <input type="number" id="demucsShifts" value="1" min="1" max="10" style="width:100%;padding:5px;font-size:.75rem;border-radius:5px;background:var(--bg3);color:var(--text);border:1px solid var(--border)" title="Shifts: Mehr = bessere Qualität, aber langsamer (1–10)">
         </div>
       </div>
 
       <label style="font-size:.7rem;display:flex;align-items:center;gap:5px;color:var(--dim);margin-bottom:12px">
-        <input type="checkbox" id="demucsMp3"> Ausgabe als MP3 (statt WAV)
+        <input type="checkbox" id="demucsMp3" title="Ausgabe als MP3 statt WAV — kleinere Dateien, leichter Qualitätsverlust"> Ausgabe als MP3 (statt WAV)
       </label>
 
       <!-- Progress -->
@@ -815,8 +816,8 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn-s" onclick="closeDemucsModal()">Schließen</button>
-        <button class="btn" id="demucsStartBtn" onclick="startDemucs()">🎵 Separation starten</button>
+        <button class="btn-s" onclick="closeDemucsModal()" title="Demucs-Dialog schließen">Schließen</button>
+        <button class="btn" id="demucsStartBtn" onclick="startDemucs()" title="Vocal Separation mit Demucs starten">🎵 Separation starten</button>
       </div>
     </div>
   </div>
@@ -829,7 +830,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <h3>AI Assistant</h3>
     <span class="ai-model" id="aiModel">—</span>
     <button class="chat-close" onclick="clearChat()" title="Chat leeren">🗑</button>
-    <button class="chat-close" onclick="toggleChat()">✕</button>
+    <button class="chat-close" onclick="toggleChat()" title="Chat schließen">✕</button>
   </div>
   <div class="chat-cmds">
     <button class="chat-cmd" onclick="sendCmd('correct')" title="Transkriptionsfehler kontextbasiert fixen">🔧 Korrigieren</button>
@@ -856,8 +857,8 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     </div>
   </div>
   <div class="chat-input">
-    <input type="text" id="chatIn" placeholder="Nachricht..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendChat()">
-    <button class="btn" id="chatSend" onclick="sendChat()">↑</button>
+    <input type="text" id="chatIn" placeholder="Nachricht..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendChat()" title="Nachricht an AI Assistant eingeben">
+    <button class="btn" id="chatSend" onclick="sendChat()" title="Nachricht senden (Enter)">↑</button>
   </div>
 </div>
 
@@ -867,7 +868,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <div class="modal-head">
   <span style="font-size:1.1rem">📖</span>
   <h2>Karaoke Sub Tool — Hilfe</h2>
-  <div class="modal-close" onclick="toggleHelp()">✕</div>
+  <div class="modal-close" onclick="toggleHelp()" title="Schließen">✕</div>
 </div>
 <div class="modal-body">
 
@@ -1349,10 +1350,10 @@ function renderSegs(){
     const cc=conf>=.8?'ch':conf>=.6?'cm':'cl';
     const dur=s.end-s.start;const cps=dur>0?s.text.length/dur:0;
     let cls='si';if(conf<.6)cls+=' low';if(overlaps.has(i))cls+=' overlap';if(s.pinned)cls+=' pinned';
-    const spk=s.speaker?`<span class="speaker-tag" onclick="editSpeaker(${i})">${esc(s.speaker)}</span>`:'';
-    const cpsW=cps>22?`<span class="cps-warn">${cps.toFixed(0)} cps!</span>`:'';
+    const spk=s.speaker?`<span class="speaker-tag" onclick="editSpeaker(${i})" title="Speaker-Label bearbeiten">${esc(s.speaker)}</span>`:'';
+    const cpsW=cps>22?`<span class="cps-warn" title="Hohe Zeichenrate">${cps.toFixed(0)} cps!</span>`:'';
     return`<div class="${cls}" data-idx="${i}" id="seg${i}">
-<div class="sidx" onclick="playSeg(${i})">#${i+1}<br>
+<div class="sidx" onclick="playSeg(${i})" title="Klick = Segment abspielen">#${i+1}<br>
 <input class="stm-edit" value="${fmtMs(s.start)}" onchange="updTime(${i},'start',this.value)" title="Start">
 <input class="stm-edit" value="${fmtMs(s.end)}" onchange="updTime(${i},'end',this.value)" title="End">
 </div>
@@ -1456,7 +1457,7 @@ const el=document.getElementById('dictList');el.innerHTML='';
 function addDictRow(){addDictUI('','')}
 function addDictUI(w,c){const el=document.getElementById('dictList');
 const div=document.createElement('div');div.className='dict-row';
-div.innerHTML=`<input placeholder="Falsch" value="${esc(w)}"><span style="color:var(--dim)">→</span><input placeholder="Korrekt" value="${esc(c)}"><button class="btn-s btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+div.innerHTML=`<input placeholder="Falsch" value="${esc(w)}"><span style="color:var(--dim)">→</span><input placeholder="Korrekt" value="${esc(c)}"><button class="btn-s btn-sm" onclick="this.parentElement.remove()" title="Eintrag entfernen">✕</button>`;
 el.appendChild(div)}
 async function saveDict(){const rows=document.querySelectorAll('.dict-row');const entries=[];
 rows.forEach(r=>{const inputs=r.querySelectorAll('input');if(inputs[0].value&&inputs[1].value)entries.push({wrong:inputs[0].value,correct:inputs[1].value})});
@@ -1606,8 +1607,8 @@ function _showRefDiff(data){
     html+='</div>';
   }
   html+='<div class="ref-diff-actions">';
-  html+='<button class="btn-s" onclick="this.closest(\'.ref-diff\').remove()">✕ Verwerfen</button>';
-  html+='<button class="btn" onclick="applyRefCorrect()">✓ Anwenden ('+data.changes.length+' Änderungen)</button>';
+  html+='<button class="btn-s" onclick="this.closest(\'.ref-diff\').remove()" title="Vorgeschlagene Korrekturen verwerfen">✕ Verwerfen</button>';
+  html+='<button class="btn" onclick="applyRefCorrect()" title="Alle Korrekturen auf Segmente anwenden">✓ Anwenden ('+data.changes.length+' Änderungen)</button>';
   html+='</div>';
   div.innerHTML=html;
   el.appendChild(div);el.scrollTop=el.scrollHeight;
@@ -1692,8 +1693,8 @@ function _showMergeDiff(data){
   }
   if(merges.length>0){
     html+='<div class="merge-actions">';
-    html+='<button class="btn-s" onclick="this.closest(\'.merge-diff\').remove()">✕ Verwerfen</button>';
-    html+='<button class="btn" onclick="applyMerge()">✓ '+merges.length+' Merges anwenden</button>';
+    html+='<button class="btn-s" onclick="this.closest(\'.merge-diff\').remove()" title="Vorgeschlagene Merges verwerfen">✕ Verwerfen</button>';
+    html+='<button class="btn" onclick="applyMerge()" title="Alle Merges auf Segmente anwenden">✓ '+merges.length+' Merges anwenden</button>';
     html+='</div>';
   }
   div.innerHTML=html;
@@ -2681,7 +2682,7 @@ window.closeSubEditor=function(){
     <span style="font-size:1.1rem">📝</span>
     <h2>Text Editor</h2>
     <span class="sube-info" id="subeInfo">—</span>
-    <div class="modal-close" onclick="closeSubEditor()">✕</div>
+    <div class="modal-close" onclick="closeSubEditor()" title="Schließen">✕</div>
   </div>
   <div class="sube-body">
     <div class="sube-hint">Eine Zeile = ein Segment · Timings bleiben erhalten · Ctrl+S zum Speichern · Esc zum Schließen</div>
@@ -2689,8 +2690,8 @@ window.closeSubEditor=function(){
   </div>
   <div class="sube-foot">
     <span class="sube-stats" id="subeStats">—</span>
-    <button class="btn-s" id="subeSaveBtn" onclick="saveTextEditor()" style="opacity:.5">💾 Speichern (Ctrl+S)</button>
-    <button class="btn" onclick="closeSubEditor()">✕ Schließen</button>
+    <button class="btn-s" id="subeSaveBtn" onclick="saveTextEditor()" style="opacity:.5" title="Alle Text-Änderungen in Segmente übernehmen">💾 Speichern (Ctrl+S)</button>
+    <button class="btn" onclick="closeSubEditor()" title="Text-Editor schließen">✕ Schließen</button>
   </div>
 </div>
 </div>

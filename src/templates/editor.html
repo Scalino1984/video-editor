@@ -271,23 +271,23 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   </div>
   <div class="hdr-sep"></div>
   <div class="hdr-group">
-    <button class="btn-s btn-sm" onclick="showNewProject()">📄 Neu</button>
-    <button class="btn-s btn-sm" onclick="openProjectModal()">📂 Projekte</button>
-    <button class="btn-s btn-sm" onclick="saveProject()">💾 Save</button>
-    <button class="btn-s btn-sm" onclick="openJobModal()">📥 Import Job</button>
+    <button class="btn-s btn-sm" onclick="showNewProject()" title="Neues Projekt erstellen">📄 Neu</button>
+    <button class="btn-s btn-sm" onclick="openProjectModal()" title="Projektliste öffnen">📂 Projekte</button>
+    <button class="btn-s btn-sm" onclick="saveProject()" title="Projekt speichern (Ctrl+S)">💾 Save</button>
+    <button class="btn-s btn-sm" onclick="openJobModal()" title="Transkriptions-Job importieren">📥 Import Job</button>
   </div>
   <div class="hdr-sep"></div>
   <div class="hdr-group">
-    <button class="btn btn-sm" onclick="renderProject()" id="renderBtn">🎬 Render</button>
+    <button class="btn btn-sm" onclick="renderProject()" id="renderBtn" title="Video rendern">🎬 Render</button>
     <button class="btn-s btn-sm" onclick="renderLoop()" title="Loop Video rendern">🔁 Loop</button>
     <button class="btn-s btn-sm" onclick="clearEditor()" title="Editor zurücksetzen" style="color:var(--danger)">🗑️ Clear</button>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
     <div class="theme-sw">
-      <button class="tsw-dark on" onclick="setTheme('dark')"></button>
-      <button class="tsw-neon" onclick="setTheme('neon')"></button>
-      <button class="tsw-light" onclick="setTheme('light')"></button>
-      <button class="tsw-warm" onclick="setTheme('warm')"></button>
+      <button class="tsw-dark on" onclick="setTheme('dark')" title="Dunkles Theme"></button>
+      <button class="tsw-neon" onclick="setTheme('neon')" title="Neon Theme"></button>
+      <button class="tsw-light" onclick="setTheme('light')" title="Helles Theme"></button>
+      <button class="tsw-warm" onclick="setTheme('warm')" title="Warmes Theme"></button>
     </div>
     <a href="/" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">🎤 Karaoke Tool</a>
     <span style="font-size:.6rem;color:var(--dim)" id="projName">Kein Projekt</span>
@@ -332,23 +332,23 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   <div class="sb-content" id="sbTemplates" style="display:none">
     <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">Schnell-Vorlagen:</div>
     <div style="display:flex;flex-direction:column;gap:6px">
-      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('loop')">
+      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('loop')" title="Loop-Video Vorlage: Video/Bild loopen mit Effekten">
         <span style="font-size:1rem">🔁</span> <b>Loop Video</b><br>
         <span style="font-size:.65rem;color:var(--dim)">Video/Bild loopen mit Effekten</span>
       </button>
-      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('karaoke')">
+      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('karaoke')" title="Karaoke-Video Vorlage: Audio + Untertitel + Background">
         <span style="font-size:1rem">🎤</span> <b>Karaoke Video</b><br>
         <span style="font-size:.65rem;color:var(--dim)">Audio + Untertitel + Background</span>
       </button>
-      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('slideshow')">
+      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('slideshow')" title="Slideshow Vorlage: Bilder-Slideshow mit Audio">
         <span style="font-size:1rem">🖼️</span> <b>Slideshow</b><br>
         <span style="font-size:.65rem;color:var(--dim)">Bilder-Slideshow mit Audio</span>
       </button>
-      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('music_video')">
+      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('music_video')" title="Musikvideo Vorlage: Video + Lyrics Overlay + Effekte">
         <span style="font-size:1rem">🎵</span> <b>Musik Video</b><br>
         <span style="font-size:.65rem;color:var(--dim)">Video + Lyrics Overlay + Effekte</span>
       </button>
-      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('vertical')">
+      <button class="btn-s" style="text-align:left;padding:10px" onclick="quickTemplate('vertical')" title="Vertikales Video (9:16) für TikTok/Reels">
         <span style="font-size:1rem">📱</span> <b>Vertical (9:16)</b><br>
         <span style="font-size:.65rem;color:var(--dim)">TikTok/Reels Format</span>
       </button>
@@ -371,10 +371,10 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   </div>
   <div class="player-bar">
     <button class="btn-s btn-sm" onclick="transport('zero')" title="Zum Anfang (Home)">⏮₀</button>
-    <button class="btn-s btn-sm" onclick="transport('prev')">-2s</button>
-    <button class="btn-s btn-sm" onclick="transport('play')" id="playBtn">▶</button>
-    <button class="btn-s btn-sm" onclick="transport('next')">+2s</button>
-    <button class="btn-s btn-sm" onclick="transport('stop')">⏹</button>
+    <button class="btn-s btn-sm" onclick="transport('prev')" title="2 Sekunden zurück">-2s</button>
+    <button class="btn-s btn-sm" onclick="transport('play')" id="playBtn" title="Abspielen / Pause (Leertaste)">▶</button>
+    <button class="btn-s btn-sm" onclick="transport('next')" title="2 Sekunden vor">+2s</button>
+    <button class="btn-s btn-sm" onclick="transport('stop')" title="Stopp">⏹</button>
     <span style="border-left:1px solid var(--border);height:14px;margin:0 2px"></span>
     <button class="btn-s btn-sm" onclick="setLoopA()" id="loopABtn" title="Loop Start (Ctrl+A)" style="font-size:.6rem;min-width:22px">A</button>
     <button class="btn-s btn-sm" onclick="setLoopB()" id="loopBBtn" title="Loop Ende (Ctrl+B)" style="font-size:.6rem;min-width:22px">B</button>
@@ -388,7 +388,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <input type="text" class="time-input" id="timeInput" value="0:00.0" title="Zeit eingeben (Enter)" onkeydown="if(event.key==='Enter')jumpToTime(this.value)" onfocus="this.select()">
     <span style="color:var(--dim);font-size:.65rem;font-family:var(--mono)">/</span>
     <span style="font-family:var(--mono);font-size:.68rem;color:var(--dim)" id="durDisplay">0:00.0</span>
-    <select id="speedSel" onchange="setPlaySpeed(this.value)" style="width:55px;padding:3px;font-size:.6rem">
+    <select id="speedSel" onchange="setPlaySpeed(this.value)" style="width:55px;padding:3px;font-size:.6rem" title="Wiedergabegeschwindigkeit">
       <option value="0.25">0.25x</option><option value="0.5">0.5x</option>
       <option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option>
     </select>
@@ -415,25 +415,25 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
       <div id="clipPropsContent" style="display:none">
         <div class="prop-section">
           <h4>📐 Position & Dauer</h4>
-          <div class="prop-row"><label>Start</label><input type="number" id="cpStart" step="0.1" onchange="updateClipProp('start',this.value)"></div>
-          <div class="prop-row"><label>Dauer</label><input type="number" id="cpDur" step="0.1" onchange="updateClipProp('duration',this.value)"></div>
-          <div class="prop-row"><label>In</label><input type="number" id="cpIn" step="0.1" onchange="updateClipProp('in_point',this.value)"></div>
-          <div class="prop-row"><label>Out</label><input type="number" id="cpOut" step="0.1" onchange="updateClipProp('out_point',this.value)"></div>
+          <div class="prop-row"><label>Start</label><input type="number" id="cpStart" step="0.1" onchange="updateClipProp('start',this.value)" title="Clip-Startzeit in Sekunden"></div>
+          <div class="prop-row"><label>Dauer</label><input type="number" id="cpDur" step="0.1" onchange="updateClipProp('duration',this.value)" title="Clip-Dauer in Sekunden"></div>
+          <div class="prop-row"><label>In</label><input type="number" id="cpIn" step="0.1" onchange="updateClipProp('in_point',this.value)" title="In-Point (Quell-Startzeit)"></div>
+          <div class="prop-row"><label>Out</label><input type="number" id="cpOut" step="0.1" onchange="updateClipProp('out_point',this.value)" title="Out-Point (Quell-Endzeit)"></div>
         </div>
         <div class="prop-section">
           <h4>🎛️ Einstellungen</h4>
-          <div class="prop-row"><label>Speed</label><input type="range" id="cpSpeed" min="0.1" max="4" step="0.1" value="1" oninput="updateClipProp('speed',this.value);document.getElementById('cpSpeedV').textContent=this.value+'x'"><span id="cpSpeedV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">1x</span></div>
-          <div class="prop-row"><label>Volume</label><input type="range" id="cpVol" min="0" max="2" step="0.05" value="1" oninput="updateClipProp('volume',this.value);document.getElementById('cpVolV').textContent=Math.round(this.value*100)+'%'"><span id="cpVolV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">100%</span></div>
-          <div class="prop-row"><label>Loop</label><input type="checkbox" id="cpLoop" onchange="updateClipProp('loop',this.checked)" style="width:auto"></div>
+          <div class="prop-row"><label>Speed</label><input type="range" id="cpSpeed" min="0.1" max="4" step="0.1" value="1" oninput="updateClipProp('speed',this.value);document.getElementById('cpSpeedV').textContent=this.value+'x'" title="Clip-Geschwindigkeit"><span id="cpSpeedV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">1x</span></div>
+          <div class="prop-row"><label>Volume</label><input type="range" id="cpVol" min="0" max="2" step="0.05" value="1" oninput="updateClipProp('volume',this.value);document.getElementById('cpVolV').textContent=Math.round(this.value*100)+'%'" title="Clip-Lautstärke"><span id="cpVolV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">100%</span></div>
+          <div class="prop-row"><label>Loop</label><input type="checkbox" id="cpLoop" onchange="updateClipProp('loop',this.checked)" style="width:auto" title="Clip als Schleife abspielen"></div>
         </div>
         <div class="prop-section">
           <h4>✨ Clip-Effekte</h4>
           <div class="fx-list" id="clipFxList"></div>
         </div>
         <div class="prop-section" style="display:flex;gap:4px">
-          <button class="btn-s btn-sm" onclick="splitSelectedClip()" style="flex:1">✂️ Split</button>
-          <button class="btn-s btn-sm" onclick="duplicateClip()" style="flex:1">📋 Duplizieren</button>
-          <button class="btn-d btn-sm" onclick="deleteSelectedClip()" style="flex:1">🗑️ Löschen</button>
+          <button class="btn-s btn-sm" onclick="splitSelectedClip()" style="flex:1" title="Ausgewählten Clip teilen">✂️ Split</button>
+          <button class="btn-s btn-sm" onclick="duplicateClip()" style="flex:1" title="Clip duplizieren">📋 Duplizieren</button>
+          <button class="btn-d btn-sm" onclick="deleteSelectedClip()" style="flex:1" title="Ausgewählten Clip löschen">🗑️ Löschen</button>
         </div>
       </div>
     </div>
@@ -443,21 +443,21 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
       <div class="prop-section">
         <h4>Effekt hinzufügen</h4>
         <div class="fx-add-grid">
-          <div class="fx-btn" onclick="addFx('fade_in')"><span class="fx-ico">◐</span>Fade In</div>
-          <div class="fx-btn" onclick="addFx('fade_out')"><span class="fx-ico">◑</span>Fade Out</div>
-          <div class="fx-btn" onclick="addFx('blur')"><span class="fx-ico">💨</span>Blur</div>
-          <div class="fx-btn" onclick="addFx('grayscale')"><span class="fx-ico">⬛</span>Graustufen</div>
-          <div class="fx-btn" onclick="addFx('sepia')"><span class="fx-ico">🟤</span>Sepia</div>
-          <div class="fx-btn" onclick="addFx('vignette')"><span class="fx-ico">🔘</span>Vignette</div>
-          <div class="fx-btn" onclick="addFx('sharpen')"><span class="fx-ico">🔍</span>Schärfe</div>
-          <div class="fx-btn" onclick="addFx('brightness')"><span class="fx-ico">☀️</span>Helligkeit</div>
-          <div class="fx-btn" onclick="addFx('contrast')"><span class="fx-ico">◼️</span>Kontrast</div>
-          <div class="fx-btn" onclick="addFx('saturation')"><span class="fx-ico">🎨</span>Sättigung</div>
-          <div class="fx-btn" onclick="addFx('rotate')"><span class="fx-ico">🔄</span>Drehen</div>
-          <div class="fx-btn" onclick="addFx('flip_h')"><span class="fx-ico">↔️</span>Spiegel H</div>
-          <div class="fx-btn" onclick="addFx('flip_v')"><span class="fx-ico">↕️</span>Spiegel V</div>
-          <div class="fx-btn" onclick="addFx('zoom')"><span class="fx-ico">🔎</span>Zoom</div>
-          <div class="fx-btn" onclick="addFx('overlay_text')"><span class="fx-ico">💬</span>Text</div>
+          <div class="fx-btn" onclick="addFx('fade_in')" title="Einblendung hinzufügen"><span class="fx-ico">◐</span>Fade In</div>
+          <div class="fx-btn" onclick="addFx('fade_out')" title="Ausblendung hinzufügen"><span class="fx-ico">◑</span>Fade Out</div>
+          <div class="fx-btn" onclick="addFx('blur')" title="Unschärfe-Effekt hinzufügen"><span class="fx-ico">💨</span>Blur</div>
+          <div class="fx-btn" onclick="addFx('grayscale')" title="Graustufen-Effekt hinzufügen"><span class="fx-ico">⬛</span>Graustufen</div>
+          <div class="fx-btn" onclick="addFx('sepia')" title="Sepia-Effekt hinzufügen"><span class="fx-ico">🟤</span>Sepia</div>
+          <div class="fx-btn" onclick="addFx('vignette')" title="Vignette-Effekt hinzufügen"><span class="fx-ico">🔘</span>Vignette</div>
+          <div class="fx-btn" onclick="addFx('sharpen')" title="Schärfe-Effekt hinzufügen"><span class="fx-ico">🔍</span>Schärfe</div>
+          <div class="fx-btn" onclick="addFx('brightness')" title="Helligkeits-Effekt hinzufügen"><span class="fx-ico">☀️</span>Helligkeit</div>
+          <div class="fx-btn" onclick="addFx('contrast')" title="Kontrast-Effekt hinzufügen"><span class="fx-ico">◼️</span>Kontrast</div>
+          <div class="fx-btn" onclick="addFx('saturation')" title="Sättigungs-Effekt hinzufügen"><span class="fx-ico">🎨</span>Sättigung</div>
+          <div class="fx-btn" onclick="addFx('rotate')" title="Dreh-Effekt hinzufügen"><span class="fx-ico">🔄</span>Drehen</div>
+          <div class="fx-btn" onclick="addFx('flip_h')" title="Horizontal spiegeln"><span class="fx-ico">↔️</span>Spiegel H</div>
+          <div class="fx-btn" onclick="addFx('flip_v')" title="Vertikal spiegeln"><span class="fx-ico">↕️</span>Spiegel V</div>
+          <div class="fx-btn" onclick="addFx('zoom')" title="Zoom-Effekt hinzufügen"><span class="fx-ico">🔎</span>Zoom</div>
+          <div class="fx-btn" onclick="addFx('overlay_text')" title="Text-Overlay hinzufügen"><span class="fx-ico">💬</span>Text</div>
         </div>
       </div>
       <div class="prop-section">
@@ -472,24 +472,24 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <div id="propProject" style="display:none">
       <div class="prop-section">
         <h4>📐 Format</h4>
-        <div class="prop-row"><label>Name</label><input type="text" id="ppName" value="Untitled" onchange="updateProjProp('name',this.value)"></div>
-        <div class="prop-row"><label>Breite</label><input type="number" id="ppW" value="1920" onchange="updateProjProp('width',+this.value)"></div>
-        <div class="prop-row"><label>Höhe</label><input type="number" id="ppH" value="1080" onchange="updateProjProp('height',+this.value)"></div>
-        <div class="prop-row"><label>FPS</label><select id="ppFps" onchange="updateProjProp('fps',+this.value)">
+        <div class="prop-row"><label>Name</label><input type="text" id="ppName" value="Untitled" onchange="updateProjProp('name',this.value)" title="Projektname"></div>
+        <div class="prop-row"><label>Breite</label><input type="number" id="ppW" value="1920" onchange="updateProjProp('width',+this.value)" title="Videobreite in Pixeln"></div>
+        <div class="prop-row"><label>Höhe</label><input type="number" id="ppH" value="1080" onchange="updateProjProp('height',+this.value)" title="Videohöhe in Pixeln"></div>
+        <div class="prop-row"><label>FPS</label><select id="ppFps" onchange="updateProjProp('fps',+this.value)" title="Bilder pro Sekunde">
           <option value="24">24</option><option value="25">25</option>
           <option value="30" selected>30</option><option value="60">60</option>
         </select></div>
       </div>
       <div class="prop-section">
         <h4>🎬 Render</h4>
-        <div class="prop-row"><label>Preset</label><select id="ppPreset" onchange="updateProjProp('preset',this.value)">
+        <div class="prop-row"><label>Preset</label><select id="ppPreset" onchange="updateProjProp('preset',this.value)" title="Encoding-Preset (Geschwindigkeit vs. Qualität)">
           <option value="youtube">YouTube (1080p)</option>
           <option value="mobile">Mobile (720p)</option>
           <option value="draft">Draft (schnell)</option>
           <option value="custom">Custom</option>
         </select></div>
-        <div class="prop-row"><label>CRF</label><input type="range" id="ppCrf" min="10" max="35" value="20" oninput="updateProjProp('crf',+this.value);document.getElementById('ppCrfV').textContent=this.value"><span id="ppCrfV" style="font-size:.6rem;font-family:var(--mono)">20</span></div>
-        <div class="prop-row"><label>Audio</label><select id="ppABR" onchange="updateProjProp('audio_bitrate',this.value)">
+        <div class="prop-row"><label>CRF</label><input type="range" id="ppCrf" min="10" max="35" value="20" oninput="updateProjProp('crf',+this.value);document.getElementById('ppCrfV').textContent=this.value" title="Qualitätsstufe (niedriger = bessere Qualität)"><span id="ppCrfV" style="font-size:.6rem;font-family:var(--mono)">20</span></div>
+        <div class="prop-row"><label>Audio</label><select id="ppABR" onchange="updateProjProp('audio_bitrate',this.value)" title="Audio-Bitrate">
           <option value="96k">96k</option><option value="128k">128k</option>
           <option value="192k" selected>192k</option><option value="320k">320k</option>
         </select></div>
@@ -497,12 +497,12 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
       <div class="prop-section">
         <h4>📐 Format-Vorlagen</h4>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-          <button class="btn-s btn-sm" onclick="setFormat(1920,1080,30)">16:9 HD</button>
-          <button class="btn-s btn-sm" onclick="setFormat(3840,2160,30)">4K</button>
-          <button class="btn-s btn-sm" onclick="setFormat(1080,1920,30)">9:16 Vert</button>
-          <button class="btn-s btn-sm" onclick="setFormat(1080,1080,30)">1:1 Square</button>
+          <button class="btn-s btn-sm" onclick="setFormat(1920,1080,30)" title="Format: 1920×1080 @ 30fps">16:9 HD</button>
+          <button class="btn-s btn-sm" onclick="setFormat(3840,2160,30)" title="Format: 3840×2160 @ 30fps">4K</button>
+          <button class="btn-s btn-sm" onclick="setFormat(1080,1920,30)" title="Format: 1080×1920 @ 30fps (vertikal)">9:16 Vert</button>
+          <button class="btn-s btn-sm" onclick="setFormat(1080,1080,30)" title="Format: 1080×1080 @ 30fps (quadratisch)">1:1 Square</button>
         </div>
-        <div class="prop-row" style="margin-top:6px"><label>Video</label><select id="ppVideoFit" onchange="updateProjProp('video_fit',this.value);applyVideoFit()">
+        <div class="prop-row" style="margin-top:6px"><label>Video</label><select id="ppVideoFit" onchange="updateProjProp('video_fit',this.value);applyVideoFit()" title="Video-Einpassung (Skalierung)">
           <option value="cover">Füllen (Cover)</option>
           <option value="contain">Einpassen (Contain)</option>
           <option value="stretch">Strecken (Stretch)</option>
@@ -511,24 +511,24 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 
       <div class="prop-section">
         <h4>💬 Untertitel-Stil</h4>
-        <div class="prop-row"><label>Font</label><select id="ppSubFont" onchange="updateSubSetting('sub_font',this.value)">
+        <div class="prop-row"><label>Font</label><select id="ppSubFont" onchange="updateSubSetting('sub_font',this.value)" title="Untertitel-Schriftart">
           <option value="Arial">Arial</option><option value="Roboto">Roboto</option>
           <option value="Noto Sans">Noto Sans</option><option value="Open Sans">Open Sans</option>
           <option value="Montserrat">Montserrat</option><option value="Impact">Impact</option>
           <option value="Comic Sans MS">Comic Sans</option>
         </select></div>
-        <div class="prop-row"><label>Größe</label><input type="range" id="ppSubSize" min="20" max="100" value="48" oninput="updateSubSetting('sub_size',+this.value);document.getElementById('ppSubSizeV').textContent=this.value+'px'"><span id="ppSubSizeV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">48px</span></div>
-        <div class="prop-row"><label>Farbe</label><input type="color" id="ppSubColor" value="#ffffff" oninput="updateSubSetting('sub_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><span id="ppSubColorHex" style="font-size:.6rem;font-family:var(--mono)">#FFFFFF</span></div>
-        <div class="prop-row"><label>Highlight</label><input type="color" id="ppSubHighlight" value="#ffff00" oninput="updateSubSetting('sub_highlight_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><span id="ppSubHighlightHex" style="font-size:.6rem;font-family:var(--mono)">#FFFF00</span></div>
-        <div class="prop-row"><label>Outline</label><input type="color" id="ppSubOutline" value="#000000" oninput="updateSubSetting('sub_outline_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><input type="range" id="ppSubOutW" min="0" max="6" value="2" style="flex:1" oninput="updateSubSetting('sub_outline_width',+this.value);document.getElementById('ppSubOutWV').textContent=this.value+'px'"><span id="ppSubOutWV" style="font-size:.6rem;font-family:var(--mono);min-width:24px">2px</span></div>
-        <div class="prop-row"><label>Y-Pos</label><input type="range" id="ppSubY" min="0" max="100" value="85" oninput="updateSubSetting('sub_y_percent',+this.value);document.getElementById('ppSubYV').textContent=this.value+'%'"><span id="ppSubYV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">85%</span></div>
+        <div class="prop-row"><label>Größe</label><input type="range" id="ppSubSize" min="20" max="100" value="48" oninput="updateSubSetting('sub_size',+this.value);document.getElementById('ppSubSizeV').textContent=this.value+'px'" title="Untertitel-Schriftgröße"><span id="ppSubSizeV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">48px</span></div>
+        <div class="prop-row"><label>Farbe</label><input type="color" id="ppSubColor" value="#ffffff" oninput="updateSubSetting('sub_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer" title="Untertitel-Textfarbe"><span id="ppSubColorHex" style="font-size:.6rem;font-family:var(--mono)">#FFFFFF</span></div>
+        <div class="prop-row"><label>Highlight</label><input type="color" id="ppSubHighlight" value="#ffff00" oninput="updateSubSetting('sub_highlight_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer" title="Karaoke-Hervorhebungsfarbe"><span id="ppSubHighlightHex" style="font-size:.6rem;font-family:var(--mono)">#FFFF00</span></div>
+        <div class="prop-row"><label>Outline</label><input type="color" id="ppSubOutline" value="#000000" oninput="updateSubSetting('sub_outline_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer" title="Untertitel-Umrandungsfarbe"><input type="range" id="ppSubOutW" min="0" max="6" value="2" style="flex:1" oninput="updateSubSetting('sub_outline_width',+this.value);document.getElementById('ppSubOutWV').textContent=this.value+'px'" title="Umrandungsbreite"><span id="ppSubOutWV" style="font-size:.6rem;font-family:var(--mono);min-width:24px">2px</span></div>
+        <div class="prop-row"><label>Y-Pos</label><input type="range" id="ppSubY" min="0" max="100" value="85" oninput="updateSubSetting('sub_y_percent',+this.value);document.getElementById('ppSubYV').textContent=this.value+'%'" title="Vertikale Position der Untertitel"><span id="ppSubYV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">85%</span></div>
         <div class="prop-row" style="font-size:.55rem;color:var(--dim);margin-top:-4px">← Oben &nbsp;&nbsp; Unten →</div>
-        <div class="prop-row"><label>Zeilen</label><select id="ppSubLines" onchange="updateSubSetting('sub_lines',+this.value)">
+        <div class="prop-row"><label>Zeilen</label><select id="ppSubLines" onchange="updateSubSetting('sub_lines',+this.value)" title="Anzahl sichtbarer Untertitelzeilen">
           <option value="1">1 — nur aktuelle Zeile</option>
           <option value="2">2 — aktuelle + nächste</option>
           <option value="3">3 — vorherige + aktuelle + nächste</option>
         </select></div>
-        <div class="prop-row"><label>Hintergrund</label><input type="checkbox" id="ppSubBg" checked onchange="updateSubSetting('sub_bg_enabled',this.checked)" style="width:auto"><input type="color" id="ppSubBgColor" value="#000000" oninput="updateSubSetting('sub_bg_color',hexToAssBg(this.value,document.getElementById('ppSubBgAlpha').value))" style="width:30px;height:20px;padding:0;border:none;cursor:pointer"><input type="range" id="ppSubBgAlpha" min="0" max="255" value="128" style="flex:1" oninput="updateSubSetting('sub_bg_color',hexToAssBg(document.getElementById('ppSubBgColor').value,this.value))"><span id="ppSubBgAlphaV" style="font-size:.6rem;font-family:var(--mono);min-width:20px">50%</span></div>
+        <div class="prop-row"><label>Hintergrund</label><input type="checkbox" id="ppSubBg" checked onchange="updateSubSetting('sub_bg_enabled',this.checked)" style="width:auto" title="Untertitel-Hintergrund ein/aus"><input type="color" id="ppSubBgColor" value="#000000" oninput="updateSubSetting('sub_bg_color',hexToAssBg(this.value,document.getElementById('ppSubBgAlpha').value))" style="width:30px;height:20px;padding:0;border:none;cursor:pointer" title="Hintergrundfarbe der Untertitel"><input type="range" id="ppSubBgAlpha" min="0" max="255" value="128" style="flex:1" oninput="updateSubSetting('sub_bg_color',hexToAssBg(document.getElementById('ppSubBgColor').value,this.value))" title="Hintergrund-Transparenz"><span id="ppSubBgAlphaV" style="font-size:.6rem;font-family:var(--mono);min-width:20px">50%</span></div>
       </div>
     </div>
 
@@ -538,8 +538,8 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
         <div class="chat-msg ai">👋 Hallo! Ich bin dein KI-Video-Editor-Assistent. Sag mir was du machen möchtest — ich kann Clips bearbeiten, Effekte anwenden, Timing ändern und mehr.</div>
       </div>
       <div class="chat-input-row">
-        <input type="text" id="aiInput" placeholder="z.B. 'Füge einen Fade-In zum ersten Clip hinzu'" onkeydown="if(event.key==='Enter')sendAI()">
-        <button class="btn btn-sm" onclick="sendAI()">↑</button>
+        <input type="text" id="aiInput" placeholder="z.B. 'Füge einen Fade-In zum ersten Clip hinzu'" onkeydown="if(event.key==='Enter')sendAI()" title="AI-Anweisung eingeben">
+        <button class="btn btn-sm" onclick="sendAI()" title="AI-Nachricht senden (Enter)">↑</button>
       </div>
     </div>
   </div>
@@ -548,16 +548,16 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 <!-- ═══ TIMELINE ═══ -->
 <div class="timeline-area">
   <div class="tl-toolbar">
-    <button class="btn-s btn-sm" onclick="edUndo()">↩</button>
-    <button class="btn-s btn-sm" onclick="edRedo()">↪</button>
+    <button class="btn-s btn-sm" onclick="edUndo()" title="Rückgängig (Ctrl+Z)">↩</button>
+    <button class="btn-s btn-sm" onclick="edRedo()" title="Wiederherstellen (Ctrl+Y)">↪</button>
     <div class="hdr-sep" style="height:16px"></div>
-    <button class="btn-s btn-sm" onclick="splitAtPlayhead()">✂️ Split</button>
-    <button class="btn-s btn-sm" onclick="deleteSelectedClip()">🗑️</button>
+    <button class="btn-s btn-sm" onclick="splitAtPlayhead()" title="An Playhead-Position teilen">✂️ Split</button>
+    <button class="btn-s btn-sm" onclick="deleteSelectedClip()" title="Ausgewählten Clip löschen (Entf)">🗑️</button>
     <button class="btn-s btn-sm" onclick="toggleSnap()" id="snapBtn" title="Snap an/aus">🧲 Snap</button>
     <div style="flex:1"></div>
     <div class="zoom-ctrl">
       <span class="zoom-label">🔍</span>
-      <input type="range" id="zoomSlider" min="5" max="200" value="40" oninput="setZoom(this.value)">
+      <input type="range" id="zoomSlider" min="5" max="200" value="40" oninput="setZoom(this.value)" title="Timeline-Zoom">
       <span class="zoom-label" id="zoomVal">40px/s</span>
     </div>
   </div>
@@ -589,8 +589,8 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   <div class="job-modal">
     <div class="job-modal-header">
       <h3>📥 Job importieren</h3>
-      <input type="text" id="jobModalSearch" placeholder="Suchen..." style="width:160px;font-size:.72rem" oninput="filterJobModal(this.value)">
-      <button class="btn-s btn-sm" onclick="closeJobModal()">✕</button>
+      <input type="text" id="jobModalSearch" placeholder="Suchen..." style="width:160px;font-size:.72rem" oninput="filterJobModal(this.value)" title="Jobs durchsuchen">
+      <button class="btn-s btn-sm" onclick="closeJobModal()" title="Schließen">✕</button>
     </div>
     <div class="job-modal-body" id="jobModalBody">
       <div style="color:var(--dim);font-size:.75rem;text-align:center;padding:30px">Lade...</div>
@@ -604,8 +604,8 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <div class="job-modal-header">
       <h3>📂 Projekte</h3>
       <div style="flex:1"></div>
-      <button class="btn btn-sm" onclick="closeProjectModal();showNewProject()">+ Neu</button>
-      <button class="btn-s btn-sm" onclick="closeProjectModal()">✕</button>
+      <button class="btn btn-sm" onclick="closeProjectModal();showNewProject()" title="Neues Projekt erstellen">+ Neu</button>
+      <button class="btn-s btn-sm" onclick="closeProjectModal()" title="Schließen">✕</button>
     </div>
     <div class="job-modal-body" id="projModalBody">
       <div style="color:var(--dim);font-size:.75rem;text-align:center;padding:30px">Lade...</div>
