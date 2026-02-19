@@ -1299,6 +1299,7 @@ function seekMM(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentT
 
 // ── Karaoke Live ──
 function _getKaraokeMode(){return document.getElementById('sK').value}
+function _wordsMatch(seg){return seg.words&&seg.words.length&&seg.words.map(w=>w.word).join(' ').trim()===seg.text.trim()}
 function updKaraoke(){if(!cSegs.length)return;const t=subTime();const el=document.getElementById('kLive');
 const seg=cSegs.find(s=>t>=s.start&&t<=s.end);
 if(!seg){el.innerHTML='<span style="color:var(--dim);font-size:.85rem">—</span>';el.dataset.segIdx='';return}
@@ -1306,7 +1307,8 @@ el.dataset.segIdx=cSegs.indexOf(seg);
 const mode=_getKaraokeMode();
 const hlC=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00e5a0';
 const baseC=getComputedStyle(el).color||'var(--text)';
-if(seg.has_word_timestamps&&seg.words&&seg.words.length){
+const hasWords=_wordsMatch(seg);
+if(hasWords){
   el.innerHTML=seg.words.map(w=>{
     if(t>=w.end)return`<span class="kw past">${esc(w.word)} </span>`;
     if(t>=w.start){
@@ -1342,7 +1344,7 @@ function editKaraokeLine(){
 
 async function saveKaraokeEdit(idx,text){
   if(!aJobId||!cSegs[idx])return;
-  cSegs[idx].text=text;cSegs[idx].words=[];cSegs[idx].has_word_timestamps=false;
+  cSegs[idx].text=text;
   try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx,text})})}catch(e){toast('Fehler','err')}
   renderSegs();updKaraoke();toast('✓ Segment #'+(idx+1)+' gespeichert')}
 
@@ -1404,7 +1406,7 @@ function renderSegs(){
 function setFil(f){curFil=f;document.querySelectorAll('.fil').forEach(e=>e.classList.toggle('on',e.dataset.f===f));renderSegs()}
 
 async function updSeg(i,text){if(!aJobId)return;
-  cSegs[i].text=text;cSegs[i].words=[];cSegs[i].has_word_timestamps=false;
+  cSegs[i].text=text;
   try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
     // Flash save indicator
     const ta=document.querySelector(`[data-idx="${i}"]`);
@@ -2569,7 +2571,8 @@ function fskRender(){
   }else{
     const seg=cSegs[ci];
     // Word-level highlighting if available
-    if(seg.words&&seg.words.length>1){
+    const fskWords=_wordsMatch(seg);
+    if(fskWords){
       const mode=_getKaraokeMode();
       const hlC=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#00e5a0';
       let wH='';

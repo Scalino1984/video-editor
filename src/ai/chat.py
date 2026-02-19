@@ -28,6 +28,7 @@ from pydantic_ai import Agent, RunContext
 from src.utils.logging import info, warn, error, debug
 
 
+
 # ── Deps context for agent tools ─────────────────────────────────────────────
 
 @dataclass
@@ -39,10 +40,16 @@ class ChatDeps:
     metadata: dict = field(default_factory=dict)
 
     def save_segments(self) -> None:
+        from src.api.routes import _validate_words, _sync_srt
+        _validate_words(self.segments)
         seg_path = self.output_dir / self.job_id / "segments.json"
         seg_path.write_text(
             json.dumps(self.segments, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        try:
+            _sync_srt(self.job_id, self.segments)
+        except Exception:
+            pass
 
     def get_lyrics_text(self) -> str:
         return "\n".join(

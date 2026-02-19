@@ -360,13 +360,28 @@ def _load_segs(job_id: str) -> tuple[Path, list[dict]]:
     return p, json.loads(p.read_text(encoding="utf-8"))
 
 def _save_segs(p: Path, data: list[dict], job_id: str):
+    _validate_words(data)
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     _sync_srt(job_id, data)
+
+
+def _validate_words(data: list[dict]) -> None:
+    """Clear stale word timestamps where words don't match segment text."""
+    for seg in data:
+        words = seg.get("words")
+        if not words:
+            continue
+        words_text = " ".join(w.get("word", "") for w in words).strip()
+        seg_text = seg.get("text", "").strip()
+        if words_text != seg_text:
+            seg["words"] = []
+            seg["has_word_timestamps"] = False
 
 
 @router.get("/jobs/{job_id}/segments")
 async def get_segments(job_id: str):
     _, data = _load_segs(job_id)
+    _validate_words(data)
     return data
 
 
@@ -378,9 +393,6 @@ async def update_segment(job_id: str, update: SegmentUpdate):
     if idx < 0 or idx >= len(data): raise HTTPException(400, f"Index {idx} out of range")
     if update.text is not None:
         data[idx]["text"] = update.text
-        # Clear word timestamps — text changed, old word boundaries are invalid
-        data[idx]["words"] = []
-        data[idx]["has_word_timestamps"] = False
     if update.start is not None: data[idx]["start"] = update.start
     if update.end is not None: data[idx]["end"] = update.end
     if update.speaker is not None: data[idx]["speaker"] = update.speaker
@@ -483,7 +495,8 @@ async def search_replace_segments(job_id: str, req: SearchReplace):
             seg["text"] = seg["text"].replace(req.search, req.replace)
         else:
             seg["text"] = re.sub(re.escape(req.search), lambda m: req.replace, seg["text"], flags=re.IGNORECASE)
-        if seg["text"] != orig: count += 1
+        if seg["text"] != orig:
+            count += 1
     _save_segs(p, data, job_id)
     return {"replaced_in_segments": count}
 
@@ -535,7 +548,8 @@ async def apply_dictionary(job_id: str):
         orig = seg["text"]
         for w, c in replacements.items():
             seg["text"] = re.sub(r'\b' + re.escape(w) + r'\b', c, seg["text"], flags=re.IGNORECASE)
-        if seg["text"] != orig: count += 1
+        if seg["text"] != orig:
+            count += 1
     _save_segs(p, data, job_id)
     return {"applied": count}
 
@@ -1165,6 +1179,7 @@ async def normalize_text_route(job_id: str, fix_case: bool = True, fix_punctuati
         if text != original:
             s["text"] = text
             changed += 1
+    _validate_words(data)
     seg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     _sync_srt(job_id, data)
     return {"changed": changed, "total": len(data)}

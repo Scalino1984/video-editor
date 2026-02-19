@@ -397,12 +397,12 @@ async def ref_correct(job_id: str, req: RefCorrectRequest):
     for c in changes:
         segments[c["index"]]["text"] = c["new_text"]
 
-    # Save segments + sync SRT
+    # Save segments + sync SRT (validates words automatically)
+    from src.api.routes import _validate_words, _sync_srt
+    _validate_words(segments)
     seg_path.write_text(
         json.dumps(segments, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    # Import _sync_srt from routes to keep SRT in sync
-    from src.api.routes import _sync_srt
     _sync_srt(job_id, segments)
 
     # Write audit log
