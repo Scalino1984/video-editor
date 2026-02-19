@@ -200,6 +200,10 @@ async def render_video_endpoint(
     audio_file: optional audio track (or auto-found from source job)
     options: JSON string with preset, position, crf, etc.
     """
+    from src.utils.media_executor import check_media_capacity
+    has_cap, running, queued = check_media_capacity()
+    if not has_cap:
+        raise HTTPException(429, f"System ausgelastet — {running} laufende, {queued} wartende Jobs. Bitte später erneut versuchen.")
     # Validate background
     _validate_ext(background_file.filename, ALLOWED_BG_EXT, "background")
 
