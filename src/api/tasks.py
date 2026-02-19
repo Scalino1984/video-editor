@@ -77,7 +77,27 @@ def get_job(job_id: str) -> JobInfo | None:
     return _jobs.get(job_id)
 
 
+MAX_FINISHED_JOBS = 200
+
+
+def _cleanup_finished_jobs() -> None:
+    """Remove oldest finished jobs from memory when exceeding MAX_FINISHED_JOBS."""
+    terminal = {JobStatus.completed, JobStatus.failed, JobStatus.cancelled}
+    with _jobs_lock:
+        finished = [(jid, j) for jid, j in _jobs.items() if j.status in terminal]
+        if len(finished) <= MAX_FINISHED_JOBS:
+            return
+        finished.sort(key=lambda x: x[1].created_at)
+        to_remove = finished[:len(finished) - MAX_FINISHED_JOBS]
+        for jid, _ in to_remove:
+            _jobs.pop(jid, None)
+            _cancel_events.pop(jid, None)
+            _undo_stacks.pop(jid, None)
+            _redo_stacks.pop(jid, None)
+
+
 def create_job(filename: str) -> JobInfo:
+    _cleanup_finished_jobs()
     job_id = uuid.uuid4().hex[:12]
     job = JobInfo(
         job_id=job_id, filename=filename,

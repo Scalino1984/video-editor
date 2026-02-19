@@ -377,6 +377,7 @@ async def api_import_from_job(pid: str, job_id: str):
     if not job_dir.exists():
         raise HTTPException(404, f"Job output not found: {job_id}")
 
+    _push_undo(pid)
     imported = []
 
     def _copy_and_add(source: Path, track: str) -> dict | None:
@@ -461,6 +462,7 @@ async def api_update_clip(pid: str, clip_id: str, body: dict):
     filtered = {k: v for k, v in body.items() if k in _CLIP_ALLOWED}
     if not filtered:
         raise HTTPException(400, "No valid fields")
+    _push_undo(pid)
     clip = update_clip(pid, clip_id, **filtered)
     if not clip:
         raise HTTPException(404, "Clip not found")
@@ -469,6 +471,7 @@ async def api_update_clip(pid: str, clip_id: str, body: dict):
 
 @router.delete("/projects/{pid}/clips/{clip_id}")
 async def api_remove_clip(pid: str, clip_id: str):
+    _push_undo(pid)
     ok = remove_clip(pid, clip_id)
     if not ok:
         raise HTTPException(404, "Clip not found")
@@ -477,6 +480,7 @@ async def api_remove_clip(pid: str, clip_id: str):
 
 @router.post("/projects/{pid}/clips/{clip_id}/split")
 async def api_split_clip(pid: str, clip_id: str, at_time: float = 0):
+    _push_undo(pid)
     result = split_clip(pid, clip_id, at_time)
     if not result:
         raise HTTPException(400, "Cannot split at this position")
@@ -486,6 +490,7 @@ async def api_split_clip(pid: str, clip_id: str, at_time: float = 0):
 
 @router.post("/projects/{pid}/clips/{clip_id}/effects")
 async def api_add_effect(pid: str, clip_id: str, body: dict):
+    _push_undo(pid)
     eff = add_effect(pid, clip_id, body.get("type", ""), body.get("params", {}))
     if not eff:
         raise HTTPException(404, "Clip not found")
@@ -494,6 +499,7 @@ async def api_add_effect(pid: str, clip_id: str, body: dict):
 
 @router.delete("/projects/{pid}/clips/{clip_id}/effects/{idx}")
 async def api_remove_effect(pid: str, clip_id: str, idx: int):
+    _push_undo(pid)
     ok = remove_effect(pid, clip_id, idx)
     if not ok:
         raise HTTPException(404, "Not found")
@@ -645,7 +651,12 @@ async def api_asset_file(pid: str, asset_id: str):
     if not p or asset_id not in p.assets:
         raise HTTPException(404)
     asset = p.assets[asset_id]
-    path = Path(asset.path)
+    path = Path(asset.path).resolve()
+    # Validate path is within allowed directories
+    editor_root = EDITOR_DIR.resolve()
+    output_root = Path("data/output").resolve()
+    if not (path.is_relative_to(editor_root) or path.is_relative_to(output_root)):
+        raise HTTPException(403, "Access denied")
     if not path.exists():
         raise HTTPException(404, "File not found")
     # Determine media type
