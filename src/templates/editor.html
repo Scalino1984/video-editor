@@ -48,7 +48,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 /* ── Layout ── */
 .app{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:var(--sidebar-w) 1fr var(--props-w);height:100vh}
 .hdr{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:10}
-.hdr h1{font-size:1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr h1{font-size:1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hdr .v{font-family:var(--mono);font-size:.55rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:4px}
 .sidebar{grid-row:2;grid-column:1;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 .center{grid-row:2;grid-column:2;display:flex;flex-direction:column;overflow:hidden}
@@ -1605,7 +1605,7 @@ function parseSRT(text){
     if(lines.length<2)continue;
     const tsLine=lines.find(l=>/\d{2}:\d{2}:\d{2}/.test(l));
     if(!tsLine)continue;
-    const m=tsLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d+)\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d+)/);
+    const m=tsLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d+)\s*--[>]\s*(\d{2}):(\d{2}):(\d{2})[,.](\d+)/);
     if(!m)continue;
     const start=+m[1]*3600+m[2]*60+m[3]*1+m[4]/1000;
     const end=+m[5]*3600+m[6]*60+m[7]*1+m[8]/1000;
