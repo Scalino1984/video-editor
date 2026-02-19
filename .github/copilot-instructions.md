@@ -444,6 +444,18 @@ Wenn Protokolle erzeugt/aktualisiert werden, immer angeben:
 
 ---
 
+### DOM-Registry — Pflege & Konsistenzprüfung
+
+Die Datei `.intern/dom-registry.json` ist die **kanonische Referenz** für alle Frontend-IDs, CSS-Klassen, Selektoren und Funktionsnamen:
+
+- **Vor jeder Änderung an HTML/JS/CSS**: `.intern/dom-registry.json` lesen und alle betroffenen IDs/Selektoren/Funktionsnamen prüfen
+- **Nach jeder Änderung an HTML/JS/CSS**: `.intern/dom-registry.json` aktualisieren — neue/umbenannte/entfernte IDs, Selektoren und Funktionsnamen eintragen
+- **Konsistenzcheck durchführen**: Bei jeder Änderung HTML ↔ JS ↔ CSS gegenseitig abgleichen (getElementById-Strings müssen im HTML existieren, Inline-Handler-Ziele müssen als Funktionen definiert sein)
+- **Dynamische Selektoren unter `dynamic_or_unknown`** dokumentieren — nie raten, ob ein Selektor statisch funktioniert
+- **Issues-Sektion pflegen**: Neue Inkonsistenzen sofort unter `issues` eintragen, behobene entfernen
+
+---
+
 ### BESTANDSAUFNAHME.md — Pflege & Protokoll
 
 Die Datei `.intern/BESTANDSAUFNAHME.md` ist die **verbindliche Referenz** für den aktuellen Stand des Codes:

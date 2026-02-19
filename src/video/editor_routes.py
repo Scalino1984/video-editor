@@ -27,6 +27,129 @@ from src.video.editor import (
 
 router = APIRouter(prefix="/api/editor", tags=["editor"])
 
+LOOP_VIDEOS_DIR = Path("src/library/loop_videos")
+
+# Mapping: project aspect ratio → loop video subfolder
+_LOOP_FOLDER_MAP: dict[str, str] = {
+    "16:9": "1280x720",
+    "9:16": "720x1280",
+    "1:1": "1000x1000",
+}
+
+
+def _aspect_ratio(w: int, h: int) -> str:
+    """Determine aspect ratio bucket from project dimensions."""
+    from math import gcd
+    g = gcd(w, h)
+    rw, rh = w // g, h // g
+    if rw == rh:
+        return "1:1"
+    if rw / rh > 1:
+        return "16:9"  # landscape
+    return "9:16"  # portrait
+
+
+# ── Loop Video Library ────────────────────────────────────────────────────────
+
+@router.get("/loop-videos")
+async def api_list_loop_videos(width: int = 0, height: int = 0):
+    """List available loop videos, optionally filtered by project resolution."""
+    result: dict[str, list[dict]] = {}
+
+    if width > 0 and height > 0:
+        folder_name = _LOOP_FOLDER_MAP.get(_aspect_ratio(width, height))
+        folders = [folder_name] if folder_name else []
+    else:
+        folders = sorted(d.name for d in LOOP_VIDEOS_DIR.iterdir() if d.is_dir())
+
+    for fname in folders:
+        folder = LOOP_VIDEOS_DIR / fname
+        if not folder.is_dir():
+            continue
+        videos = []
+        for f in sorted(folder.iterdir()):
+            if f.suffix.lower() in (".mp4", ".mov", ".webm"):
+                # Extract display name (e.g. "Car_1280x720.mp4" → "Car")
+                display = f.stem.rsplit("_", 1)[0] if "_" in f.stem else f.stem
+                videos.append({
+                    "filename": f.name,
+                    "display_name": display,
+                    "folder": fname,
+                    "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
+                    "url": f"/api/editor/loop-videos/{fname}/{f.name}",
+                    "thumb_url": f"/api/editor/loop-videos/{fname}/{f.name}/thumb",
+                })
+        if videos:
+            result[fname] = videos
+
+    return result
+
+
+@router.get("/loop-videos/{folder}/{filename}")
+async def api_serve_loop_video(folder: str, filename: str):
+    """Serve a loop video file for preview / playback."""
+    path = LOOP_VIDEOS_DIR / folder / filename
+    if not path.exists() or ".." in folder or ".." in filename:
+        raise HTTPException(404, "Not found")
+    return FileResponse(path, media_type="video/mp4", filename=filename)
+
+
+@router.get("/loop-videos/{folder}/{filename}/thumb")
+async def api_loop_video_thumb(folder: str, filename: str):
+    """Generate and serve a thumbnail for a loop video."""
+    path = LOOP_VIDEOS_DIR / folder / filename
+    if not path.exists() or ".." in folder or ".." in filename:
+        raise HTTPException(404, "Not found")
+    # Cache thumbnail in EDITOR_DIR/assets
+    thumb_name = f"loopthumb_{folder}_{Path(filename).stem}.jpg"
+    thumb_path = EDITOR_DIR / "assets" / thumb_name
+    if not thumb_path.exists():
+        import subprocess
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(path), "-ss", "1", "-frames:v", "1",
+                 "-vf", "scale=160:-1", str(thumb_path)],
+                capture_output=True, timeout=15,
+            )
+        except Exception:
+            raise HTTPException(500, "Thumbnail generation failed")
+    if not thumb_path.exists():
+        raise HTTPException(500, "Thumbnail not created")
+    return FileResponse(thumb_path, media_type="image/jpeg")
+
+
+@router.post("/projects/{pid}/import-loop-video")
+async def api_import_loop_video(
+    pid: str,
+    folder: str = Form(...),
+    filename: str = Form(...),
+    add_to_timeline: bool = Form(True),
+):
+    """Import a loop video from the library into the project as asset + clip."""
+    p = get_project(pid)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    src_path = LOOP_VIDEOS_DIR / folder / filename
+    if not src_path.exists() or ".." in folder or ".." in filename:
+        raise HTTPException(404, "Loop video not found")
+
+    # Copy to assets dir
+    safe_name = filename.replace("/", "_").replace("\\", "_")
+    dest = EDITOR_DIR / "assets" / f"{uuid.uuid4().hex[:8]}_{safe_name}"
+    shutil.copy2(src_path, dest)
+
+    asset = add_asset(pid, safe_name, dest)
+    if not asset:
+        raise HTTPException(500, "Failed to add asset")
+
+    clip_data = None
+    if add_to_timeline:
+        clip = add_clip(pid, asset.id, track="video", start=0, loop=True)
+        if clip:
+            clip_data = clip.to_dict()
+
+    return {"asset": asset.to_dict(), "clip": clip_data}
+
 
 # ── Project CRUD ──────────────────────────────────────────────────────────────
 
