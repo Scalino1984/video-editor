@@ -40,6 +40,8 @@ class FileReport:
     bpm_snap_active: bool = False
     bpm_value: float = 0.0
     ai_correct_active: bool = False
+    karaoke_mode: str = "kf"
+    preset: str = "classic"
     duration_sec: float = 0.0
     runtime_sec: float = 0.0
     errors: list[str] = field(default_factory=list)
@@ -94,6 +96,8 @@ def generate_report(file_report: FileReport, fmt: str = "json") -> str:
                 "bpm": file_report.bpm_value,
                 "ai_correct": file_report.ai_correct_active,
             },
+            "karaoke_mode": file_report.karaoke_mode,
+            "preset": file_report.preset,
             "duration_sec": round(file_report.duration_sec, 2),
             "runtime_sec": round(file_report.runtime_sec, 2),
             "errors": file_report.errors,

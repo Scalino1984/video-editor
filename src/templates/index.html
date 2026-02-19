@@ -427,7 +427,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
         <option value="auto">Auto</option><option value="de">DE</option><option value="en">EN</option>
         <option value="fr">FR</option><option value="es">ES</option><option value="ja">JA</option>
       </select></div>
-      <div><label>Mode</label><select id="sK"><option value="kf">kf</option><option value="k">k</option><option value="ko">ko</option></select></div>
+      <div><label>Mode</label><select id="sK"><option value="kf">Fill (progressiv)</option><option value="k">Highlight (sofort)</option><option value="ko">Outline-Wipe</option></select></div>
       <div><label>Preset</label><select id="sP"><option value="classic">Classic</option><option value="neon">Neon</option><option value="high_contrast">Hi-Con</option><option value="landscape_1080p">Land</option><option value="portrait_1080x1920">Port</option><option value="mobile_safe">Mobile</option></select></div>
       <div class="f"><label>CPS / Max Chars</label>
         <div style="display:flex;gap:5px"><input type="number" id="sC" value="18" min="5" max="40" style="width:50%"><input type="number" id="sMC" value="42" min="20" max="80" style="width:50%"></div>
@@ -548,6 +548,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
             <button class="btn-s btn-sm" onclick="regenFmt()">🔄 Regen</button>
             <button class="btn-s btn-sm" onclick="copyC('srt')">📋SRT</button>
             <button class="btn-s btn-sm" onclick="copyC('ass')">📋ASS</button>
+            <button class="btn-s btn-sm" onclick="downloadJobZip()" title="Gesamten Ordner als ZIP herunterladen">📦 ZIP</button>
             <button class="btn-s btn-sm" onclick="exportProject()">💾 Export</button>
           </div>
         </div>
@@ -1305,6 +1306,13 @@ async function copyC(ext){if(!aJobId)return;try{
   if(d.content!=null){await navigator.clipboard.writeText(d.content);toast(ext.toUpperCase()+' → Clipboard')}
   else toast(ext.toUpperCase()+' nicht verfügbar','err')
 }catch(e){toast('Fehler: '+e.message,'err')}}
+async function downloadJobZip(){if(!aJobId)return;try{
+  toast('ZIP wird erstellt…');const resp=await fetch(B+'/api/jobs/'+aJobId+'/download-zip');
+  if(!resp.ok){const e=await resp.json().catch(()=>({}));toast('ZIP Fehler: '+(e.detail||'Unbekannt'),'err');return}
+  const blob=await resp.blob();const a=document.createElement('a');
+  const cd=resp.headers.get('content-disposition')||'';const m=cd.match(/filename="([^"]+)"/);const fn=m?m[1]:aJobId+'_all.zip';
+  a.href=URL.createObjectURL(blob);a.download=fn;a.click();URL.revokeObjectURL(a.href);
+  toast('ZIP heruntergeladen')}catch(e){toast('ZIP Fehler: '+e.message,'err')}}
 async function exportProject(){if(!aJobId)return;try{
   const resp=await fetch(B+'/api/jobs/'+aJobId+'/project-export');
   if(!resp.ok){const e=await resp.json().catch(()=>({}));toast('Export Fehler: '+(e.detail||'Unbekannt'),'err');return}

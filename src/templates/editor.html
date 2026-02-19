@@ -101,9 +101,9 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 .preview-video{width:100%;height:100%;object-fit:cover;border-radius:2px}
 .preview-empty{color:var(--dim);text-align:center;font-size:.85rem}
 .preview-empty .ic{font-size:3rem;display:block;margin-bottom:8px;opacity:.3}
-.sub-overlay{position:absolute;left:5%;right:5%;text-align:center;pointer-events:none;z-index:5;transition:opacity .08s ease;line-height:1.6}
-.sub-overlay.sub-fade-out{opacity:0}
-.sub-overlay.sub-fade-in{opacity:1}
+.sub-overlay{position:absolute;left:5%;right:5%;text-align:center;pointer-events:none;z-index:5;line-height:1.6}
+.sub-overlay.sub-hidden{opacity:0;transition:opacity .06s ease}
+.sub-overlay.sub-visible{opacity:1;transition:none}
 .sub-overlay span{display:inline;padding:3px 10px;border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .player-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg3);border-top:1px solid var(--border)}
 .player-bar button{padding:4px 8px;font-size:.75rem}
@@ -497,6 +497,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
         </select></div>
         <div class="prop-row"><label>Größe</label><input type="range" id="ppSubSize" min="20" max="100" value="48" oninput="updateSubSetting('sub_size',+this.value);document.getElementById('ppSubSizeV').textContent=this.value+'px'"><span id="ppSubSizeV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">48px</span></div>
         <div class="prop-row"><label>Farbe</label><input type="color" id="ppSubColor" value="#ffffff" oninput="updateSubSetting('sub_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><span id="ppSubColorHex" style="font-size:.6rem;font-family:var(--mono)">#FFFFFF</span></div>
+        <div class="prop-row"><label>Highlight</label><input type="color" id="ppSubHighlight" value="#ffff00" oninput="updateSubSetting('sub_highlight_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><span id="ppSubHighlightHex" style="font-size:.6rem;font-family:var(--mono)">#FFFF00</span></div>
         <div class="prop-row"><label>Outline</label><input type="color" id="ppSubOutline" value="#000000" oninput="updateSubSetting('sub_outline_color',hexToAss(this.value))" style="width:40px;height:24px;padding:0;border:none;cursor:pointer"><input type="range" id="ppSubOutW" min="0" max="6" value="2" style="flex:1" oninput="updateSubSetting('sub_outline_width',+this.value);document.getElementById('ppSubOutWV').textContent=this.value+'px'"><span id="ppSubOutWV" style="font-size:.6rem;font-family:var(--mono);min-width:24px">2px</span></div>
         <div class="prop-row"><label>Y-Pos</label><input type="range" id="ppSubY" min="0" max="100" value="85" oninput="updateSubSetting('sub_y_percent',+this.value);document.getElementById('ppSubYV').textContent=this.value+'%'"><span id="ppSubYV" style="font-size:.6rem;font-family:var(--mono);min-width:30px">85%</span></div>
         <div class="prop-row" style="font-size:.55rem;color:var(--dim);margin-top:-4px">← Oben &nbsp;&nbsp; Unten →</div>
@@ -651,8 +652,8 @@ function _resetEditorUI(){
   for(const id of ['trackVideo','trackAudio','trackSub','trackOverlay']){
     const el=document.getElementById(id);if(el)el.innerHTML=''}
   // Clear preview media
-  const vid=document.getElementById('previewVideo');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
-  const aud=document.getElementById('previewAudio');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
+  const vid=document.getElementById('previewVid');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
+  const aud=document.getElementById('previewAu');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
   document.getElementById('previewEmpty').style.display='block';
   // Clear subtitle overlay
   const subOv=document.getElementById('subtitleOverlay');if(subOv)subOv.textContent='';
@@ -1217,19 +1218,19 @@ async function updateSubSetting(key,val){
   if(!PID)return;
   PROJ[key]=val;
   if(key==='sub_color'){document.getElementById('ppSubColorHex').textContent=assToHex(val)}
+  if(key==='sub_highlight_color'){document.getElementById('ppSubHighlightHex').textContent=assToHex(val)}
   if(key==='sub_bg_color'){
     const alpha=val?parseInt(val.slice(2,4),16):128;
     const el=document.getElementById('ppSubBgAlphaV');
     if(el)el.textContent=Math.round(alpha/255*100)+'%'}
+  // Apply style immediately for responsive slider feedback
+  _lastSubIdx=-1;
+  updateSubtitleStyle();
   try{
     await fetch(B+'/api/editor/projects/'+PID,{
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({[key]:val})})
-  }catch(e){console.warn('updateSubSetting:',e)}
-  // Force subtitle overlay rebuild when settings change
-  _lastSubIdx=-1;
-  updateSubtitleStyle();
-  updateSubtitleOverlay()}
+  }catch(e){console.warn('updateSubSetting:',e)}}
 
 // Convert hex color (#RRGGBB) to ASS color (&H00BBGGRR)
 function hexToAss(hex){
@@ -1324,6 +1325,7 @@ function updateProps(){
   if(el('ppSubFont'))el('ppSubFont').value=PROJ.sub_font||'Arial';
   if(el('ppSubSize')){el('ppSubSize').value=PROJ.sub_size||48;el('ppSubSizeV').textContent=(PROJ.sub_size||48)+'px'}
   if(el('ppSubColor')){el('ppSubColor').value=assToHex(PROJ.sub_color||'&H00FFFFFF');el('ppSubColorHex').textContent=assToHex(PROJ.sub_color||'&H00FFFFFF')}
+  if(el('ppSubHighlight')){el('ppSubHighlight').value=assToHex(PROJ.sub_highlight_color||'&H0000FFFF');el('ppSubHighlightHex').textContent=assToHex(PROJ.sub_highlight_color||'&H0000FFFF')}
   if(el('ppSubOutline'))el('ppSubOutline').value=assToHex(PROJ.sub_outline_color||'&H00000000');
   if(el('ppSubOutW')){el('ppSubOutW').value=PROJ.sub_outline_width||2;el('ppSubOutWV').textContent=(PROJ.sub_outline_width||2)+'px'}
   if(el('ppSubY')){el('ppSubY').value=PROJ.sub_y_percent??85;el('ppSubYV').textContent=(PROJ.sub_y_percent??85)+'%'}
@@ -1512,6 +1514,8 @@ function setPlaySpeed(v){
 // ══════════════════════════════════════════════════════════════════════════════
 
 let _subtitleCues=[]; // [{start, end, text}]
+let _subBpm=0; // BPM from report.json (0 = no BPM)
+let _subBeatInterval=0; // seconds per beat
 
 function parseSRT(text){
   const cues=[];
@@ -1519,14 +1523,12 @@ function parseSRT(text){
   for(const block of blocks){
     const lines=block.trim().split('\n');
     if(lines.length<2)continue;
-    // Find timestamp line
     const tsLine=lines.find(l=>/\d{2}:\d{2}:\d{2}/.test(l));
     if(!tsLine)continue;
     const m=tsLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d+)\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d+)/);
     if(!m)continue;
     const start=+m[1]*3600+m[2]*60+m[3]*1+m[4]/1000;
     const end=+m[5]*3600+m[6]*60+m[7]*1+m[8]/1000;
-    // Remaining lines are text (skip index line)
     const textLines=lines.filter(l=>l!==tsLine&&!/^\d+$/.test(l.trim()));
     cues.push({start,end,text:textLines.join('\n').replace(/<[^>]+>/g,'')})}
   return cues}
@@ -1544,8 +1546,17 @@ function parseASS(text){
     if(text)cues.push({start,end,text})}
   return cues}
 
+// Binary search: find cue index where cue.start <= t, rightmost
+function _bsearchCue(t){
+  let lo=0,hi=_subtitleCues.length-1,res=-1;
+  while(lo<=hi){
+    const mid=(lo+hi)>>>1;
+    if(_subtitleCues[mid].start<=t){res=mid;lo=mid+1}
+    else hi=mid-1}
+  return res>=0&&t<=_subtitleCues[res].end?res:-1}
+
 async function loadSubtitleCues(){
-  _subtitleCues=[];
+  _subtitleCues=[];_subBpm=0;_subBeatInterval=0;
   if(!PROJ||!PID)return;
   const subClip=(PROJ.clips||[]).find(c=>c.track==='subtitle');
   if(!subClip){console.log('[subs] No subtitle clip on timeline');return}
@@ -1562,68 +1573,109 @@ async function loadSubtitleCues(){
     if(ext.endsWith('.srt')||ext.endsWith('.vtt'))_subtitleCues=parseSRT(text);
     else if(ext.endsWith('.ass'))_subtitleCues=parseASS(text);
     else{console.warn('[subs] Unknown format:',ext);return}
-    console.log(`[subs] ✓ Loaded ${_subtitleCues.length} cues from ${asset.filename}`);
-    // Apply project subtitle styling — do NOT display a cue yet, wait for playback
+
+    // Sort cues by start time for binary search
+    _subtitleCues.sort((a,b)=>a.start-b.start);
+
+    // Try to load BPM from stats for pre-cue beat-snapping
+    _loadSubBpm();
+
+    // Pre-build HTML for each cue (avoids DOM work during playback)
+    _prebuildCueHtml();
+
+    console.log(`[subs] ✓ Loaded ${_subtitleCues.length} cues from ${asset.filename}` +
+      (_subBpm?` (BPM: ${_subBpm.toFixed(1)})`:''));
     updateSubtitleStyle();
   }catch(e){console.warn('[subs] Load error:',e)}}
 
+async function _loadSubBpm(){
+  // Try to get BPM from the karaoke job stats
+  if(!PROJ||!PID)return;
+  try{
+    // Find job_id from subtitle asset path (data/output/{job_id}/...)
+    const subClip=(PROJ.clips||[]).find(c=>c.track==='subtitle');
+    if(!subClip)return;
+    const asset=PROJ.assets[subClip.asset_id];
+    if(!asset||!asset.path)return;
+    const m=asset.path.match(/data\/output\/([a-f0-9]+)\//);
+    if(!m)return;
+    const jobId=m[1];
+    const resp=await fetch(B+'/api/jobs/'+jobId+'/stats');
+    if(!resp.ok)return;
+    const stats=await resp.json();
+    if(stats.bpm&&stats.bpm>0){
+      _subBpm=stats.bpm;
+      _subBeatInterval=60.0/_subBpm;
+      console.log(`[subs] BPM: ${_subBpm.toFixed(1)}, beat interval: ${(_subBeatInterval*1000).toFixed(1)}ms`);
+    }
+  }catch(e){/* BPM is optional */}}
+
+function _prebuildCueHtml(){
+  const nLines=(PROJ&&PROJ.sub_lines)||1;
+  const nlBr=s=>esc(s).replace(/\n/g,'<br>');
+  for(let i=0;i<_subtitleCues.length;i++){
+    const cue=_subtitleCues[i];
+    let html='';
+    if(nLines===1){
+      html='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+    } else if(nLines===2){
+      html='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+      if(i+1<_subtitleCues.length)
+        html+='<br><span class="sub-context">'+nlBr(_subtitleCues[i+1].text)+'</span>';
+    } else if(nLines>=3){
+      if(i>0)
+        html+='<span class="sub-context">'+nlBr(_subtitleCues[i-1].text)+'</span><br>';
+      html+='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+      if(i+1<_subtitleCues.length)
+        html+='<br><span class="sub-context">'+nlBr(_subtitleCues[i+1].text)+'</span>';
+    }
+    cue._html=html;
+  }
+}
+
 let _lastSubIdx=-1;
+let _preloadedIdx=-1; // index of cue whose HTML is pre-loaded in hidden state
 
 function updateSubtitleOverlay(time){
   const el=document.getElementById('subOverlay');
-  if(!_subtitleCues.length){el.innerHTML='';el.classList.remove('sub-fade-in');_lastSubIdx=-1;return}
+  if(!_subtitleCues.length){el.innerHTML='';el.className='sub-overlay';_lastSubIdx=-1;_preloadedIdx=-1;return}
   const t=time!==undefined?time:PLAYBACK_TIME;
-  const nLines=(PROJ&&PROJ.sub_lines)||1;
 
-  // Find current cue index
-  const idx=_subtitleCues.findIndex(c=>t>=c.start&&t<=c.end);
+  // Binary search for current cue
+  const idx=_bsearchCue(t);
+
   if(idx<0){
-    // No active cue — fade out
-    if(_lastSubIdx>=0){el.classList.remove('sub-fade-in');el.classList.add('sub-fade-out');_lastSubIdx=-1}
-    else if(!el.innerHTML){el.classList.remove('sub-fade-out')}
+    // No active cue
+    if(_lastSubIdx>=0){el.className='sub-overlay sub-hidden';_lastSubIdx=-1}
+
+    // Lookahead: pre-load next cue's HTML while invisible
+    // Find the next upcoming cue
+    let nextIdx=-1;
+    let lo=0,hi=_subtitleCues.length-1;
+    while(lo<=hi){const mid=(lo+hi)>>>1;if(_subtitleCues[mid].start>t){nextIdx=mid;hi=mid-1}else lo=mid+1}
+
+    if(nextIdx>=0&&nextIdx!==_preloadedIdx){
+      const gap=_subtitleCues[nextIdx].start-t;
+      // Pre-load HTML if cue is within 300ms (or 1 beat if BPM known)
+      const preloadWindow=_subBeatInterval>0?Math.max(0.15,_subBeatInterval):0.3;
+      if(gap<=preloadWindow){
+        el.innerHTML=_subtitleCues[nextIdx]._html||'';
+        _preloadedIdx=nextIdx;
+      }
+    }
     return}
 
-  const cue=_subtitleCues[idx];
-
-  // Only rebuild HTML when cue changes
+  // Active cue found — show it
   if(idx!==_lastSubIdx){
-    const cueDur=cue.end-cue.start;
-    const fast=cueDur<0.8; // short cue → instant swap
-
-    function _buildHtml(){
-      let html='';
-      const nlBr=s=>esc(s).replace(/\n/g,'<br>');
-      if(nLines===1){
-        html='<span class=\"sub-current\">'+nlBr(cue.text)+'</span>';
-      } else if(nLines===2){
-        html='<span class=\"sub-current\">'+nlBr(cue.text)+'</span>';
-        if(idx+1<_subtitleCues.length){
-          html+='<br><span class=\"sub-context\">'+nlBr(_subtitleCues[idx+1].text)+'</span>'}
-      } else if(nLines>=3){
-        if(idx>0){
-          html+='<span class=\"sub-context\">'+nlBr(_subtitleCues[idx-1].text)+'</span><br>'}
-        html+='<span class=\"sub-current\">'+nlBr(cue.text)+'</span>';
-        if(idx+1<_subtitleCues.length){
-          html+='<br><span class=\"sub-context\">'+nlBr(_subtitleCues[idx+1].text)+'</span>'}
-      }
-      return html}
-
-    if(fast){
-      // Instant swap for fast segments — no fade lag
-      el.classList.remove('sub-fade-out');
-      el.innerHTML=_buildHtml();
-      el.classList.add('sub-fade-in');
+    // If already pre-loaded, just flip to visible — zero DOM work
+    if(idx===_preloadedIdx){
+      el.className='sub-overlay sub-visible';
     } else {
-      // Smooth fade for normal-speed segments
-      el.classList.remove('sub-fade-in');
-      el.classList.add('sub-fade-out');
-      requestAnimationFrame(()=>{
-        el.innerHTML=_buildHtml();
-        el.classList.remove('sub-fade-out');
-        el.classList.add('sub-fade-in');
-      });
+      el.innerHTML=_subtitleCues[idx]._html||'';
+      el.className='sub-overlay sub-visible';
     }
     _lastSubIdx=idx;
+    _preloadedIdx=-1;
   }
 }
 
@@ -1662,6 +1714,10 @@ function updateSubtitleStyle(){
 .sub-overlay span.sub-current{font-family:'${font}',sans-serif!important;font-size:${sizePx}px!important;color:${color}!important;font-weight:700!important;text-shadow:${shadow}!important;${bg}!important}
 .sub-overlay span.sub-context{font-family:'${font}',sans-serif!important;font-size:${ctxSizePx}px!important;color:${color}!important;opacity:.55!important;font-weight:400!important;text-shadow:${ctxShadow}!important;${bg}!important}`;
   if(!style.parentNode)document.head.appendChild(style);
+
+  // Rebuild pre-cached HTML (nLines may have changed)
+  if(_subtitleCues.length)_prebuildCueHtml();
+  _lastSubIdx=-1;_preloadedIdx=-1;
   updateSubtitleOverlay()}
 
 // ══════════════════════════════════════════════════════════════════════════════

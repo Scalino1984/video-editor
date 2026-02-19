@@ -126,6 +126,7 @@ class Project:
     sub_lines: int = 1             # 1 = only current, 2 = current+next, 3 = prev+current+next
     sub_bg_enabled: bool = True
     sub_bg_color: str = "&H80000000"  # ASS: semi-transparent black
+    sub_highlight_color: str = "&H0000FFFF"  # ASS: yellow karaoke highlight
     video_fit: str = "cover"  # cover | contain | stretch
 
     @property
@@ -156,6 +157,7 @@ class Project:
             "sub_lines": self.sub_lines,
             "sub_bg_enabled": self.sub_bg_enabled,
             "sub_bg_color": self.sub_bg_color,
+            "sub_highlight_color": self.sub_highlight_color,
             "video_fit": self.video_fit,
             "assets": {k: v.to_dict() for k, v in self.assets.items()},
             "clips": [c.to_dict() for c in self.clips],
@@ -188,6 +190,7 @@ class Project:
             sub_lines=d.get("sub_lines", 1),
             sub_bg_enabled=d.get("sub_bg_enabled", True),
             sub_bg_color=d.get("sub_bg_color", "&H80000000"),
+            sub_highlight_color=d.get("sub_highlight_color", "&H0000FFFF"),
             video_fit=d.get("video_fit", "cover"),
             assets=assets, clips=clips,
         )
@@ -615,7 +618,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Current,{p.sub_font},{p.sub_size},{p.sub_color},&H000000FF,{p.sub_outline_color},{bg_color},-1,0,0,0,100,100,0,0,{border_style},{p.sub_outline_width},{shadow_depth},{alignment},20,20,{mv},1
+Style: Current,{p.sub_font},{p.sub_size},{p.sub_color},{p.sub_highlight_color},{p.sub_outline_color},{bg_color},-1,0,0,0,100,100,0,0,{border_style},{p.sub_outline_width},{shadow_depth},{alignment},20,20,{mv},1
 Style: Context,{p.sub_font},{int(p.sub_size * 0.75)},&H80FFFFFF,&H000000FF,{p.sub_outline_color},{bg_color},0,0,0,0,100,100,0,0,{border_style},{max(1, p.sub_outline_width - 1)},{shadow_depth},{alignment},20,20,{mv},1
 
 [Events]

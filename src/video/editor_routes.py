@@ -65,7 +65,7 @@ async def api_update_project(pid: str, data: dict):
         "name", "width", "height", "fps", "preset", "crf", "audio_bitrate",
         "sub_font", "sub_size", "sub_color", "sub_outline_color",
         "sub_outline_width", "sub_position", "sub_margin_v", "sub_y_percent",
-        "sub_lines", "sub_bg_enabled", "sub_bg_color", "video_fit",
+        "sub_lines", "sub_bg_enabled", "sub_bg_color", "sub_highlight_color", "video_fit",
     }
     changed = []
     for k, v in data.items():
@@ -215,17 +215,13 @@ async def api_import_from_job(pid: str, job_id: str):
             if imported and any(a.get("type") == "audio" for a in imported):
                 break
 
-    # Find subtitle files — prefer .ass over .srt, only import ONE format
-    sub_imported = False
-    for ext in (".ass", ".srt"):
-        if sub_imported:
-            break
+    # Find subtitle files — import ALL available formats (.ass, .srt, .vtt, .lrc)
+    for ext in (".ass", ".srt", ".vtt", ".lrc"):
         for f in job_dir.glob(f"*{ext}"):
             asset = add_asset(pid, f.name, f)
             if asset:
                 imported.append(asset.to_dict())
                 add_clip(pid, asset.id, track="subtitle", start=0)
-                sub_imported = True
             break
 
     return {"imported": len(imported), "assets": imported}
@@ -307,6 +303,7 @@ async def api_update_sub_settings(pid: str, data: dict = None):
     allowed = {
         "sub_font", "sub_size", "sub_color", "sub_outline_color",
         "sub_outline_width", "sub_position", "sub_margin_v", "sub_lines",
+        "sub_highlight_color",
     }
     for k, v in data.items():
         if k in allowed:

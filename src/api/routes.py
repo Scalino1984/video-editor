@@ -599,6 +599,33 @@ async def export_project(job_id: str):
     return project
 
 
+@router.get("/jobs/{job_id}/download-zip")
+async def download_job_zip(job_id: str):
+    """Download entire job output folder as a ZIP file."""
+    job_dir = tasks.OUTPUT_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(404, "Job directory not found")
+    files = [f for f in job_dir.iterdir() if f.is_file()]
+    if not files:
+        raise HTTPException(404, "No files in job directory")
+    # Determine a human-readable name from the first SRT/ASS stem or fallback to job_id
+    stem = job_id[:12]
+    for f in files:
+        if f.suffix in (".srt", ".ass"):
+            stem = f.stem
+            break
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(files, key=lambda x: x.name):
+            zf.write(f, f.name)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{stem}_all.zip"'},
+    )
+
+
 @router.post("/jobs/{job_id}/project-import")
 async def import_project(job_id: str, file: UploadFile = File(...)):
     """Import project state from JSON."""
@@ -734,7 +761,17 @@ def _sync_srt(job_id: str, data: list[dict]) -> None:
             from src.refine.alignment import ensure_word_timestamps
             from src.export.ass_writer import write_ass
             segs_wt = ensure_word_timestamps(segs)
-            write_ass(segs_wt, f)
+            # Read karaoke_mode + preset from report.json if available
+            k_mode, k_preset = "kf", "classic"
+            for rp in job_dir.glob("*.report.json"):
+                try:
+                    rd = json.loads(rp.read_text(encoding="utf-8"))
+                    k_mode = rd.get("karaoke_mode", "kf")
+                    k_preset = rd.get("preset", "classic")
+                except Exception:
+                    pass
+                break
+            write_ass(segs_wt, f, karaoke_mode=k_mode, preset=k_preset)
         except Exception:
             pass  # non-critical: ASS regeneration may fail without word timestamps
         break

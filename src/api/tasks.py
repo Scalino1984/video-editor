@@ -415,6 +415,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
             vocal_isolation_active=req.vocal_isolation,
             bpm_snap_active=bpm_value > 0, bpm_value=bpm_value,
             ai_correct_active=ai_corrected,
+            karaoke_mode=req.karaoke_mode.value, preset=req.preset.value,
             duration_sec=duration, segment_reports=seg_reports,
         )
         report_path = save_report(file_report, job_output / stem, "json")
