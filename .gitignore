@@ -115,7 +115,8 @@ venv/
 .venv/
 env/
 ENV/
-.intern/
+.intern/*
+!.intern/api-registry.json
 htmlcov/
 .tox/
 .nox/
