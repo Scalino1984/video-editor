@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from src.utils.logging import debug, error
+from src.utils.media_executor import run_media_subprocess
 
 SUPPORTED_FORMATS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wma"}
 
@@ -21,7 +20,10 @@ def probe_audio(path: Path) -> dict[str, Any]:
         str(path),
     ]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        r = run_media_subprocess(
+            cmd, tool="ffprobe", description=f"probe {path.name}",
+            timeout=30, heavy=False,
+        )
         return json.loads(r.stdout)
     except Exception as e:
         error(f"ffprobe failed for {path}: {e}")
@@ -48,7 +50,10 @@ def convert_to_wav(input_path: Path, output_path: Path | None = None,
         str(output_path),
     ]
     debug(f"Converting: {' '.join(cmd)}")
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    r = run_media_subprocess(
+        cmd, tool="ffmpeg", description=f"convert {input_path.name} → WAV",
+        timeout=300, heavy=True,
+    )
     if r.returncode != 0:
         raise RuntimeError(f"ffmpeg conversion failed: {r.stderr}")
     return output_path
@@ -62,7 +67,10 @@ def apply_loudnorm(input_path: Path, output_path: Path, target_lufs: float = -16
         str(output_path),
     ]
     debug(f"Normalizing: {' '.join(cmd)}")
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    r = run_media_subprocess(
+        cmd, tool="ffmpeg", description=f"loudnorm {input_path.name}",
+        timeout=300, heavy=True,
+    )
     if r.returncode != 0:
         raise RuntimeError(f"Loudness normalization failed: {r.stderr}")
     return output_path

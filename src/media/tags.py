@@ -192,11 +192,15 @@ def _read_mutagen(path: Path, ext: str, lib: str) -> tuple[dict[str, str], bool,
 def _read_ffprobe(path: Path) -> dict[str, str]:
     """Read tags via ffprobe (fallback)."""
     try:
+        from src.utils.media_executor import run_media_subprocess
         cmd = [
             "ffprobe", "-v", "quiet", "-print_format", "json",
             "-show_format", str(path),
         ]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        r = run_media_subprocess(
+            cmd, tool="ffprobe", description=f"tags {path.name}",
+            timeout=15, heavy=False,
+        )
         data = json.loads(r.stdout)
         fmt_tags = data.get("format", {}).get("tags", {})
 

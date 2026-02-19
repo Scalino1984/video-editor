@@ -111,12 +111,13 @@ async def api_loop_video_thumb(folder: str, filename: str):
     thumb_name = f"loopthumb_{folder}_{Path(filename).stem}.jpg"
     thumb_path = EDITOR_DIR / "assets" / thumb_name
     if not thumb_path.exists():
-        import subprocess
+        from src.utils.media_executor import run_media_subprocess
         try:
-            subprocess.run(
+            run_media_subprocess(
                 ["ffmpeg", "-y", "-i", str(path), "-ss", "1", "-frames:v", "1",
                  "-vf", "scale=160:-1", str(thumb_path)],
-                capture_output=True, timeout=15,
+                tool="ffmpeg", description=f"loop thumb {filename}",
+                timeout=15, heavy=False,
             )
         except Exception:
             raise HTTPException(500, "Thumbnail generation failed")

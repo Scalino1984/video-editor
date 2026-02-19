@@ -702,13 +702,17 @@ def _generate_waveform_data(audio_path: Path, output_path: Path, num_points: int
     """Generate waveform peak data. Uses ffmpeg to decode to raw PCM first
     to avoid soundfile struggling with compressed formats."""
     import subprocess
+    from src.utils.media_executor import run_media_subprocess
 
     info(f"Generating waveform from {audio_path.name}...")
 
     # Decode to raw PCM via ffmpeg (fast, handles any format)
     cmd = ["ffmpeg", "-y", "-i", str(audio_path), "-f", "s16le", "-ac", "1", "-ar", "22050", "pipe:1"]
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        result = run_media_subprocess(
+            cmd, tool="ffmpeg", description=f"waveform {audio_path.name}",
+            timeout=60, heavy=False, text=False,
+        )
         if result.returncode != 0:
             warn(f"Waveform ffmpeg failed, skipping")
             return

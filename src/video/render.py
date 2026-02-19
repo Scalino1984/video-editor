@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from src.utils.logging import info, warn, error, debug
+from src.utils.media_executor import run_media_subprocess
 
 
 # ── Probe helpers ─────────────────────────────────────────────────────────────
@@ -49,7 +50,10 @@ def probe_media(path: Path) -> ProbeResult:
         "-show_format", "-show_streams", str(path),
     ]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        r = run_media_subprocess(
+            cmd, tool="ffprobe", description=f"probe {path.name}",
+            timeout=30, heavy=False,
+        )
         data = json.loads(r.stdout)
     except Exception as e:
         error(f"ffprobe failed: {e}")
@@ -143,7 +147,10 @@ def srt_to_ass(srt_path: Path, output_path: Path | None = None,
         "ffmpeg", "-y", "-i", str(srt_path),
         str(out),
     ]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    r = run_media_subprocess(
+        cmd, tool="ffmpeg", description=f"SRT→ASS {srt_path.name}",
+        timeout=30, heavy=False,
+    )
     if r.returncode != 0 or not out.exists():
         # Fallback: manual minimal ASS
         _manual_srt_to_ass(srt_path, out, position, font_size)
@@ -396,9 +403,9 @@ def render_video(
         debug(f"Full CMD: {' '.join(cmd)}")
 
         try:
-            r = subprocess.run(
-                cmd, capture_output=True, text=True,
-                timeout=max(600, target_duration * 3),
+            r = run_media_subprocess(
+                cmd, tool="ffmpeg", description=f"render video {output_path.name}",
+                timeout=max(600, target_duration * 3), heavy=True,
             )
             if r.returncode != 0:
                 error(f"ffmpeg render failed:\n{r.stderr[-2000:]}")

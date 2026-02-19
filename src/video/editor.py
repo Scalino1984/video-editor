@@ -21,7 +21,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any
 
-from src.utils.logging import info, warn, error, debug
+from src.utils.logging import info, warn, error, debug, render_log, set_job_id
+from src.utils.media_executor import run_media_subprocess, run_media_popen, release_media_popen
 from src.video.render import probe_media, ProbeResult
 
 # ── Data directory ────────────────────────────────────────────────────────────
@@ -354,16 +355,18 @@ def add_asset(pid: str, filename: str, file_path: Path) -> Asset | None:
         try:
             thumb_file = EDITOR_DIR / "assets" / f"thumb_{aid}.jpg"
             if atype == "video":
-                subprocess.run([
+                run_media_subprocess([
                     "ffmpeg", "-y", "-i", str(file_path),
                     "-ss", "1", "-frames:v", "1",
                     "-vf", "scale=160:-1", str(thumb_file)
-                ], capture_output=True, timeout=15)
+                ], tool="ffmpeg", description=f"thumb {filename}",
+                   timeout=15, heavy=False)
             else:
-                subprocess.run([
+                run_media_subprocess([
                     "ffmpeg", "-y", "-i", str(file_path),
                     "-vf", "scale=160:-1", str(thumb_file)
-                ], capture_output=True, timeout=15)
+                ], tool="ffmpeg", description=f"thumb {filename}",
+                   timeout=15, heavy=False)
             if thumb_file.exists():
                 thumb_path = str(thumb_file)
         except Exception:
@@ -570,22 +573,36 @@ def generate_styled_ass(
     sub_path: Path,
     project: Project,
     output_path: Path,
+    segments: list | None = None,
 ) -> Path | None:
-    """Generate an ASS file with styled subtitles and multi-line display.
+    """Generate an ASS file with styled subtitles, karaoke tags, and multi-line display.
+
+    If *segments* (list[TranscriptSegment]) is provided, karaoke tags are generated
+    from word-level timestamps — this is the preferred path for accurate karaoke.
+    Otherwise cues are parsed from the file on disk (tags will be stripped).
 
     sub_lines=1: only current line
     sub_lines=2: current + next
     sub_lines=3: prev + current + next
     """
-    text = sub_path.read_text(encoding="utf-8", errors="replace")
-    ext = sub_path.suffix.lower()
 
-    if ext in (".srt", ".vtt"):
-        cues = _parse_srt_cues(text)
-    elif ext == ".ass":
-        cues = _parse_ass_cues(text)
+    # ── Build cues — prefer TranscriptSegment objects (preserves word TS) ──
+    if segments:
+        cues = []
+        for seg in segments:
+            cue: dict = {"start": seg.start, "end": seg.end, "text": seg.text}
+            if seg.has_word_timestamps and seg.words:
+                cue["words"] = [{"start": w.start, "end": w.end, "word": w.word} for w in seg.words]
+            cues.append(cue)
     else:
-        return None
+        text = sub_path.read_text(encoding="utf-8", errors="replace")
+        ext = sub_path.suffix.lower()
+        if ext in (".srt", ".vtt"):
+            cues = _parse_srt_cues(text)
+        elif ext == ".ass":
+            cues = _parse_ass_cues(text)
+        else:
+            return None
 
     if not cues:
         warn(f"[editor] No cues found in {sub_path.name}")
@@ -635,10 +652,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     for i, cue in enumerate(cues):
         start_ts = _fmt_ass_time(cue["start"])
         end_ts = _fmt_ass_time(cue["end"])
-        # Replace real newlines with ASS newline code
-        current_text = cue["text"].replace("\n", r"\N")
 
-        # Inline override tag for context lines (more reliable than \rStyleName in libass)
+        # ── Generate karaoke-tagged text if word timestamps available ──
+        words = cue.get("words")
+        if words and len(words) > 0:
+            # Use \kf (progressive fill) for karaoke
+            parts = []
+            for wi, word in enumerate(words):
+                dur_cs = max(1, round((word["end"] - word["start"]) * 100))
+                if wi == 0:
+                    # First word includes highlight color override
+                    hl = p.sub_highlight_color or "&H0000FFFF"
+                    parts.append(f"{{\\kf{dur_cs}\\1c{hl}}}{word['word']}")
+                else:
+                    parts.append(f"{{\\kf{dur_cs}}}{word['word']}")
+                if wi < len(words) - 1:
+                    parts.append(" ")
+            current_text = "".join(parts)
+        else:
+            current_text = cue["text"].replace("\n", r"\N")
+
+        # Inline override tag for context lines
         ctx_size = int(p.sub_size * 0.75)
         ctx_tag = r"{\fs" + str(ctx_size) + r"\1a&H80&\b0}"
 
@@ -647,7 +681,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f"Dialogue: 0,{start_ts},{end_ts},Current,,0,0,0,,{current_text}"
             )
         elif n_lines == 2:
-            next_text = cues[i + 1]["text"].replace("\n", r"\N") if i + 1 < len(cues) else ""
+            next_cue = cues[i + 1] if i + 1 < len(cues) else None
+            next_text = next_cue["text"].replace("\n", r"\N") if next_cue else ""
             combined = current_text
             if next_text:
                 combined += r"\N" + ctx_tag + next_text
@@ -655,22 +690,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f"Dialogue: 0,{start_ts},{end_ts},Current,,0,0,0,,{combined}"
             )
         elif n_lines >= 3:
-            prev_text = cues[i - 1]["text"].replace("\n", r"\N") if i > 0 else ""
-            next_text = cues[i + 1]["text"].replace("\n", r"\N") if i + 1 < len(cues) else ""
-            parts = []
+            prev_cue = cues[i - 1] if i > 0 else None
+            next_cue = cues[i + 1] if i + 1 < len(cues) else None
+            prev_text = prev_cue["text"].replace("\n", r"\N") if prev_cue else ""
+            next_text = next_cue["text"].replace("\n", r"\N") if next_cue else ""
+            parts_combined = []
             if prev_text:
-                parts.append(ctx_tag + prev_text + r"\N")
-            parts.append(r"{\r}" + current_text)
+                parts_combined.append(ctx_tag + prev_text + r"\N")
+            parts_combined.append(r"{\r}" + current_text)
             if next_text:
-                parts.append(r"\N" + ctx_tag + next_text)
-            combined = "".join(parts)
+                parts_combined.append(r"\N" + ctx_tag + next_text)
+            combined = "".join(parts_combined)
             events.append(
                 f"Dialogue: 0,{start_ts},{end_ts},Current,,0,0,0,,{combined}"
             )
 
     ass_content = header + "\n".join(events) + "\n"
     output_path.write_text(ass_content, encoding="utf-8")
-    info(f"[editor] Generated styled ASS: {output_path.name} ({len(cues)} cues, {n_lines} lines)")
+    has_karaoke = any(cue.get("words") for cue in cues)
+    tag_info = " with karaoke tags" if has_karaoke else ""
+    info(f"[editor] Generated styled ASS: {output_path.name} ({len(cues)} cues, {n_lines} lines{tag_info})")
+    render_log(f"Styled ASS: {output_path.name} ({len(cues)} cues, {n_lines} lines{tag_info})")
     return output_path
 
 def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
@@ -800,6 +840,7 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
         # If subtitle comes from a job output dir, regenerate from segments.json
         # to ensure we always use the latest edited version
         _refreshed = False
+        _segs_for_styled: list | None = None
         try:
             if "data/output/" in str(sub_path):
                 seg_json = sub_path.parent / "segments.json"
@@ -817,7 +858,9 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
                         from src.export.ass_writer import write_ass
                         segs = ensure_word_timestamps(segs)
                         write_ass(segs, sub_path)
+                    _segs_for_styled = segs
                     _refreshed = True
+                    render_log(f"Refreshed {sub_path.name} from segments.json ({len(segs)} segments)")
                     info(f"[editor] Refreshed {sub_path.name} from segments.json before render")
         except Exception as e:
             warn(f"[editor] Could not refresh subtitle from segments.json: {e}")
@@ -828,10 +871,11 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
 
         sub_label = f"vs{si}"
 
-        # Generate styled ASS with multi-line support and positioning
+        # Generate styled ASS with multi-line support, positioning, and karaoke tags
         styled_ass = EDITOR_DIR / "renders" / f"styled_{pid}_{si}.ass"
         styled_ass.parent.mkdir(parents=True, exist_ok=True)
-        result = generate_styled_ass(sub_path, p, styled_ass)
+        # Pass segments directly so generate_styled_ass can use word timestamps for \kf tags
+        result = generate_styled_ass(sub_path, p, styled_ass, segments=_segs_for_styled)
 
         if result and result.exists():
             sub_path = result
@@ -842,10 +886,10 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
                 ass_path = sub_path.with_suffix(".ass")
                 if not ass_path.exists():
                     try:
-                        import subprocess as _sp
-                        _sp.run([
+                        run_media_subprocess([
                             "ffmpeg", "-y", "-i", str(sub_path), str(ass_path)
-                        ], capture_output=True, timeout=30)
+                        ], tool="ffmpeg", description="SRT→ASS fallback",
+                           timeout=30, heavy=False)
                     except Exception:
                         pass
                 if ass_path and ass_path.exists():
@@ -862,12 +906,13 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
         video_chain = sub_label
 
     # ── Final output label ──
-    # Rename final video chain to vout
-    filter_parts.append(f"[{video_chain}]null[vout]")
+    # Rename final video chain to [vout] using copy filter (passthrough)
+    filter_parts.append(f"[{video_chain}]copy[vout]")
 
     filter_complex = ";\n".join(filter_parts)
 
     # Log for debugging
+    render_log(f"Filter complex ({len(filter_parts)} parts):\n{filter_complex}")
     info(f"[editor] Filter complex ({len(filter_parts)} parts):\n{filter_complex}")
 
     cmd = ["ffmpeg", "-y"]
@@ -950,9 +995,17 @@ def _effect_to_filter(eff: Effect, clip: Clip) -> str:
 
 def _prepare_render(pid: str) -> tuple[Path | None, list[str] | None, float, str]:
     """Prepare render: build output path + ffmpeg command. Returns (output, cmd, duration, error)."""
+    import time
+    set_job_id(pid)
+    render_log(f"=== Render start for project {pid} ===")
+    render_log(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
     p = _projects.get(pid)
     if not p or not p.clips:
+        render_log(f"No clips in project {pid}", level="error")
         return None, None, 0, "No clips"
+
+    render_log(f"Project: {p.name} ({p.width}x{p.height} @ {p.fps}fps, {len(p.clips)} clips)")
 
     from datetime import datetime
     audio_clips = [c for c in p.clips if c.track == "audio"]
@@ -966,7 +1019,10 @@ def _prepare_render(pid: str) -> tuple[Path | None, list[str] | None, float, str
     output = EDITOR_DIR / "renders" / f"{safe_name}_{ts}.mp4"
     cmd = build_render_cmd(pid, output)
     if not cmd:
+        render_log(f"Failed to build render command for {pid}", level="error")
         return None, None, 0, "Failed to build render command"
+    render_log(f"Output: {output}")
+    render_log(f"Duration: {p.computed_duration:.1f}s")
     return output, cmd, p.computed_duration, ""
 
 
@@ -1002,32 +1058,43 @@ def _extract_ffmpeg_error(stderr_text: str) -> str:
 
 def render_project(pid: str) -> tuple[Path | None, str]:
     """Render the full project to MP4. Returns (path, error_msg)."""
+    import time
+    t0 = time.monotonic()
     output, cmd, duration, err = _prepare_render(pid)
     if not cmd:
         return None, err
 
     info(f"[editor] Rendering project {pid} → {output}")
+    render_log(f"Rendering (blocking) project {pid} → {output}")
     debug(f"[editor] Full CMD:\n{' '.join(str(c) for c in cmd)}")
     for i, arg in enumerate(cmd):
         if arg == "-filter_complex" and i + 1 < len(cmd):
             debug(f"[editor] filter_complex:\n{cmd[i+1]}")
+            render_log(f"filter_complex:\n{cmd[i+1]}")
             break
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=max(600, duration * 5))
+        r = run_media_subprocess(
+            cmd, tool="ffmpeg", description=f"render project {pid}",
+            timeout=max(600, duration * 5), heavy=True,
+        )
         if r.returncode != 0:
             err_msg = _extract_ffmpeg_error(r.stderr)
             error(f"[editor] Render failed:\n{err_msg}")
+            render_log(f"Render FAILED (exit={r.returncode}): {err_msg}", level="error")
             return None, err_msg
     except subprocess.TimeoutExpired:
         error("[editor] Render timed out")
+        render_log("Render TIMED OUT", level="error")
         return None, "Render timed out"
 
+    elapsed = time.monotonic() - t0
     if output.exists():
         mb = output.stat().st_size / (1024 * 1024)
         info(f"[editor] Rendered: {output.name} ({mb:.1f} MB)")
+        render_log(f"Render OK: {output.name} ({mb:.1f} MB, {elapsed:.1f}s)")
         return output, ""
+    render_log("Output file not created", level="error")
     return None, "Output file not created"
 
 
@@ -1040,15 +1107,19 @@ def render_project_with_progress(
     progress_cb(phase: str, percent: int) is called during rendering.
     Percent is 0–100.  Phase is a short German label.
     """
+    import time
+    t0 = time.monotonic()
     output, cmd, duration, err = _prepare_render(pid)
     if not cmd:
         return None, err
 
     info(f"[editor] Rendering (streamed) project {pid} → {output}")
+    render_log(f"Rendering (streamed) project {pid} → {output}")
     debug(f"[editor] Full CMD:\n{' '.join(str(c) for c in cmd)}")
     for i, arg in enumerate(cmd):
         if arg == "-filter_complex" and i + 1 < len(cmd):
             debug(f"[editor] filter_complex:\n{cmd[i+1]}")
+            render_log(f"filter_complex:\n{cmd[i+1]}")
             break
 
     if progress_cb:
@@ -1056,8 +1127,9 @@ def render_project_with_progress(
 
     timeout_sec = max(600, duration * 5)
     try:
-        proc = subprocess.Popen(
-            cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
+        proc, media_job_id, sem_acquired = run_media_popen(
+            cmd, tool="ffmpeg", description=f"render (streamed) {pid}",
+            heavy=True, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
             text=True, bufsize=1,
         )
     except FileNotFoundError:
@@ -1083,20 +1155,30 @@ def render_project_with_progress(
         proc.wait(timeout=timeout_sec)
     except subprocess.TimeoutExpired:
         proc.kill()
+        release_media_popen(media_job_id, sem_acquired, returncode=-1, error_msg="Timeout")
         error("[editor] Render timed out (streamed)")
+        render_log("Render TIMED OUT (streamed)", level="error")
         return None, "Render timed out"
+
+    # Release semaphore now that process is done
+    release_media_popen(media_job_id, sem_acquired,
+                        returncode=proc.returncode,
+                        error_msg="".join(stderr_lines[-5:]) if proc.returncode != 0 else "")
 
     if proc.returncode != 0:
         full_stderr = "".join(stderr_lines)
         err_msg = _extract_ffmpeg_error(full_stderr)
         error(f"[editor] Render failed:\n{err_msg}")
+        render_log(f"Render FAILED (streamed, exit={proc.returncode}): {err_msg}", level="error")
         if progress_cb:
             progress_cb("Fehler", -1)
         return None, err_msg
 
+    elapsed = time.monotonic() - t0
     if output.exists():
         mb = output.stat().st_size / (1024 * 1024)
         info(f"[editor] Rendered (streamed): {output.name} ({mb:.1f} MB)")
+        render_log(f"Render OK (streamed): {output.name} ({mb:.1f} MB, {elapsed:.1f}s)")
         if progress_cb:
             progress_cb("Fertig", 100)
         return output, ""
@@ -1159,7 +1241,10 @@ def render_loop_video(
     info(f"[editor] Loop render: {source_path.name} × {loop_count} → {output_path.name}")
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        r = run_media_subprocess(
+            cmd, tool="ffmpeg", description=f"loop render {source_path.name}",
+            timeout=300, heavy=True,
+        )
         if r.returncode != 0:
             error(f"[editor] Loop render failed:\n{r.stderr[-1000:]}")
             return None

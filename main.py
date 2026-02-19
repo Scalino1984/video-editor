@@ -17,8 +17,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 load_dotenv()
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Assign a unique request_id to every incoming request for log correlation."""
+
+    async def dispatch(self, request: Request, call_next):
+        from src.utils.logging import set_request_id
+        rid = request.headers.get("x-request-id", "")
+        rid = set_request_id(rid)
+        response = await call_next(request)
+        response.headers["x-request-id"] = rid
+        return response
 
 
 @asynccontextmanager
@@ -81,6 +95,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestIdMiddleware)
 
 # ── API Routes ────────────────────────────────────────────────────────────────
 

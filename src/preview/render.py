@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from src.utils.logging import info, warn, error, debug
+from src.utils.media_executor import run_media_subprocess
 
 
 def parse_time_str(time_str: str) -> float:
@@ -89,7 +90,10 @@ def render_preview(
     debug(f"CMD: {' '.join(cmd)}")
 
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        r = run_media_subprocess(
+            cmd, tool="ffmpeg", description=f"preview {output_path.name}",
+            timeout=120, heavy=True,
+        )
         if r.returncode != 0:
             error(f"ffmpeg preview render failed:\n{r.stderr}")
             return None
