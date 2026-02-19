@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Karaoke Sub Tool v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0e14;--bg2:#13161f;--bg3:#191d29;--bg4:#1e2333;--border:#262b3d;
+  --text:#e2e4ea;--dim:#7a7f94;--accent:#00e5a0;--accent2:#00b8ff;
+  --danger:#ff4466;--warn:#ffaa22;--purple:#a855f7;--r:10px;
+  --font:'Outfit',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+}
+/* ── Theme: Neon ── */
+[data-theme="neon"]{
+  --bg:#0a0015;--bg2:#120025;--bg3:#1a0035;--bg4:#220045;--border:#3a1a6a;
+  --text:#f0e0ff;--dim:#9070b8;--accent:#ff00ff;--accent2:#00ffff;
+  --danger:#ff2050;--warn:#ff8800;--purple:#b040ff;
+}
+/* ── Theme: Light ── */
+[data-theme="light"]{
+  --bg:#f5f6fa;--bg2:#ecedf2;--bg3:#e3e4ec;--bg4:#d8dae4;--border:#c0c4d6;
+  --text:#1a1d2e;--dim:#6b7094;--accent:#00b87a;--accent2:#0088cc;
+  --danger:#e03050;--warn:#d48a00;--purple:#7c3aed;
+}
+[data-theme="light"] .btn{color:#fff}
+[data-theme="light"] .hdr h1{-webkit-text-fill-color:transparent}
+/* ── Theme: Warm ── */
+[data-theme="warm"]{
+  --bg:#1a1410;--bg2:#221a14;--bg3:#2a201a;--bg4:#332820;--border:#4a3a2a;
+  --text:#f0e6d8;--dim:#a0907a;--accent:#ff9f43;--accent2:#ee5a24;
+  --danger:#ff4466;--warn:#ffc048;--purple:#c56cf0;
+}
+/* ── Theme Switcher ── */
+.theme-sw{display:flex;gap:3px;margin-left:8px}
+.theme-sw button{width:18px;height:18px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;transition:all .2s}
+.theme-sw button:hover{transform:scale(1.3)}
+.theme-sw button.on{border-color:var(--text);box-shadow:0 0 8px var(--accent)}
+.tsw-dark{background:linear-gradient(135deg,#0c0e14,#191d29)}
+.tsw-neon{background:linear-gradient(135deg,#0a0015,#ff00ff)}
+.tsw-light{background:linear-gradient(135deg,#f5f6fa,#00b87a)}
+.tsw-warm{background:linear-gradient(135deg,#1a1410,#ff9f43)}
+/* ── Audio Spectrum ── */
+.spectrum{position:relative;height:32px;margin-top:2px;border-radius:4px;overflow:hidden;cursor:pointer}
+.spectrum canvas{width:100%;height:100%;display:block}
+/* ── A/B Loop ── */
+.loop-region{position:absolute;top:0;height:100%;background:var(--accent);opacity:.12;pointer-events:none;z-index:2;border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+.loop-label{position:absolute;top:-14px;font-size:8px;font-family:var(--mono);color:var(--accent);font-weight:700;pointer-events:none;z-index:3}
+/* ── Tap-to-Time ── */
+.ttt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;font-family:var(--font)}
+.ttt-overlay.open{display:flex}
+.ttt-counter{font-size:5rem;font-weight:700;font-family:var(--mono);background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:20px;transition:transform .08s}
+.ttt-counter.pulse{transform:scale(1.15)}
+.ttt-line{font-size:1.5rem;color:var(--text);max-width:80vw;text-align:center;opacity:.6;transition:opacity .15s,transform .15s}
+.ttt-line.active{opacity:1;transform:scale(1.05);color:var(--accent)}
+.ttt-line.done{opacity:.25;font-size:1rem;transform:scale(.9)}
+.ttt-hint{font-size:.75rem;color:var(--dim);margin-top:30px}
+.ttt-progress{width:60vw;height:4px;background:var(--bg4);border-radius:2px;margin-top:12px;overflow:hidden}
+.ttt-progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .1s linear;border-radius:2px}
+.ttt-flash{position:fixed;inset:0;background:var(--accent);opacity:0;pointer-events:none;z-index:1001;transition:opacity .06s}
+/* ── Fullscreen Karaoke ── */
+.fsk{position:fixed;inset:0;background:#000;z-index:900;display:none;flex-direction:column;align-items:center;justify-content:center;cursor:none}
+.fsk.open{display:flex}
+.fsk-text{font-size:3.5rem;font-weight:700;color:#fff;text-align:center;max-width:90vw;line-height:1.3;text-shadow:0 0 40px rgba(0,229,160,.3)}
+.fsk-next{font-size:1.4rem;color:rgba(255,255,255,.2);margin-top:20px;max-width:80vw;text-align:center}
+.fsk-progress{position:fixed;bottom:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .05s linear}
+.fsk-time{position:fixed;bottom:12px;right:20px;font-family:var(--mono);font-size:.8rem;color:rgba(255,255,255,.3)}
+.fsk-word{display:inline-block;transition:color .1s}
+.fsk-word.hl{color:var(--accent);text-shadow:0 0 20px var(--accent)}
+html{font-size:14px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+a{color:var(--accent2);text-decoration:none}
+button{font-family:var(--font);cursor:pointer;border:none;border-radius:6px;padding:7px 14px;font-weight:500;font-size:.82rem;transition:all .15s}
+.btn{background:var(--accent);color:#0c0e14;font-weight:600}
+.btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+.btn-s{background:var(--bg4);color:var(--text);border:1px solid var(--border)}
+.btn-s:hover{background:var(--border)}
+.btn-d{background:var(--danger);color:#fff}
+.btn-sm{padding:4px 9px;font-size:.75rem}
+input,select,textarea{font-family:var(--font);background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.82rem;width:100%;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.app{display:grid;grid-template-columns:290px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
+.hdr{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.hdr h1{font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr .v{font-family:var(--mono);font-size:.6rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:4px}
+.hdr .dot{width:8px;height:8px;border-radius:50%;margin-left:auto}
+.dot-ok{background:var(--accent)}.dot-err{background:var(--danger)}
+.side{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.main{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px}
+.card-h{font-weight:600;font-size:.82rem;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.dz{border:2px dashed var(--border);border-radius:var(--r);padding:22px 12px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg3)}
+.dz:hover,.dz.over{border-color:var(--accent);background:rgba(0,229,160,.04)}
+.dz .ic{font-size:1.6rem;display:block;margin-bottom:4px}
+.dz .hn{font-size:.7rem;color:var(--dim);margin-top:3px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sg .f{grid-column:1/-1}
+.tg{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.78rem}
+.tg input{width:auto;accent-color:var(--accent)}
+.ji{display:flex;align-items:center;gap:8px;padding:8px;border-radius:7px;cursor:pointer;transition:background .15s;border:1px solid transparent}
+.ji:hover{background:var(--bg4)}
+.ji.active{border-color:var(--accent);background:var(--bg4)}
+.jic{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+.jic.p{background:rgba(122,127,148,.15);color:var(--dim)}
+.jic.r{background:rgba(0,184,255,.12);color:var(--accent2)}
+.jic.c{background:rgba(0,229,160,.12);color:var(--accent)}
+.jic.f{background:rgba(255,68,102,.12);color:var(--danger)}
+.jm{flex:1;min-width:0}
+.jn{font-weight:500;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.js{font-size:.65rem;color:var(--dim)}
+.pb{height:3px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
+.pf{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+.player{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px}
+.player-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.player-row button{padding:4px 10px;font-size:.75rem}
+.player-time{font-family:var(--mono);font-size:.72rem;color:var(--dim);min-width:90px}
+.waveform{width:100%;height:56px;background:var(--bg);border-radius:6px;cursor:crosshair;position:relative;overflow:hidden}
+.waveform canvas{width:100%;height:100%;border-radius:6px}
+.wf-cursor{position:absolute;top:0;width:2px;height:100%;background:var(--accent);pointer-events:none;transition:left .05s linear}
+/* Karaoke live display */
+.karaoke-live{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;min-height:52px;font-size:1.1rem;font-weight:500;text-align:center;transition:all .2s;overflow:hidden;cursor:pointer;position:relative}
+.karaoke-live:hover::after{content:'✏️ Doppelklick zum Bearbeiten';position:absolute;top:2px;right:8px;font-size:.55rem;color:var(--dim);font-weight:400}
+.karaoke-live .kw{display:inline;transition:color .15s}
+.karaoke-live .kw.active{color:var(--accent)}
+.karaoke-live .kw.past{color:var(--accent);opacity:.6}
+/* Minimap */
+.minimap{height:18px;background:var(--bg);border-radius:4px;position:relative;cursor:pointer;margin-top:4px}
+.mm-seg{position:absolute;top:2px;height:14px;border-radius:2px;background:var(--accent2);opacity:.3;transition:opacity .1s}
+.mm-seg.mm-low{background:var(--warn)}
+.mm-seg.mm-pin{background:var(--purple)}
+.mm-cur{position:absolute;top:0;width:2px;height:100%;background:var(--accent);pointer-events:none}
+/* Segments */
+.segs{display:flex;flex-direction:column;gap:5px;max-height:50vh;overflow-y:auto}
+.si{display:grid;grid-template-columns:44px 1fr 52px 46px;gap:6px;align-items:center;padding:7px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:.8rem;transition:all .15s}
+.si:hover{border-color:var(--accent2)}
+.si.low{border-left:3px solid var(--warn)}
+.si.active{border-color:var(--accent);background:rgba(0,229,160,.04)}
+.si.overlap{border-right:3px solid var(--danger)}
+.si.pinned{border-left:3px solid var(--purple)}
+.sidx{font-family:var(--mono);font-size:.65rem;color:var(--dim);text-align:center;cursor:pointer}
+.sidx:hover{color:var(--accent)}
+.stm{font-family:var(--mono);font-size:.6rem;color:var(--dim);display:block}
+.stm-edit{background:transparent;border:none;color:var(--dim);font-family:var(--mono);font-size:.6rem;width:55px;padding:0;cursor:pointer}
+.stm-edit:hover{color:var(--accent2)}
+.stm-edit:focus{color:var(--text);border-bottom:1px solid var(--accent)}
+.stx{position:relative}
+.stx textarea{min-height:30px;resize:vertical;font-size:.8rem;line-height:1.3;background:var(--bg4);border:1px solid transparent;border-radius:4px;padding:4px 6px;transition:border-color .15s,background .15s}
+.stx textarea:hover{border-color:var(--border);background:var(--bg3)}
+.stx textarea:focus{border-color:var(--accent);background:var(--bg2);outline:none}
+.stx .save-ok{position:absolute;top:4px;left:4px;font-size:.6rem;color:var(--accent);opacity:0;transition:opacity .3s}
+.stx .speaker-tag{position:absolute;top:2px;right:2px;font-size:.55rem;background:var(--purple);color:#fff;padding:1px 5px;border-radius:3px;cursor:pointer}
+.stx .cps-warn{position:absolute;bottom:2px;right:2px;font-size:.55rem;color:var(--warn);font-family:var(--mono)}
+.scf{font-family:var(--mono);font-size:.6rem;padding:2px 4px;border-radius:3px;text-align:center}
+.ch{background:rgba(0,229,160,.12);color:var(--accent)}
+.cm{background:rgba(255,170,34,.12);color:var(--warn)}
+.cl{background:rgba(255,68,102,.12);color:var(--danger)}
+.sbtns{display:flex;flex-wrap:wrap;gap:2px}
+.sbtns button{padding:2px 4px;font-size:.6rem;background:var(--bg4);color:var(--dim);border:1px solid var(--border)}
+.sbtns button:hover{color:var(--text);border-color:var(--accent)}
+.dls{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.dl{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s}
+.dl:hover{border-color:var(--accent);background:var(--bg4)}
+.dl .x{font-family:var(--mono);font-size:.55rem;background:var(--accent);color:#0c0e14;padding:1px 3px;border-radius:2px;font-weight:700}
+.tabs{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:7px}
+.tab{padding:5px 12px;border-radius:5px;font-size:.72rem;font-weight:500;color:var(--dim);cursor:pointer;transition:all .15s;background:transparent}
+.tab.on{background:var(--bg3);color:var(--text)}
+.tab:hover:not(.on){color:var(--text)}
+.empty{text-align:center;padding:36px;color:var(--dim)}
+.empty .ic{font-size:2rem;margin-bottom:8px;display:block;opacity:.4}
+.empty p{font-size:.82rem;max-width:260px;margin:0 auto}
+.toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.toolbar .sep{width:1px;height:18px;background:var(--border)}
+.search-box{display:flex;gap:3px;align-items:center}
+.search-box input{width:110px;font-size:.72rem;padding:4px 7px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center}
+.stat-val{font-size:1.15rem;font-weight:700;color:var(--accent)}
+.stat-val.warn{color:var(--warn)}
+.stat-label{font-size:.6rem;color:var(--dim);text-transform:uppercase;margin-top:1px}
+.kbd{font-family:var(--mono);font-size:.55rem;background:var(--bg4);color:var(--dim);padding:1px 4px;border-radius:3px;border:1px solid var(--border)}
+/* Filter bar */
+.filters{display:flex;gap:4px;font-size:.7rem}
+.fil{padding:3px 8px;border-radius:4px;cursor:pointer;background:var(--bg4);color:var(--dim);border:1px solid transparent}
+.fil.on{border-color:var(--accent);color:var(--accent)}
+.fil:hover{color:var(--text)}
+/* Dictionary panel */
+.dict-row{display:flex;gap:4px;align-items:center;margin-bottom:4px}
+.dict-row input{flex:1;padding:4px 6px;font-size:.72rem}
+.toast-c{position:fixed;bottom:14px;right:14px;z-index:999;display:flex;flex-direction:column;gap:5px}
+.toast{padding:7px 12px;border-radius:7px;font-size:.78rem;font-weight:500;animation:si .3s ease;max-width:320px}
+.toast-ok{background:rgba(0,229,160,.15);color:var(--accent);border:1px solid rgba(0,229,160,.3)}
+.toast-err{background:rgba(255,68,102,.15);color:var(--danger);border:1px solid rgba(255,68,102,.3)}
+@keyframes si{from{transform:translateX(80px);opacity:0}to{transform:translateX(0);opacity:1}}
+@media(max-width:900px){.app{grid-template-columns:1fr}.side{border-right:none;border-bottom:1px solid var(--border)}}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:900;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h2{font-size:1rem;font-weight:700;flex:1}
+.modal-close{background:var(--bg4);color:var(--dim);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;border:1px solid var(--border);transition:all .15s}
+.modal-close:hover{color:var(--text);border-color:var(--accent)}
+.modal-body{overflow-y:auto;padding:20px;font-size:.82rem;line-height:1.7}
+.modal-body h3{font-size:.88rem;font-weight:700;color:var(--accent);margin:16px 0 6px;display:flex;align-items:center;gap:6px}
+.modal-body h3:first-child{margin-top:0}
+.modal-body p{color:var(--text);margin-bottom:8px}
+.modal-body .hd{color:var(--dim);font-size:.72rem;margin-bottom:2px}
+.htable{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:.78rem}
+.htable th{text-align:left;padding:5px 8px;background:var(--bg4);color:var(--dim);font-weight:600;font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;border:1px solid var(--border)}
+.htable td{padding:5px 8px;border:1px solid var(--border);vertical-align:top}
+.htable tr:hover td{background:rgba(0,229,160,.02)}
+.htable code{font-family:var(--mono);font-size:.72rem;background:var(--bg);padding:1px 4px;border-radius:3px;color:var(--accent2)}
+.htag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;font-weight:600;margin-left:4px}
+.htag-api{background:rgba(0,184,255,.12);color:var(--accent2)}
+.htag-local{background:rgba(168,85,247,.12);color:var(--purple)}
+.htag-both{background:rgba(0,229,160,.12);color:var(--accent)}
+.help-btn{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0}
+.help-btn:hover{color:var(--accent);border-color:var(--accent)}
+/* Chat Panel */
+.chat-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0c0e14;border:none;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0;font-weight:700}
+.chat-btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.chat-btn.disabled{opacity:.3;cursor:not-allowed;filter:none;transform:none}
+.chat-panel{position:fixed;top:0;right:0;width:400px;max-width:90vw;height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:800;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;box-shadow:-4px 0 20px rgba(0,0,0,.3)}
+.chat-panel.open{transform:translateX(0)}
+.chat-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.chat-head h3{font-size:.88rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.chat-head .ai-model{font-family:var(--mono);font-size:.55rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:3px}
+.chat-close{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:.8rem;cursor:pointer;padding:0}
+.chat-close:hover{color:var(--text);border-color:var(--accent)}
+.chat-cmds{display:flex;gap:3px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.chat-cmd{padding:3px 8px;border-radius:4px;font-size:.62rem;cursor:pointer;background:var(--bg4);color:var(--dim);border:1px solid var(--border);transition:all .15s;font-weight:500}
+.chat-cmd:hover{border-color:var(--accent);color:var(--accent)}
+.chat-cmd:disabled{opacity:.4;cursor:not-allowed}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{max-width:92%;padding:8px 11px;border-radius:8px;font-size:.78rem;line-height:1.55;word-wrap:break-word;overflow-wrap:break-word}
+.chat-msg.user{background:var(--bg4);align-self:flex-end;border:1px solid var(--border);border-bottom-right-radius:2px}
+.chat-msg.model{background:var(--bg3);align-self:flex-start;border:1px solid var(--border);border-bottom-left-radius:2px}
+.chat-msg.model code{font-family:var(--mono);font-size:.72rem;background:var(--bg);padding:1px 4px;border-radius:3px}
+.chat-msg.model pre{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;margin:4px 0;overflow-x:auto;font-family:var(--mono);font-size:.68rem}
+.chat-msg.model p{margin:3px 0}
+.chat-msg.model strong{color:var(--accent)}
+.chat-msg.model ul,.chat-msg.model ol{padding-left:16px;margin:3px 0}
+.chat-msg.model li{margin:1px 0}
+.chat-typing{align-self:flex-start;color:var(--dim);font-size:.72rem;padding:4px 8px}
+.chat-typing::after{content:'...';animation:dots 1.2s steps(3,end) infinite}
+@keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
+.chat-input{display:flex;gap:4px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg3)}
+.chat-input input{flex:1;padding:8px 10px;font-size:.8rem;border-radius:7px}
+.chat-input button{padding:8px 14px;border-radius:7px;font-weight:600}
+.chat-no-ai{padding:20px;text-align:center;color:var(--dim);font-size:.78rem}
+.chat-no-ai code{font-family:var(--mono);font-size:.7rem;background:var(--bg);padding:1px 4px;border-radius:3px;display:inline-block;margin-top:4px}
+/* Library Modal */
+.lib-btn{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0}
+.lib-btn:hover{color:var(--accent);border-color:var(--accent)}
+.lib-list{max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.lib-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;transition:all .12s;font-size:.75rem}
+.lib-item:hover{border-color:var(--accent);background:var(--bg4)}
+.lib-item .li-title{flex:1;font-weight:600;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-item .li-meta{color:var(--dim);font-family:var(--mono);font-size:.6rem;display:flex;gap:6px;flex-shrink:0}
+.lib-item .li-badge{font-size:.55rem;padding:1px 5px;border-radius:3px;font-weight:600}
+.lib-item .li-badge.rev{background:#f5a62333;color:#f5a623}
+.lib-item .li-del{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.8rem;padding:2px 4px;border-radius:3px;flex-shrink:0}
+.lib-item .li-del:hover{color:#e74c3c;background:#e74c3c22}
+.lib-search{margin-bottom:8px}
+.lib-empty{text-align:center;color:var(--dim);padding:30px 0;font-size:.8rem}
+/* Video Render */
+.vr-zone{border:1px dashed var(--border);border-radius:7px;padding:10px;margin-top:6px;display:none}
+.vr-zone.show{display:block}
+.vr-row{display:flex;gap:5px;margin-bottom:4px;align-items:center}
+.vr-row label{font-size:.65rem;color:var(--dim);min-width:40px}
+.vr-row select,.vr-row input[type=file]{flex:1;font-size:.72rem}
+/* Tag Modal */
+.tag-form{display:flex;flex-direction:column;gap:6px}
+.tag-row{display:flex;align-items:center;gap:8px}
+.tag-row label{min-width:60px;font-size:.7rem;color:var(--dim);text-align:right}
+.tag-row input,.tag-row select{flex:1;font-size:.75rem;padding:5px 8px;border-radius:5px;background:var(--bg3);border:1px solid var(--border);color:var(--fg)}
+.tag-row input:disabled{opacity:.5;cursor:not-allowed}
+.tag-ro{font-size:.6rem;color:var(--dim);text-align:right;padding-right:4px}
+.tag-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+/* Quick Actions */
+.qa-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--fg);cursor:pointer;transition:all .15s;text-align:left}
+.qa-btn:hover{border-color:var(--accent);background:var(--bg4);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,229,160,.08)}
+.qa-btn:active{transform:translateY(0)}
+.qa-icon{font-size:1.1rem}
+.qa-label{font-weight:600;font-size:.75rem}
+.qa-desc{font-size:.6rem;color:var(--dim);line-height:1.2}
+/* Rhyme scheme */
+.rhyme-grid{display:flex;flex-wrap:wrap;gap:3px;font-family:var(--mono);font-size:.65rem}
+.rhyme-line{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);min-width:0}
+.rhyme-label{font-weight:700;width:16px;text-align:center;flex-shrink:0}
+.rhyme-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:250px}
+.rhyme-end{font-weight:600;margin-left:auto;padding-left:4px;flex-shrink:0}
+.rhyme-pair{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:10px;font-size:.6rem;font-family:var(--mono);border:1px solid}
+.rhyme-pair.end{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.06)}
+.rhyme-pair.internal{border-color:#b8a0ff;color:#b8a0ff;background:rgba(184,160,255,.06)}
+.rhyme-pair.multi{border-color:#ffd700;color:#ffd700;background:rgba(255,215,0,.06)}
+/* Gap scanner */
+.gap-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;font-size:.7rem;cursor:pointer;transition:background .1s}
+.gap-item:hover{background:var(--bg4)}
+.gap-item.gap{border-left:3px solid #f5a623}
+.gap-item.overlap{border-left:3px solid #e74c3c}
+.gap-badge{font-size:.6rem;padding:1px 6px;border-radius:3px;font-weight:600;font-family:var(--mono)}
+.gap-badge.warn{background:#f5a62333;color:#f5a623}
+.gap-badge.err{background:#e74c3c33;color:#e74c3c}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="hdr">
+  <h1>♪ Karaoke Sub Tool</h1><span class="v">v3.2</span>
+  <div class="theme-sw">
+    <button class="tsw-dark on" onclick="setTheme('dark')" title="Dark"></button>
+    <button class="tsw-neon" onclick="setTheme('neon')" title="Neon"></button>
+    <button class="tsw-light" onclick="setTheme('light')" title="Light"></button>
+    <button class="tsw-warm" onclick="setTheme('warm')" title="Warm"></button>
+  </div>
+  <div style="display:flex;gap:3px;margin-left:6px" id="bb"></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    <button class="btn-s btn-sm" onclick="toggleTapToTime()" title="Tap-to-Time Modus (T)">🎤 Tap</button>
+    <button class="btn-s btn-sm" onclick="toggleFSKaraoke()" title="Fullscreen Karaoke (F)">🖥️</button>
+    <button class="lib-btn" onclick="toggleLibrary()" title="Library">📚</button>
+    <a href="/editor" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="Video Editor">🎬 Editor</a>
+    <button class="chat-btn disabled" id="chatBtn" onclick="toggleChat()" title="AI Chat">🤖</button>
+    <button class="help-btn" onclick="toggleHelp()" title="Hilfe (F1)">?</button>
+    <span style="font-size:.68rem;color:var(--dim)" id="hTxt"></span>
+    <div class="dot" id="hDot"></div>
+  </div>
+</header>
+<aside class="side">
+  <div class="dz" id="dz" onclick="document.getElementById('fi').click()">
+    <span class="ic">📂</span><b>Audio hochladen</b>
+    <div class="hn">mp3 wav flac m4a ogg • Drag & Drop</div>
+    <input type="file" id="fi" accept=".mp3,.wav,.flac,.m4a,.aac,.ogg,.srt,.vtt,.lrc" multiple hidden>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <span style="font-size:.58rem;color:var(--dim)">optional</span>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg3);border:1px dashed var(--border);border-radius:6px;cursor:pointer;transition:all .15s" onclick="document.getElementById('lyFi').click()" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border)'">
+    <span style="font-size:.9rem">📝</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:.7rem;font-weight:600" id="lyLabel">Lyrics (.txt/.lrc) hochladen</div>
+      <div style="font-size:.55rem;color:var(--dim)" id="lyHint">Zeilenstruktur wird für SRT/ASS übernommen</div>
+    </div>
+    <button style="font-size:.55rem;padding:2px 5px;display:none;background:var(--bg4);color:var(--dim);border:1px solid var(--border);border-radius:3px" id="lyDel" onclick="event.stopPropagation();clearLyrics()">✕</button>
+    <input type="file" id="lyFi" accept=".txt,.lrc" hidden>
+  </div>
+  <div id="lyOpts" style="display:none;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-top:-2px;font-size:.65rem">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+      <label style="color:var(--dim)">Template</label>
+      <select id="sLTM" style="flex:1;font-size:.65rem"><option value="lyrics_source_of_truth">Source of Truth</option><option value="layout_only_reflow">Layout Only</option><option value="hybrid_mark_differences">Hybrid</option></select>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="color:var(--dim)">Match</label>
+      <select id="sMatch" style="flex:1;font-size:.65rem"><option value="lenient">Lenient</option><option value="strict">Strict</option></select>
+      <label class="tg" style="font-size:.6rem"><input type="checkbox" id="sEL"> Empty Lines</label>
+    </div>
+  </div>
+  <button class="btn-s" id="tagBtn" style="display:none;width:100%;margin-top:3px;font-size:.65rem" onclick="openTagModal()">🏷️ Tags bearbeiten</button>
+  <div class="card">
+    <div class="card-h">⚙ Settings</div>
+    <div class="sg">
+      <div><label>Backend</label><select id="sB">
+        <option value="voxtral">Voxtral</option><option value="openai_whisper">OpenAI</option>
+        <option value="local_whisper">Local Whisper</option><option value="whisperx">WhisperX</option>
+      </select></div>
+      <div><label>Sprache</label><select id="sL">
+        <option value="auto">Auto</option><option value="de">DE</option><option value="en">EN</option>
+        <option value="fr">FR</option><option value="es">ES</option><option value="ja">JA</option>
+      </select></div>
+      <div><label>Mode</label><select id="sK"><option value="kf">kf</option><option value="k">k</option><option value="ko">ko</option></select></div>
+      <div><label>Preset</label><select id="sP"><option value="classic">Classic</option><option value="neon">Neon</option><option value="high_contrast">Hi-Con</option><option value="landscape_1080p">Land</option><option value="portrait_1080x1920">Port</option><option value="mobile_safe">Mobile</option></select></div>
+      <div class="f"><label>CPS / Max Chars</label>
+        <div style="display:flex;gap:5px"><input type="number" id="sC" value="18" min="5" max="40" style="width:50%"><input type="number" id="sMC" value="42" min="20" max="80" style="width:50%"></div>
+      </div>
+      <label class="tg f"><input type="checkbox" id="sVAD" checked> VAD</label>
+      <label class="tg f"><input type="checkbox" id="sN" checked> Normalize</label>
+      <label class="tg f"><input type="checkbox" id="sA" checked> ASS</label>
+      <label class="tg f"><input type="checkbox" id="sVTT"> +VTT</label>
+      <label class="tg f"><input type="checkbox" id="sLRC"> +LRC</label>
+      <label class="tg f"><input type="checkbox" id="sTXT"> +TXT</label>
+      <label class="tg f"><input type="checkbox" id="sVO"> Vocal Iso</label>
+      <label class="tg f"><input type="checkbox" id="sBT"> BPM Snap</label>
+      <label class="tg f"><input type="checkbox" id="sAI"> AI Correct</label>
+    </div>
+    <button class="btn-s" onclick="document.getElementById('vrZone').classList.toggle('show')" style="width:100%;margin-top:4px;font-size:.65rem">🎬 Video Render ▾</button>
+    <div class="vr-zone" id="vrZone">
+      <div class="vr-row"><label>BG</label><input type="file" id="vrBg" accept="image/*,video/*"></div>
+      <div class="vr-row"><label>Audio</label><input type="file" id="vrAudio" accept="audio/*"></div>
+      <div class="vr-row"><label>Preset</label><select id="vrPreset"><option value="youtube">YouTube</option><option value="mobile">Mobile</option><option value="draft">Draft</option></select>
+      <label style="margin-left:4px">Pos</label><select id="vrPos"><option value="bottom">Bottom</option><option value="middle">Middle</option><option value="top">Top</option></select></div>
+      <button class="btn" onclick="startRender()" style="width:100%;margin-top:4px;font-size:.72rem">🎬 Render Video</button>
+    </div>
+    <div id="wxO" style="display:none;margin-top:6px"><div class="sg">
+      <div><label>Model</label><select id="sWXM"><option value="large-v3">large-v3</option><option value="medium">medium</option><option value="small">small</option></select></div>
+      <div><label>Compute</label><select id="sWXC"><option value="float16">fp16</option><option value="int8">int8</option></select></div>
+    </div></div>
+  </div>
+  <button class="btn" style="width:100%;padding:9px" id="btnGo" disabled>▶ Start</button>
+  <div style="flex:1;overflow-y:auto">
+    <div class="card-h" style="padding:0 0 5px">📋 Jobs</div>
+    <div id="jl"></div>
+  </div>
+  <div style="font-size:.55rem;color:var(--dim);text-align:center;line-height:1.6">
+    <span class="kbd">Space</span> Play <span class="kbd">S</span> Split <span class="kbd">T</span> Tap
+    <span class="kbd">F</span> Fullscreen <span class="kbd">Ctrl+Z/Y</span> Undo
+  </div>
+</aside>
+<main class="main" id="mc">
+  <div class="empty" id="es"><span class="ic">🎤</span><p>Audio hochladen und transkribieren lassen.</p></div>
+  <div id="jd" style="display:none">
+    <!-- Status -->
+    <div class="card" id="sc">
+      <div class="card-h"><span id="dI">⏳</span> <span id="dF"></span><span style="margin-left:auto;font-size:.72rem;color:var(--dim)" id="dS"></span></div>
+      <div class="pb"><div class="pf" id="dP" style="width:0%"></div></div>
+      <div style="font-size:.72rem;color:var(--dim);margin-top:5px" id="dSt"></div>
+    </div>
+    <!-- Player -->
+    <div class="player" id="playerSec" style="display:none">
+      <div class="player-row">
+        <button class="btn-s btn-sm" onclick="togglePlay()" title="Space">⏯</button>
+        <button class="btn-s btn-sm" onclick="skipTo(-5)">-5s</button>
+        <button class="btn-s btn-sm" onclick="skipTo(5)">+5s</button>
+        <select id="pbSpeed" onchange="setSpeed(this.value)" style="width:55px;padding:3px;font-size:.65rem">
+          <option value="0.5">0.5x</option><option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option><option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option><option value="2">2x</option>
+        </select>
+        <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8" style="width:60px" oninput="au.volume=this.value">
+        <span class="player-time" id="pTime">0:00 / 0:00</span>
+        <button class="btn-s btn-sm" id="loopBtn" onclick="toggleLoop()" style="opacity:.4">🔁</button>
+        <button class="btn-s btn-sm" onclick="clearABLoop()" id="abClear" style="display:none;opacity:.6" title="A/B Loop löschen">✕AB</button>
+        <button class="btn-s btn-sm" onclick="splitAtPlayhead()" title="Split bei Playhead (S)">✂️</button>
+      </div>
+      <div class="waveform" id="wfC" onclick="seekWF(event)" onmousedown="loopDragStart(event)" onmousemove="loopDragMove(event)" onmouseup="loopDragEnd(event)">
+        <canvas id="wfCv"></canvas>
+        <div class="wf-cursor" id="wfCur" style="left:0"></div>
+        <div class="loop-region" id="loopRegion" style="display:none"></div>
+        <span class="loop-label" id="loopLabelA" style="display:none">A</span>
+        <span class="loop-label" id="loopLabelB" style="display:none">B</span>
+      </div>
+      <div class="spectrum" id="specC"><canvas id="specCv"></canvas></div>
+      <div class="minimap" id="mm" onclick="seekMM(event)"><div class="mm-cur" id="mmCur"></div></div>
+      <div class="karaoke-live" id="kLive" ondblclick="editKaraokeLine()"></div>
+    </div>
+    <!-- Downloads -->
+    <div id="dlSec" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="card-h" style="margin:0">💾 Downloads</span>
+        <a class="dl" id="zipDl" style="margin-left:auto"><span class="x">ZIP</span>Alle</a>
+      </div>
+      <div class="dls" id="dlBtns"></div>
+    </div>
+    <!-- Editor -->
+    <div id="edSec" style="display:none">
+      <div class="tabs">
+        <div class="tab on" data-tab="seg" onclick="stab('seg')">Segments</div>
+        <div class="tab" data-tab="stats" onclick="stab('stats')">Stats</div>
+        <div class="tab" data-tab="rhyme" onclick="stab('rhyme')">Rhyme</div>
+        <div class="tab" data-tab="quick" onclick="stab('quick')">⚡ Actions</div>
+        <div class="tab" data-tab="dict" onclick="stab('dict')">Dictionary</div>
+        <div class="tab" data-tab="rep" onclick="stab('rep')">Report</div>
+      </div>
+      <!-- Segments Tab -->
+      <div id="tSeg" style="margin-top:8px">
+        <div class="toolbar">
+          <span style="font-size:.75rem;color:var(--dim)" id="segCnt"></span>
+          <div class="sep"></div>
+          <div class="filters" id="filBar">
+            <div class="fil on" data-f="all" onclick="setFil('all')">Alle</div>
+            <div class="fil" data-f="low" onclick="setFil('low')">⚠ Low</div>
+            <div class="fil" data-f="pinned" onclick="setFil('pinned')">📌 Pinned</div>
+            <div class="fil" data-f="overlap" onclick="setFil('overlap')">🔴 Overlap</div>
+          </div>
+          <div class="sep"></div>
+          <div class="search-box">
+            <input type="text" id="srchIn" placeholder="Suchen...">
+            <input type="text" id="replIn" placeholder="Ersetzen...">
+            <button class="btn-s btn-sm" onclick="doReplace()">⇄</button>
+          </div>
+          <div class="sep"></div>
+          <button class="btn-s btn-sm" onclick="doUndo()" title="Ctrl+Z">↩</button>
+          <button class="btn-s btn-sm" onclick="doRedo()" title="Ctrl+Y">↪</button>
+          <button class="btn-s btn-sm" onclick="tShift()">⏱ Shift</button>
+          <button class="btn-s btn-sm" onclick="fixGaps()">🔧 Fix Gaps</button>
+          <button class="btn-s btn-sm" onclick="applyDict()">📖 Dict</button>
+          <div style="margin-left:auto;display:flex;gap:3px">
+            <button class="btn-s btn-sm" onclick="regenFmt()">🔄 Regen</button>
+            <button class="btn-s btn-sm" onclick="copyC('srt')">📋SRT</button>
+            <button class="btn-s btn-sm" onclick="copyC('ass')">📋ASS</button>
+            <button class="btn-s btn-sm" onclick="exportProject()">💾 Export</button>
+          </div>
+        </div>
+        <div class="segs" id="segList"></div>
+      </div>
+      <!-- Stats Tab -->
+      <div id="tStats" style="display:none;margin-top:8px"><div class="stats-grid" id="statsGrid"></div></div>
+      <!-- Rhyme Tab -->
+      <div id="tRhyme" style="display:none;margin-top:8px">
+        <div class="card">
+          <div class="card-h" style="display:flex;align-items:center;gap:8px">
+            🎵 Reimschema-Analyse
+            <button class="btn-s btn-sm" onclick="analyzeRhyme()" style="margin-left:auto">Analysieren</button>
+          </div>
+          <div id="rhymeScheme" style="margin-top:8px"></div>
+          <div id="rhymeStats" style="margin-top:8px"></div>
+          <div id="rhymeMap" style="margin-top:8px;overflow-x:auto"></div>
+        </div>
+      </div>
+      <!-- Quick Actions Bar -->
+      <div id="tQuick" style="display:none;margin-top:8px">
+        <div class="card">
+          <div class="card-h">⚡ Quick Actions</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px">
+            <button class="qa-btn" onclick="doAutoFixCps()">
+              <span class="qa-icon">🏎️</span>
+              <span class="qa-label">Auto CPS Fix</span>
+              <span class="qa-desc">Schnelle Segmente splitten</span>
+            </button>
+            <button class="qa-btn" onclick="doKaraokeHtml('dark')">
+              <span class="qa-icon">🎤</span>
+              <span class="qa-label">Karaoke HTML</span>
+              <span class="qa-desc">Standalone Player (Dark)</span>
+            </button>
+            <button class="qa-btn" onclick="doKaraokeHtml('neon')">
+              <span class="qa-icon">💜</span>
+              <span class="qa-label">Neon Karaoke</span>
+              <span class="qa-desc">Standalone Player (Neon)</span>
+            </button>
+            <button class="qa-btn" onclick="doKaraokeHtml('cinema')">
+              <span class="qa-icon">🎬</span>
+              <span class="qa-label">Cinema Karaoke</span>
+              <span class="qa-desc">Gold auf Schwarz</span>
+            </button>
+            <button class="qa-btn" onclick="applyPreset('youtube')">
+              <span class="qa-icon">▶️</span>
+              <span class="qa-label">YouTube Export</span>
+              <span class="qa-desc">SRT, max 42 chars, 20 CPS</span>
+            </button>
+            <button class="qa-btn" onclick="applyPreset('tiktok')">
+              <span class="qa-icon">📱</span>
+              <span class="qa-label">TikTok/Reels</span>
+              <span class="qa-desc">ASS bold center, 1 Zeile</span>
+            </button>
+            <button class="qa-btn" onclick="applyPreset('spotify')">
+              <span class="qa-icon">🎧</span>
+              <span class="qa-label">Spotify LRC</span>
+              <span class="qa-desc">Synced Lyrics</span>
+            </button>
+            <button class="qa-btn" onclick="applyPreset('karaoke')">
+              <span class="qa-icon">✨</span>
+              <span class="qa-label">Karaoke Full</span>
+              <span class="qa-desc">ASS+SRT+LRC+HTML</span>
+            </button>
+            <button class="qa-btn" onclick="doGapScan()">
+              <span class="qa-icon">🔍</span>
+              <span class="qa-label">Gap Scanner</span>
+              <span class="qa-desc">Lücken &amp; Overlaps finden</span>
+            </button>
+            <button class="qa-btn" onclick="doSegHeatmap()">
+              <span class="qa-icon">🌡️</span>
+              <span class="qa-label">CPS Heatmap</span>
+              <span class="qa-desc">Confidence + Speed Map</span>
+            </button>
+            <button class="qa-btn" onclick="doFillGaps()">
+              <span class="qa-icon">🔗</span>
+              <span class="qa-label">Gap Filler</span>
+              <span class="qa-desc">Lücken mit ♪ füllen</span>
+            </button>
+            <button class="qa-btn" onclick="doRedistribute()">
+              <span class="qa-icon">⏱️</span>
+              <span class="qa-label">Timing Reset</span>
+              <span class="qa-desc">Timestamps neu verteilen</span>
+            </button>
+            <button class="qa-btn" onclick="doTextStats()">
+              <span class="qa-icon">📊</span>
+              <span class="qa-label">Text Analyse</span>
+              <span class="qa-desc">Wortschatz, Flow, Silben</span>
+            </button>
+            <button class="qa-btn" onclick="doRemoveShort()">
+              <span class="qa-icon">🧹</span>
+              <span class="qa-label">Kurze entfernen</span>
+              <span class="qa-desc">&lt;2 Zeichen / &lt;0.3s</span>
+            </button>
+            <button class="qa-btn" onclick="doNormalizeText()">
+              <span class="qa-icon">✏️</span>
+              <span class="qa-label">Text normalisieren</span>
+              <span class="qa-desc">Groß/Klein, Interpunktion</span>
+            </button>
+            <button class="qa-btn" onclick="applyPreset('translation')">
+              <span class="qa-icon">🌍</span>
+              <span class="qa-label">Übersetzer-Export</span>
+              <span class="qa-desc">SRT+TXT+VTT</span>
+            </button>
+            <button class="qa-btn" onclick="doExportAll()">
+              <span class="qa-icon">📦</span>
+              <span class="qa-label">Alle Formate</span>
+              <span class="qa-desc">SRT+ASS+VTT+LRC+TXT+HTML</span>
+            </button>
+          </div>
+        </div>
+        <!-- Gap Scanner Results -->
+        <div id="gapResults" style="display:none;margin-top:8px" class="card">
+          <div class="card-h">🔍 Gap Scanner Ergebnisse</div>
+          <div id="gapList" style="max-height:35vh;overflow:auto"></div>
+        </div>
+        <!-- CPS Heatmap -->
+        <div id="heatmapCard" style="display:none;margin-top:8px" class="card">
+          <div class="card-h">🌡️ CPS Heatmap</div>
+          <canvas id="heatCv" style="width:100%;height:60px;border-radius:6px;cursor:pointer" onclick="seekHM(event)"></canvas>
+          <div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--dim);margin-top:2px">
+            <span>🟢 &lt;15 CPS</span><span>🟡 15-20</span><span>🟠 20-25</span><span>🔴 &gt;25</span>
+          </div>
+        </div>
+        <!-- Text Stats Results -->
+        <div id="textStatsCard" style="display:none;margin-top:8px" class="card">
+          <div class="card-h">📊 Text Analyse</div>
+          <div id="textStatsGrid" class="stats-grid"></div>
+          <div id="textStatsWords" style="margin-top:8px"></div>
+          <div id="textStatsSyl" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <!-- Dictionary Tab -->
+      <div id="tDict" style="display:none;margin-top:8px">
+        <div class="card">
+          <div class="card-h">📖 Custom Dictionary</div>
+          <div id="dictList"></div>
+          <button class="btn-s btn-sm" onclick="addDictRow()" style="margin-top:6px">+ Eintrag</button>
+          <button class="btn btn-sm" onclick="saveDict()" style="margin-top:6px;margin-left:6px">Speichern</button>
+        </div>
+      </div>
+      <!-- Report Tab -->
+      <div id="tRep" style="display:none;margin-top:8px">
+        <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px;font-family:var(--mono);font-size:.7rem;overflow:auto;max-height:50vh" id="repC"></pre>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<audio id="audioEl" preload="auto"></audio>
+<div class="toast-c" id="toasts"></div>
+
+<!-- Tag Modal -->
+<div class="modal-bg" id="tagModal" onclick="if(event.target===this)closeTagModal()">
+  <div class="modal" style="max-width:480px;width:90%">
+    <div class="modal-head"><h2 style="font-size:1rem">🏷️ Media Tags</h2>
+      <div class="modal-close" onclick="closeTagModal()">✕</div>
+    </div>
+    <div class="modal-body" style="padding:12px">
+      <div id="tagStatus" style="font-size:.65rem;color:var(--dim);margin-bottom:8px"></div>
+      <div class="tag-form" id="tagForm"></div>
+      <div class="tag-actions" id="tagActions" style="display:none">
+        <button class="btn-s" onclick="closeTagModal()">Abbrechen</button>
+        <button class="btn" onclick="saveTags()">💾 Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Library Modal -->
+<div class="modal-bg" id="libModal" onclick="if(event.target===this)toggleLibrary()">
+  <div class="modal" style="max-width:650px;width:95%">
+    <div class="modal-head"><h2 style="font-size:1rem">📚 Transcriptions Library</h2>
+      <div class="modal-close" onclick="toggleLibrary()">✕</div>
+    </div>
+    <div class="modal-body" style="padding:12px">
+      <input type="text" class="lib-search" id="libSearch" placeholder="Suche nach Titel, Datei, Backend..."
+        oninput="clearTimeout(libST);libST=setTimeout(loadLibrary,400)" style="width:100%;padding:7px 10px;font-size:.78rem;border-radius:6px">
+      <div class="lib-list" id="libList"><div class="lib-empty">Lade...</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.65rem;color:var(--dim)">
+        <span id="libCount">—</span>
+        <div><button class="btn-s btn-sm" onclick="libPage=Math.max(0,libPage-1);loadLibrary()" id="libPrev" disabled>◂ Prev</button>
+        <button class="btn-s btn-sm" onclick="libPage++;loadLibrary()" id="libNext">Next ▸</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Video Render Section in sidebar -->
+
+<!-- AI Chat Panel -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-head">
+    <span style="font-size:1rem">🤖</span>
+    <h3>AI Assistant</h3>
+    <span class="ai-model" id="aiModel">—</span>
+    <button class="chat-close" onclick="clearChat()" title="Chat leeren">🗑</button>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-cmds">
+    <button class="chat-cmd" onclick="sendCmd('correct')" title="Transkriptionsfehler kontextbasiert fixen">🔧 Korrigieren</button>
+    <button class="chat-cmd" onclick="sendCmd('punctuate')" title="Satzzeichen und Formatierung">✏️ Interpunktion</button>
+    <button class="chat-cmd" onclick="sendCmd('structure')" title="Verse/Hook/Bridge erkennen">🏗️ Struktur</button>
+    <button class="chat-cmd" onclick="sendCmd('translate')" title="Lyrics uebersetzen">🌍 Translate</button>
+    <button class="chat-cmd" onclick="sendCmd('generate')" title="Fehlende Lyrics generieren">✨ Generate</button>
+  </div>
+  <div class="chat-msgs" id="chatMsgs">
+    <div class="chat-no-ai" id="chatWelcome">
+      <div style="font-size:1.5rem;margin-bottom:6px">🤖</div>
+      <b>AI Audio Engineer</b><br>
+      Korrigiert Lyrics, setzt Interpunktion, erkennt Songstrukturen, uebersetzt und generiert Texte.<br><br>
+      Nutze die Buttons oben oder schreibe frei.
+    </div>
+  </div>
+  <div class="chat-input">
+    <input type="text" id="chatIn" placeholder="Nachricht..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendChat()">
+    <button class="btn" id="chatSend" onclick="sendChat()">↑</button>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-bg" id="helpModal" onclick="if(event.target===this)toggleHelp()">
+<div class="modal">
+<div class="modal-head">
+  <span style="font-size:1.1rem">📖</span>
+  <h2>Karaoke Sub Tool — Hilfe</h2>
+  <div class="modal-close" onclick="toggleHelp()">✕</div>
+</div>
+<div class="modal-body">
+
+<h3>🚀 Schnellstart</h3>
+<p>Audio-Datei hochladen (Drag & Drop oder Klick), Settings wählen, <b>▶ Start</b> drücken. Die Transkription läuft serverseitig (API-Call oder lokal), danach kannst du Segmente im Editor bearbeiten und in verschiedenen Formaten exportieren.</p>
+
+<h3>📝 Lyrics Upload (optional)</h3>
+<p>Lade zusätzlich eine <code>.txt</code>-Datei mit den Song-Lyrics hoch. Jede Zeile in der Datei wird exakt als ein Untertitel-Segment übernommen — <b>Zeilenumbrüche, Satzlänge und Formatierung bestimmen die Segmentierung</b> in SRT und ASS.</p>
+<table class="htable">
+<tr><th>Ohne Lyrics-Datei</th><th>Mit Lyrics-Datei</th></tr>
+<tr><td>Transkription bestimmt Text UND Segmentierung</td><td>Transkription liefert nur Timing, <b>Text kommt aus der .txt</b></td></tr>
+<tr><td>CPS/Max Chars splitten automatisch</td><td>Zeilen werden exakt übernommen, kein Auto-Split</td></tr>
+<tr><td>Word-Timestamps aus Transkription</td><td>Word-Timestamps werden auf Lyrics-Wörter umverteilt</td></tr>
+</table>
+<p><b>Format:</b> Eine Zeile pro Segment. Leerzeilen und <code>[Section]</code>-Marker werden ignoriert. UTF-8-Encoding.</p>
+
+<h3>🔧 Settings — Backends</h3>
+<p>Das Backend bestimmt, welcher Dienst die Sprache-zu-Text-Umwandlung übernimmt:</p>
+<table class="htable">
+<tr><th>Backend</th><th>Typ</th><th>Beschreibung</th><th>Word-Timestamps</th></tr>
+<tr><td><b>Voxtral</b></td><td><span class="htag htag-api">Cloud API</span></td><td>Mistral AI – schnell, gute Deutsch-Qualität. Braucht <code>MISTRAL_API_KEY</code> in <code>.env</code>.</td><td>Segment-Level (Words werden approximiert)</td></tr>
+<tr><td><b>OpenAI</b></td><td><span class="htag htag-api">Cloud API</span></td><td>OpenAI Whisper API. Braucht <code>OPENAI_API_KEY</code>.</td><td>✓ Word-Level</td></tr>
+<tr><td><b>Local Whisper</b></td><td><span class="htag htag-local">Lokal</span></td><td>Läuft lokal via <code>faster-whisper</code>. Braucht GPU für Speed, CPU geht aber langsam.</td><td>✓ Word-Level</td></tr>
+<tr><td><b>WhisperX</b></td><td><span class="htag htag-local">Lokal</span></td><td>Forced Phoneme Alignment via wav2vec2 — <b>beste Word-Timestamps</b> für Karaoke. Braucht <code>pip install whisperx torch</code>.</td><td>✓✓✓ Phonem-präzise</td></tr>
+</table>
+
+<h3>🌍 Sprache</h3>
+<table class="htable">
+<tr><th>Option</th><th>Beschreibung</th></tr>
+<tr><td><b>Auto</b></td><td>Automatische Spracherkennung (empfohlen für einzelne Sprachen)</td></tr>
+<tr><td><b>DE / EN / FR / ES / JA</b></td><td>Sprache explizit vorgeben — verbessert Genauigkeit bei bekannter Sprache</td></tr>
+</table>
+
+<h3>🎤 Karaoke Mode</h3>
+<p>Bestimmt den ASS-Karaoke-Tag-Stil für die Wort-Animation:</p>
+<table class="htable">
+<tr><th>Mode</th><th>ASS-Tag</th><th>Effekt</th></tr>
+<tr><td><b>kf</b></td><td><code>\kf</code></td><td><b>Fill-Effekt</b> — Wort wird progressiv von links nach rechts gefüllt. Standard für Karaoke.</td></tr>
+<tr><td><b>k</b></td><td><code>\k</code></td><td><b>Instant Highlight</b> — Wort springt sofort auf Highlight-Farbe um.</td></tr>
+<tr><td><b>ko</b></td><td><code>\ko</code></td><td><b>Outline-Wipe</b> — Outline wird progressiv gefüllt, Text bleibt.</td></tr>
+</table>
+
+<h3>🎨 Preset (Theme)</h3>
+<p>Voreinstellungen für Schriftart, Größe, Farben und Auflösung der ASS-Datei:</p>
+<table class="htable">
+<tr><th>Preset</th><th>Auflösung</th><th>Schrift</th><th>Einsatz</th></tr>
+<tr><td><b>Classic</b></td><td>1920×1080</td><td>Arial Bold</td><td>Standard-Karaoke, YouTube</td></tr>
+<tr><td><b>Neon</b></td><td>1920×1080</td><td>Trebuchet MS</td><td>Leuchtende Farben, Club-Style</td></tr>
+<tr><td><b>High Contrast</b></td><td>1920×1080</td><td>Impact</td><td>Maximale Lesbarkeit</td></tr>
+<tr><td><b>Landscape</b></td><td>1920×1080</td><td>Arial</td><td>16:9 Landscape</td></tr>
+<tr><td><b>Portrait</b></td><td>1080×1920</td><td>Arial</td><td>9:16 TikTok / Reels / Shorts</td></tr>
+<tr><td><b>Mobile Safe</b></td><td>1080×1920</td><td>Arial</td><td>Große Schrift, Safe Area für UI-Elemente</td></tr>
+</table>
+
+<h3>📊 CPS / Max Chars</h3>
+<table class="htable">
+<tr><th>Setting</th><th>Default</th><th>Beschreibung</th></tr>
+<tr><td><b>CPS</b></td><td>18</td><td><b>Characters Per Second</b> — Maximale Lesegeschwindigkeit. Segmente werden aufgeteilt wenn CPS überschritten wird. Für Karaoke/Rap: 20–25, für Untertitel: 12–18.</td></tr>
+<tr><td><b>Max Chars</b></td><td>42</td><td>Maximale Zeichen pro Zeile. Standard 42 für 16:9, 30–35 für Portrait/Mobile.</td></tr>
+</table>
+
+<h3>🔘 Preprocessing Toggles</h3>
+<table class="htable">
+<tr><th>Option</th><th>Default</th><th>Was es tut</th></tr>
+<tr><td><b>VAD</b></td><td>✓ An</td><td><b>Voice Activity Detection</b> — Entfernt Stille vor der Transkription. Beschleunigt den Prozess und verbessert Timestamps. Wird bei WhisperX automatisch übersprungen (hat eigene VAD).</td></tr>
+<tr><td><b>Normalize</b></td><td>✓ An</td><td><b>Loudness Normalization</b> auf -16 LUFS via ffmpeg. Verbessert die Erkennung bei leisen oder übersteuertem Audio.</td></tr>
+<tr><td><b>ASS</b></td><td>✓ An</td><td>Generiert ASS-Karaoke-Untertiteldatei mit gewähltem Preset und Mode.</td></tr>
+<tr><td><b>+VTT</b></td><td>Aus</td><td>Zusätzlich WebVTT exportieren (für HTML5 Video/Browser).</td></tr>
+<tr><td><b>+LRC</b></td><td>Aus</td><td>Zusätzlich LRC-Lyrics exportieren (für Musik-Player, mit Word-Tags).</td></tr>
+<tr><td><b>+TXT</b></td><td>Aus</td><td>Zusätzlich reinen Text exportieren (ohne Timestamps).</td></tr>
+<tr><td><b>Vocal Iso</b></td><td>Aus</td><td><b>Vocal Isolation</b> via Demucs — trennt Gesang von Instrumenten vor der Transkription. Verbessert Ergebnisse bei Musik mit lauten Beats, braucht aber GPU.</td></tr>
+<tr><td><b>BPM Snap</b></td><td>Aus</td><td><b>Beat-Grid Snap</b> — Erkennt BPM (via Essentia/librosa) und snapped Segment-/Word-Grenzen auf den nächsten Beat. Für Rap/Songs mit klarem Rhythmus.</td></tr>
+<tr><td><b>AI Correct</b></td><td>Aus</td><td><b>KI-Lyrics-Korrektur</b> — Nach der Transkription werden die Lyrics automatisch durch die Mistral API geschickt zur kontextbasierten Fehlerkorrektur. Beachtet Reimschemata, Slang und Sprache. Nutzt <code>MISTRAL_API_KEY</code> (gleicher Key wie Voxtral).</td></tr>
+</table>
+
+<h3>🎧 Audio Player</h3>
+<table class="htable">
+<tr><th>Funktion</th><th>Bedienung</th></tr>
+<tr><td>Play / Pause</td><td><code>⏯</code> Button oder <code>Space</code></td></tr>
+<tr><td>Vor / Zurück</td><td><code>-5s</code> / <code>+5s</code> Buttons oder <code>←</code> <code>→</code> Pfeiltasten (±2s)</td></tr>
+<tr><td>Speed</td><td>Dropdown: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x</td></tr>
+<tr><td>Volume</td><td>Slider rechts</td></tr>
+<tr><td>Loop 🔁</td><td>Aktiviert Segment-Loop — das aktuell fokussierte Segment wird in Schleife abgespielt</td></tr>
+<tr><td>Waveform</td><td>Klicken = Seek zur Position. Zeigt Segment-Regionen als Overlay.</td></tr>
+<tr><td>Minimap</td><td>Kompakte Segment-Übersicht: <span style="color:var(--accent2)">■</span> Normal <span style="color:var(--warn)">■</span> Low Confidence <span style="color:var(--purple)">■</span> Pinned</td></tr>
+<tr><td>Karaoke Live</td><td>Echtzeit Wort-Highlight synchron zur Wiedergabe</td></tr>
+</table>
+
+<h3>✏️ Segment Editor</h3>
+<table class="htable">
+<tr><th>Funktion</th><th>Beschreibung</th></tr>
+<tr><td><b>#Nr klicken</b></td><td>Spielt das Segment ab</td></tr>
+<tr><td><b>Start/End editieren</b></td><td>Inline-Felder: Format <code>M:SS.ms</code>, Enter zum Speichern</td></tr>
+<tr><td><b>Text editieren</b></td><td>Textarea direkt bearbeiten, wird beim Verlassen gespeichert</td></tr>
+<tr><td><b>▶</b></td><td>Segment abspielen (und bei Loop als Loop-Segment setzen)</td></tr>
+<tr><td><b>✂ Split</b></td><td>Segment an der Mitte teilen</td></tr>
+<tr><td><b>⊕ Merge</b></td><td>Mit dem nächsten Segment zusammenführen</td></tr>
+<tr><td><b>📌 Pin</b></td><td>Segment für Review markieren</td></tr>
+<tr><td><b>🎤 Speaker</b></td><td>Speaker-Label zuweisen (z.B. „Verse1", „Hook")</td></tr>
+<tr><td><b>CPS-Warnung</b></td><td>Orange Zahl unten rechts wenn CPS > 22</td></tr>
+<tr><td><b>Confidence %</b></td><td><span style="color:var(--accent)">Grün</span> ≥80%, <span style="color:var(--warn)">Orange</span> 60–80%, <span style="color:var(--danger)">Rot</span> <60%</td></tr>
+</table>
+
+<h3>🔍 Filter & Suche</h3>
+<table class="htable">
+<tr><th>Filter</th><th>Zeigt</th></tr>
+<tr><td><b>Alle</b></td><td>Alle Segmente</td></tr>
+<tr><td><b>⚠ Low</b></td><td>Nur Segmente mit Confidence < 60%</td></tr>
+<tr><td><b>📌 Pinned</b></td><td>Nur manuell gepinnte Segmente</td></tr>
+<tr><td><b>🔴 Overlap</b></td><td>Nur Segmente mit Timing-Überlappungen</td></tr>
+</table>
+<p><b>Suchen/Ersetzen:</b> Text in alle Segmente suchen und ersetzen (case-insensitive).</p>
+
+<h3>🛠 Toolbar</h3>
+<table class="htable">
+<tr><th>Button</th><th>Funktion</th></tr>
+<tr><td><b>↩ / ↪</b></td><td>Undo / Redo (bis zu 50 Schritte, auch via <code>Ctrl+Z</code> / <code>Ctrl+Y</code>)</td></tr>
+<tr><td><b>⏱ Shift</b></td><td>Alle Segmente um ±ms verschieben (globaler Time-Shift)</td></tr>
+<tr><td><b>🔧 Fix Gaps</b></td><td>Automatisch Lücken und Überlappungen reparieren (Split-Strategie)</td></tr>
+<tr><td><b>📖 Dict</b></td><td>Custom Dictionary auf alle Segmente anwenden</td></tr>
+<tr><td><b>🔄 Regen</b></td><td>SRT/ASS/VTT/LRC/TXT neu generieren nach Edits</td></tr>
+<tr><td><b>📋 SRT / ASS</b></td><td>In Clipboard kopieren</td></tr>
+<tr><td><b>💾 Export</b></td><td>Gesamtes Projekt als JSON exportieren (Backup/Sharing)</td></tr>
+</table>
+
+<h3>📖 Dictionary Tab</h3>
+<p>Hier kannst du <b>Wort-Korrekturregeln</b> anlegen (z.B. häufige Transkriptionsfehler). Format: <code>Falsch → Richtig</code>. Wird in <code>custom_words.txt</code> gespeichert. Über <b>📖 Dict</b> in der Toolbar auf alle Segmente anwenden.</p>
+
+<h3>📊 Stats Tab</h3>
+<p>Zeigt Statistiken: Segment-Anzahl, Wörter, Zeichen, Dauer, ∅/Max/Min CPS, Confidence, Gaps, Overlaps, Pinned.</p>
+
+<h3>💾 Downloads</h3>
+<table class="htable">
+<tr><th>Format</th><th>Verwendung</th></tr>
+<tr><td><b>SRT</b></td><td>Standard-Untertitel (VLC, YouTube, Premiere, DaVinci…)</td></tr>
+<tr><td><b>ASS</b></td><td>Karaoke-Untertitel mit Wort-Animation (MPC-HC, mpv, Aegisub…)</td></tr>
+<tr><td><b>VTT</b></td><td>Web Video Text Tracks (HTML5 &lt;track&gt;, Browser-Player)</td></tr>
+<tr><td><b>LRC</b></td><td>Lyrics mit Timestamps (Musik-Player, Spotify-Style)</td></tr>
+<tr><td><b>TXT</b></td><td>Reiner Text ohne Timestamps</td></tr>
+<tr><td><b>ZIP</b></td><td>Alle Outputs zusammen herunterladen</td></tr>
+</table>
+
+<h3>⌨️ Keyboard Shortcuts</h3>
+<table class="htable">
+<tr><th>Taste</th><th>Aktion</th></tr>
+<tr><td><code>Space</code></td><td>Play / Pause</td></tr>
+<tr><td><code>←</code> / <code>→</code></td><td>±2 Sekunden skippen</td></tr>
+<tr><td><code>Ctrl+Z</code></td><td>Undo</td></tr>
+<tr><td><code>Ctrl+Y</code></td><td>Redo</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Suche fokussieren</td></tr>
+<tr><td><code>S</code></td><td>Split bei Playhead</td></tr>
+<tr><td><code>T</code></td><td>Tap-to-Time Modus</td></tr>
+<tr><td><code>F</code></td><td>Fullscreen Karaoke</td></tr>
+<tr><td><code>Shift+Drag</code></td><td>A/B Loop Region setzen</td></tr>
+<tr><td><code>Shift+C</code></td><td>A/B Loop löschen</td></tr>
+<tr><td><code>F1</code></td><td>Diese Hilfe öffnen/schließen</td></tr>
+<tr><td><code>Escape</code></td><td>Hilfe/Overlay schließen</td></tr>
+</table>
+
+<h3>💡 Tipps</h3>
+<p><b>Für Rap/schnelle Texte:</b> CPS auf 22–25, WhisperX Backend (beste Word-Timestamps), BPM Snap an.</p>
+<p><b>Für Gesang:</b> CPS auf 15–18, Vocal Isolation an falls laute Instrumentals.</p>
+<p><b>Für Untertitel (kein Karaoke):</b> CPS 12–15, Max Chars 38, Mode egal (wird ignoriert bei reinem SRT).</p>
+<p><b>Workflow:</b> Transkribieren → Low-Confidence Segmente über Filter prüfen → Fix Gaps → Dictionary anwenden → Regen → Download.</p>
+
+<h3>🆕 Neu in v3.2</h3>
+<p><b>🎤 Tap-to-Time:</b> Audio abspielen und <code>Space</code> drücken für jede Textzeile — setzt Timestamps manuell in Echtzeit. Perfekt für Rap-Texte wo ASR-Timing nicht stimmt.</p>
+<p><b>🖥️ Fullscreen Karaoke:</b> Immersiver Vollbild-Modus mit Wort-für-Wort Highlighting (wenn Word-Timestamps verfügbar). Taste <code>F</code>.</p>
+<p><b>🌊 Audio Spektrum:</b> Echtzeit-Frequenzanalyse (Web Audio API FFT) über der Waveform während der Wiedergabe.</p>
+<p><b>🎨 Themes:</b> 4 Farbschemen (Dark, Neon, Light, Warm) — Theme-Buttons im Header. Wird gespeichert.</p>
+<p><b>✂️ Split bei Playhead:</b> Taste <code>S</code> splittet das aktuelle Segment an der Playhead-Position.</p>
+<p><b>🔁 A/B Loop:</b> <code>Shift+Drag</code> auf der Waveform setzt eine Loop-Region. Audio loopt automatisch zwischen A und B.</p>
+
+<h3>🤖 AI Chat</h3>
+<p>Integrierter KI-Assistent der direkt auf die transkribierten Segmente zugreifen und sie bearbeiten kann. Konfiguriert über <code>.env</code> mit einer einzigen Variable:</p>
+<table class="htable">
+<tr><th>Variable</th><th>Beschreibung</th><th>Beispiel</th></tr>
+<tr><td><code>AI_MODEL</code></td><td>Modell im Format <code>provider:model</code></td><td><code>openai:gpt-5.2</code></td></tr>
+<tr><td><code>OPENAI_API_KEY</code></td><td>API-Key für OpenAI-Modelle</td><td><code>sk-...</code></td></tr>
+<tr><td><code>ANTHROPIC_API_KEY</code></td><td>API-Key für Anthropic</td><td><code>sk-ant-...</code></td></tr>
+<tr><td><code>MISTRAL_API_KEY</code></td><td>API-Key für Mistral (wird auch für Voxtral-Transkription genutzt)</td><td><code>...</code></td></tr>
+</table>
+<p class="hd">Unterstützte Provider und Modelle:</p>
+<table class="htable">
+<tr><th>Provider</th><th>Modelle (Beispiele)</th><th>Reasoning</th></tr>
+<tr><td><b>openai</b></td><td><code>gpt-5.2</code>, <code>gpt-5</code>, <code>o3-mini</code>, <code>o4-mini</code>, <code>gpt-4o</code></td><td>✓ gpt-5*, o1*, o3*, o4*</td></tr>
+<tr><td><b>anthropic</b></td><td><code>claude-sonnet-4-20250514</code>, <code>claude-opus-4-20250514</code></td><td>✓ claude-opus-4*</td></tr>
+<tr><td><b>mistral</b></td><td><code>mistral-large-latest</code>, <code>codestral-latest</code>, <code>mistral-medium-latest</code></td><td>—</td></tr>
+<tr><td><b>google</b></td><td><code>gemini-2.0-flash</code>, <code>gemini-2.5-pro</code></td><td>✓ *-thinking</td></tr>
+</table>
+<p>Reasoning wird <b>automatisch erkannt</b> anhand des Modellnamens — keine separate Konfiguration nötig.</p>
+<p><b>AI-Befehle:</b></p>
+<table class="htable">
+<tr><th>Befehl</th><th>Was es tut</th><th>Model</th></tr>
+<tr><td><b>🔧 Korrigieren</b></td><td>Analysiert Reimschemata, Kontext, Slang und korrigiert Transkriptionsfehler automatisch</td><td>Reasoning</td></tr>
+<tr><td><b>✏️ Interpunktion</b></td><td>Setzt Kommas, Punkte, Frage-/Ausrufezeichen — ohne Wortlaut zu ändern</td><td>Standard</td></tr>
+<tr><td><b>🏗️ Struktur</b></td><td>Erkennt Verse, Hook, Bridge, Outro und setzt Speaker-Labels automatisch</td><td>Reasoning</td></tr>
+<tr><td><b>🌍 Translate</b></td><td>Übersetzt Lyrics unter Beibehaltung von Reimschema und Silbenanzahl</td><td>Reasoning</td></tr>
+<tr><td><b>✨ Generate</b></td><td>Generiert fehlende Lyrics basierend auf Kontext, Genre und Flow</td><td>Standard</td></tr>
+</table>
+<p>Du kannst auch frei chatten — die AI hat vollen Zugriff auf alle Segmente und kann sie direkt bearbeiten.</p>
+
+<h3>📚 Transcriptions Library</h3>
+<p>Jede fertige Transkription wird automatisch in einer SQLite-Datenbank gespeichert (<code>data/library.sqlite</code>). Über den <b>📚</b>-Button im Header öffnet sich das Library-Modal:</p>
+<table class="htable">
+<tr><th>Aktion</th><th>Beschreibung</th></tr>
+<tr><td><b>Suche</b></td><td>Filtert nach Titel, Dateiname oder Backend</td></tr>
+<tr><td><b>Klick</b></td><td>Öffnet die Transkription — wenn der Job noch existiert, wird er im Editor geladen; sonst wird der SRT-Text im Report-Tab angezeigt</td></tr>
+<tr><td><b>🗑 Löschen</b></td><td>Soft-Delete mit Bestätigung</td></tr>
+</table>
+<p>Deduplizierung: Bei erneutem Transkribieren derselben Datei wird der bestehende Eintrag aktualisiert statt ein Duplikat erstellt.</p>
+
+<h3>🎬 Video Rendering</h3>
+<p>Erstellt ein fertiges Karaoke-Video aus der aktuellen Transkription. Klicke auf <b>🎬 Video Render ▾</b> in der Sidebar:</p>
+<table class="htable">
+<tr><th>Feld</th><th>Beschreibung</th></tr>
+<tr><td><b>BG</b></td><td>Hintergrundbild (jpg/png/webp) oder Video (mp4/mov/webm) — wird geloopt wenn kürzer als Audio</td></tr>
+<tr><td><b>Audio</b></td><td>Optional — wenn leer wird Audio aus dem Original-Job verwendet</td></tr>
+<tr><td><b>Preset</b></td><td><code>youtube</code> (1080p, CRF 18), <code>mobile</code> (720p, CRF 23), <code>draft</code> (720p, CRF 28 ultrafast)</td></tr>
+<tr><td><b>Pos</b></td><td>Subtitle-Position: bottom, middle, top</td></tr>
+</table>
+<p>Das Video erscheint als Job in der Liste und kann über den normalen Download-Button heruntergeladen werden.</p>
+
+</div>
+</div>
+</div>
+<script>
+const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],curFil='all',looping=false,loopSeg=null;
+const au=document.getElementById('audioEl');
+function toast(m,t='ok'){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toasts').appendChild(e);setTimeout(()=>e.remove(),3500)}
+function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
+function fmt(s){if(!s&&s!==0)return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+String(sec).padStart(2,'0')}
+function fmtMs(s){const m=Math.floor(s/60),sec=(s%60).toFixed(2);return m+':'+sec.padStart(5,'0')}
+
+// ── Health ──
+async function checkH(){try{const r=await(await fetch(B+'/api/health')).json();
+document.getElementById('hDot').className='dot dot-ok';
+document.getElementById('bb').innerHTML=Object.entries(r.backends).map(([k,v])=>`<span style="font-size:.55rem;padding:2px 5px;border-radius:3px;background:${v?'rgba(0,229,160,.12)':'rgba(255,68,102,.1)'};color:${v?'var(--accent)':'var(--danger)'}">${k}</span>`).join('');
+document.getElementById('hTxt').textContent='ffmpeg:'+(r.ffmpeg?'✓':'✗')}catch(e){document.getElementById('hDot').className='dot dot-err'}}
+
+// ── SSE ──
+let es=null;
+function connectSSE(){if(es)es.close();es=new EventSource(B+'/api/events');
+es.onmessage=e=>{const d=JSON.parse(e.data);if(['job_progress','job_completed','job_failed'].includes(d.type))refreshJobs();
+if(d.type==='job_completed')toast('✅ '+d.filename);if(d.type==='job_failed')toast('❌ '+(d.error||''),'err')};
+es.onerror=()=>setTimeout(connectSSE,5000)}
+
+// ── Upload ──
+const dz=document.getElementById('dz'),fi=document.getElementById('fi');
+['dragenter','dragover'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.add('over')}));
+['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault();dz.classList.remove('over')}));
+dz.addEventListener('drop',ev=>{if(ev.dataTransfer.files.length)upF(ev.dataTransfer.files)});
+fi.addEventListener('change',()=>{if(fi.files.length)upF(fi.files);fi.value=''});
+async function upF(files){for(const f of files){const fd=new FormData();fd.append('file',f);
+try{const r=await fetch(B+'/api/upload',{method:'POST',body:fd});const d=await r.json();
+if(r.ok){uploaded.push(d.filename);toast(d.filename);document.getElementById('btnGo').disabled=false;
+  if(d.media_id&&d.taggable){curMediaId=d.media_id;curMediaEditable=d.editable;
+    document.getElementById('tagBtn').style.display='block';
+    document.getElementById('tagBtn').textContent=d.editable?'\u{1F3F7}\uFE0F Tags bearbeiten':'\u{1F3F7}\uFE0F Tags anzeigen'}}
+else toast(d.detail||'Err','err')}catch(e){toast(e.message,'err')}}}
+let curMediaId='',curMediaEditable=false;
+
+// ── Lyrics Upload ──
+let lyricsFile=null;
+const lyFi=document.getElementById('lyFi');
+lyFi.addEventListener('change',async()=>{if(!lyFi.files.length)return;
+const f=lyFi.files[0];lyFi.value='';
+const fd=new FormData();fd.append('file',f);
+try{const r=await fetch(B+'/api/upload',{method:'POST',body:fd});const d=await r.json();
+if(r.ok){lyricsFile=d.filename;
+document.getElementById('lyLabel').textContent=d.filename;
+document.getElementById('lyHint').textContent=Math.round(d.size/1024)+' KB';
+document.getElementById('lyDel').style.display='inline-block';
+document.getElementById('lyOpts').style.display='block';
+toast('Lyrics: '+d.filename)}
+else toast(d.detail||'Err','err')}catch(e){toast(e.message,'err')}});
+function clearLyrics(){lyricsFile=null;
+document.getElementById('lyLabel').textContent='Lyrics (.txt/.lrc) hochladen';
+document.getElementById('lyHint').textContent='Zeilenstruktur wird f\u00FCr SRT/ASS \u00FCbernommen';
+document.getElementById('lyDel').style.display='none';
+document.getElementById('lyOpts').style.display='none';toast('Lyrics entfernt')}
+
+// ── Settings ──
+document.getElementById('sB').onchange=function(){document.getElementById('wxO').style.display=this.value==='whisperx'?'block':'none'};
+function gS(){const s={backend:$('sB'),language:$('sL'),vad:$c('sVAD'),normalize:$c('sN'),vocal_isolation:$c('sVO'),
+generate_ass:$c('sA'),generate_vtt:$c('sVTT'),generate_lrc:$c('sLRC'),generate_txt:$c('sTXT'),
+karaoke_mode:$('sK'),preset:$('sP'),cps:parseFloat($('sC'))||18,max_chars_per_line:parseInt($('sMC'))||42,
+snap_to_beat:$c('sBT'),bpm:$c('sBT')?'detect':null,ai_correct:$c('sAI'),
+whisperx_model_size:$('sWXM'),whisperx_compute_type:$('sWXC')};
+if(lyricsFile){s.use_lyrics_template=true;s.lyrics_template_mode=$('sLTM');
+s.match_mode=$('sMatch');s.preserve_empty_lines=$c('sEL')}
+return s}
+function $(id){return document.getElementById(id).value}
+function $c(id){return document.getElementById(id).checked}
+
+// ── Tags Modal ──
+const TAG_FIELDS=['title','artist','album','album_artist','genre','year','track','disc','comment','composer'];
+async function openTagModal(){if(!curMediaId)return;
+const m=document.getElementById('tagModal');m.classList.add('open');
+const form=document.getElementById('tagForm');form.innerHTML='<div style="color:var(--dim);font-size:.7rem">Lade Tags...</div>';
+document.getElementById('tagActions').style.display='none';
+try{const r=await(await fetch(B+'/api/media/'+curMediaId+'/tags')).json();
+document.getElementById('tagStatus').textContent=r.filename+' — '+(r.editable?'Bearbeitbar':'Nur Lesen')+(r.has_cover?' \u00B7 Cover \u2713':'');
+form.innerHTML='';
+for(const f of TAG_FIELDS){
+  if(!r.supported_fields.includes(f))continue;
+  const div=document.createElement('div');div.className='tag-row';
+  const inp=document.createElement('input');inp.type='text';inp.id='tag_'+f;inp.value=r.tags[f]||'';
+  if(!r.editable)inp.disabled=true;
+  const lbl=document.createElement('label');lbl.textContent=f;
+  div.appendChild(lbl);div.appendChild(inp);form.appendChild(div)}
+if(r.editable)document.getElementById('tagActions').style.display='flex';
+}catch(e){form.innerHTML='<div style="color:#e74c3c">'+e.message+'</div>'}}
+function closeTagModal(){document.getElementById('tagModal').classList.remove('open')}
+async function saveTags(){const tags={};
+TAG_FIELDS.forEach(f=>{const el=document.getElementById('tag_'+f);if(el&&el.value.trim())tags[f]=el.value.trim()});
+if(!Object.keys(tags).length){toast('Keine Tags','err');return}
+try{const r=await fetch(B+'/api/media/'+curMediaId+'/tags',{method:'PUT',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({tags})});
+const j=await r.json();if(r.ok){toast('Tags gespeichert');closeTagModal()}else toast(j.detail||'Err','err')
+}catch(e){toast('Tags: '+e.message,'err')}}
+
+// ── Start ──
+document.getElementById('btnGo').onclick=async()=>{if(!uploaded.length)return;const fn=uploaded[uploaded.length-1],s=gS();
+let url=B+'/api/transcribe?filename='+encodeURIComponent(fn);
+if(lyricsFile)url+='&lyrics_file='+encodeURIComponent(lyricsFile);
+try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});
+const j=await r.json();if(r.ok){toast('Job gestartet'+(lyricsFile?' (mit Lyrics)':''));selJob(j.job_id)}else toast(j.detail||'Err','err')}catch(e){toast(e.message,'err')}};
+
+// ── Jobs ──
+function startPoll(){if(poll)clearInterval(poll);poll=setInterval(refreshJobs,2500);refreshJobs()}
+async function refreshJobs(){try{const jobs=await(await fetch(B+'/api/jobs')).json();rJL(jobs);
+if(aJobId){const j=jobs.find(j=>j.job_id===aJobId);if(j)rDetail(j)}
+if(!jobs.some(j=>!['completed','failed'].includes(j.status))&&poll){clearInterval(poll);poll=null}}catch(e){}}
+function rJL(jobs){const el=document.getElementById('jl');if(!jobs.length){el.innerHTML='<div style="font-size:.7rem;color:var(--dim);padding:5px">Keine Jobs</div>';return}
+const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
+el.innerHTML=jobs.map(j=>{const c=['completed'].includes(j.status)?'c':['failed'].includes(j.status)?'f':['pending','queued'].includes(j.status)?'p':'r';
+return`<div class="ji${j.job_id===aJobId?' active':''}" onclick="selJob('${j.job_id}')"><div class="jic ${c}">${ic[j.status]||'⏳'}</div><div class="jm"><div class="jn">${esc(j.filename)}</div><div class="js">${j.stage} ${Math.round(j.progress*100)}%</div>${j.progress>0&&j.progress<1?`<div class="pb"><div class="pf" style="width:${j.progress*100}%"></div></div>`:''}</div></div>`}).join('')}
+function selJob(id){aJobId=id;document.getElementById('es').style.display='none';const jd=document.getElementById('jd');jd.style.display='flex';jd.style.flexDirection='column';jd.style.gap='12px';refreshJobs();if(!poll)startPoll()}
+
+async function rDetail(j){
+const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
+document.getElementById('dI').textContent=ic[j.status]||'⏳';
+document.getElementById('dF').textContent=j.filename;
+document.getElementById('dS').textContent=j.status;
+document.getElementById('dP').style.width=(j.progress*100)+'%';
+const st=document.getElementById('dSt');st.textContent=j.error?'Error: '+j.error:j.stage;
+st.style.color=j.status==='failed'?'var(--danger)':'var(--dim)';
+if(j.status==='completed'&&j.result){
+  setupPlayer(j);
+  // downloads
+  document.getElementById('dlSec').style.display='block';
+  document.getElementById('zipDl').href=B+'/api/jobs/'+j.job_id+'/download-zip';
+  const r=j.result,bt=document.getElementById('dlBtns');let h='';
+  for(const[k,l]of[['srt_file','SRT'],['ass_file','ASS'],['vtt_file','VTT'],['lrc_file','LRC'],['txt_file','TXT'],['report_file','Report']]){
+    if(r[k])h+=`<a class="dl" href="${B}/api/jobs/${j.job_id}/download/${r[k]}" download><span class="x">${r[k].split('.').pop().toUpperCase()}</span>${l}</a>`}
+  h+=`<span style="font-size:.65rem;color:var(--dim);margin-left:4px">${r.segments_count} seg • ${r.backend} • ${r.language}${r.word_timestamps_available?' • ✓words':''}${r.needs_review?` • <b style="color:var(--warn)">${r.needs_review}⚠</b>`:''}</span>`;
+  bt.innerHTML=h;
+  document.getElementById('edSec').style.display='block';
+  loadSegs(j.job_id);loadStats(j.job_id);loadRep(j.job_id);loadDict()
+}else{document.getElementById('dlSec').style.display='none';document.getElementById('edSec').style.display='none';document.getElementById('playerSec').style.display='none'}}
+
+// ── Player ──
+function setupPlayer(j){au.src=B+'/data/output/'+j.job_id+'/'+j.filename;
+au.onerror=()=>{au.src=B+'/data/uploads/'+j.filename};
+document.getElementById('playerSec').style.display='block';loadWF(j.job_id);
+au.onloadedmetadata=()=>updPT();
+au.ontimeupdate=()=>{updPT();hlSeg();updKaraoke();if(looping&&loopSeg&&au.currentTime>=loopSeg.end)au.currentTime=loopSeg.start}}
+function togglePlay(){au.paused?au.play():au.pause()}
+function skipTo(s){au.currentTime=Math.max(0,au.currentTime+s)}
+function setSpeed(v){au.playbackRate=parseFloat(v)}
+function toggleLoop(){looping=!looping;document.getElementById('loopBtn').style.opacity=looping?'1':'.4';if(!looping)loopSeg=null}
+function updPT(){const c=au.currentTime||0,d=au.duration||0;document.getElementById('pTime').textContent=fmt(c)+' / '+fmt(d);
+if(wfDur>0){document.getElementById('wfCur').style.left=(c/wfDur*100)+'%';document.getElementById('mmCur').style.left=(c/wfDur*100)+'%'}}
+
+async function loadWF(jid){try{const d=await(await fetch(B+'/api/jobs/'+jid+'/waveform')).json();wfPeaks=d.peaks;wfDur=d.duration;drawWF()}catch(e){wfPeaks=null}}
+function drawWF(){const cv=document.getElementById('wfCv'),ctx=cv.getContext('2d'),rect=cv.parentElement.getBoundingClientRect();
+cv.width=rect.width*2;cv.height=rect.height*2;ctx.clearRect(0,0,cv.width,cv.height);if(!wfPeaks||!wfPeaks.length)return;
+const w=cv.width/wfPeaks.length,mid=cv.height/2;ctx.fillStyle='#00e5a044';
+for(let i=0;i<wfPeaks.length;i++){const h=wfPeaks[i]*mid;ctx.fillRect(i*w,mid-h,Math.max(1,w-.5),h*2)}
+if(cSegs.length&&wfDur>0){ctx.fillStyle='rgba(0,184,255,0.06)';for(const s of cSegs){const x1=s.start/wfDur*cv.width,x2=s.end/wfDur*cv.width;ctx.fillRect(x1,0,x2-x1,cv.height)}}}
+function seekWF(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentTime=(ev.clientX-r.left)/r.width*wfDur}
+function seekMM(ev){const r=ev.currentTarget.getBoundingClientRect();au.currentTime=(ev.clientX-r.left)/r.width*wfDur}
+
+// ── Karaoke Live ──
+function updKaraoke(){if(!cSegs.length)return;const t=au.currentTime;const el=document.getElementById('kLive');
+const seg=cSegs.find(s=>t>=s.start&&t<=s.end);
+if(!seg){el.innerHTML='<span style="color:var(--dim);font-size:.85rem">—</span>';el.dataset.segIdx='';return}
+el.dataset.segIdx=cSegs.indexOf(seg);
+if(seg.has_word_timestamps&&seg.words&&seg.words.length){
+  el.innerHTML=seg.words.map(w=>{const c=t>=w.end?'past':t>=w.start?'active':'';return`<span class="kw ${c}">${esc(w.word)} </span>`}).join('')
+}else{const pct=Math.min(1,(t-seg.start)/(seg.end-seg.start));
+  const txt=seg.text,split=Math.floor(txt.length*pct);
+  el.innerHTML=`<span class="kw active">${esc(txt.slice(0,split))}</span><span class="kw">${esc(txt.slice(split))}</span>`}}
+
+function editKaraokeLine(){
+  if(!cSegs.length||!aJobId)return;
+  const el=document.getElementById('kLive');
+  const idx=parseInt(el.dataset.segIdx);
+  if(isNaN(idx)||!cSegs[idx])return;
+  const seg=cSegs[idx];
+  const wasPlaying=!au.paused;if(wasPlaying)au.pause();
+  el.innerHTML=`<input type="text" id="kEditInput" value="${esc(seg.text)}" 
+    style="width:90%;font-size:1.1rem;font-weight:500;text-align:center;background:var(--bg3);color:var(--fg);border:2px solid var(--accent);border-radius:6px;padding:8px 12px;outline:none">`;
+  const inp=document.getElementById('kEditInput');
+  inp._cancelled=false;inp._wasPlaying=wasPlaying;
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();inp._cancelled=false;saveKaraokeEdit(idx,inp.value)}
+    else if(e.key==='Escape'){inp._cancelled=true;cancelKaraokeEdit(wasPlaying)}});
+  inp.addEventListener('blur',()=>{if(!inp._cancelled)saveKaraokeEdit(idx,inp.value)});
+  inp.focus();inp.select()}
+
+async function saveKaraokeEdit(idx,text){
+  if(!aJobId||!cSegs[idx])return;
+  cSegs[idx].text=text;
+  try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx,text})})}catch(e){toast('Fehler','err')}
+  renderSegs();updKaraoke();toast('✓ Segment #'+(idx+1)+' gespeichert')}
+
+function cancelKaraokeEdit(resume){
+  // Re-render the karaoke display (don't leave it blank)
+  updKaraoke();
+  if(resume)au.play()}
+
+// ── Minimap ──
+function drawMM(){const el=document.getElementById('mm');
+let h='<div class="mm-cur" id="mmCur" style="left:0"></div>';
+if(cSegs.length&&wfDur>0){for(let i=0;i<cSegs.length;i++){const s=cSegs[i];
+const l=s.start/wfDur*100,w=Math.max(0.3,(s.end-s.start)/wfDur*100);
+let cls='mm-seg';if((s.confidence||1)<.6)cls+=' mm-low';if(s.pinned)cls+=' mm-pin';
+h+=`<div class="${cls}" style="left:${l}%;width:${w}%"></div>`}}
+el.innerHTML=h}
+
+function hlSeg(){const t=au.currentTime;document.querySelectorAll('.si').forEach(el=>{
+const i=parseInt(el.dataset.idx);const s=cSegs[i];
+if(s&&t>=s.start&&t<=s.end){el.classList.add('active');if(el.scrollIntoViewIfNeeded)el.scrollIntoViewIfNeeded(false)}
+else el.classList.remove('active')})}
+
+// ── Segments ──
+let overlaps=new Set();
+async function loadSegs(jid){try{cSegs=await(await fetch(B+'/api/jobs/'+jid+'/segments')).json();
+// detect overlaps
+overlaps=new Set();for(let i=0;i<cSegs.length-1;i++){if(cSegs[i+1].start<cSegs[i].end){overlaps.add(i);overlaps.add(i+1)}}
+renderSegs();drawWF();drawMM()}catch(e){document.getElementById('segList').innerHTML='<div class="empty"><p>Fehler</p></div>'}}
+
+function renderSegs(){
+  let segs=cSegs.map((s,i)=>({...s,_i:i}));
+  if(curFil==='low')segs=segs.filter(s=>(s.confidence||1)<.6);
+  else if(curFil==='pinned')segs=segs.filter(s=>s.pinned);
+  else if(curFil==='overlap')segs=segs.filter(s=>overlaps.has(s._i));
+  document.getElementById('segCnt').textContent=cSegs.length+' seg'+(curFil!=='all'?' ('+segs.length+' shown)':'');
+  const el=document.getElementById('segList');
+  el.innerHTML=segs.map(s=>{const i=s._i;
+    const conf=s.confidence||(s.words&&s.words.length?s.words.reduce((a,w)=>a+(w.confidence||1),0)/s.words.length:1);
+    const cc=conf>=.8?'ch':conf>=.6?'cm':'cl';
+    const dur=s.end-s.start;const cps=dur>0?s.text.length/dur:0;
+    let cls='si';if(conf<.6)cls+=' low';if(overlaps.has(i))cls+=' overlap';if(s.pinned)cls+=' pinned';
+    const spk=s.speaker?`<span class="speaker-tag" onclick="editSpeaker(${i})">${esc(s.speaker)}</span>`:'';
+    const cpsW=cps>22?`<span class="cps-warn">${cps.toFixed(0)} cps!</span>`:'';
+    return`<div class="${cls}" data-idx="${i}" id="seg${i}">
+<div class="sidx" onclick="playSeg(${i})">#${i+1}<br>
+<input class="stm-edit" value="${fmtMs(s.start)}" onchange="updTime(${i},'start',this.value)" title="Start">
+<input class="stm-edit" value="${fmtMs(s.end)}" onchange="updTime(${i},'end',this.value)" title="End">
+</div>
+<div class="stx"><textarea rows="2" data-idx="${i}" onchange="updSeg(${i},this.value)" onfocus="loopSeg=cSegs[${i}]">${esc(s.text)}</textarea>${spk}${cpsW}</div>
+<div class="scf ${cc}">${(conf*100).toFixed(0)}%</div>
+<div class="sbtns">
+<button onclick="playSeg(${i})" title="Play">▶</button>
+<button onclick="splitSeg(${i})" title="Split">✂</button>
+<button onclick="mergeSeg(${i})" title="Merge↓">⊕</button>
+<button onclick="togglePin(${i})" title="Pin">${s.pinned?'📌':'📍'}</button>
+<button onclick="editSpeaker(${i})" title="Speaker">🎤</button>
+</div></div>`}).join('')}
+
+function setFil(f){curFil=f;document.querySelectorAll('.fil').forEach(e=>e.classList.toggle('on',e.dataset.f===f));renderSegs()}
+
+async function updSeg(i,text){if(!aJobId)return;
+  cSegs[i].text=text;
+  try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
+    // Flash save indicator
+    const ta=document.querySelector(`[data-idx="${i}"]`);
+    if(ta){ta.style.borderColor='var(--accent)';setTimeout(()=>ta.style.borderColor='',800)}
+    toast('✓ #'+(i+1)+' gespeichert')
+  }catch(e){toast('Err','err')}}
+async function updTime(i,field,val){if(!aJobId)return;const parts=val.split(':');if(parts.length!==2)return;
+const secs=parseFloat(parts[0])*60+parseFloat(parts[1]);if(isNaN(secs))return;
+const body={index:i};body[field]=secs;
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});loadSegs(aJobId)}catch(e){toast('Err','err')}}
+function playSeg(i){if(!cSegs[i])return;au.currentTime=cSegs[i].start;au.play();if(looping)loopSeg=cSegs[i]}
+async function splitSeg(i){if(!aJobId||!cSegs[i])return;const s=cSegs[i];
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/split',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,split_at:(s.start+s.end)/2})});toast('Split ✂');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function mergeSeg(i){if(!aJobId||i+1>=cSegs.length)return;
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index_a:i,index_b:i+1})});toast('Merged ⊕');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function togglePin(i){if(!aJobId)return;try{await fetch(B+'/api/jobs/'+aJobId+'/segments/toggle-pin?index='+i,{method:'POST'});loadSegs(aJobId)}catch(e){}}
+async function editSpeaker(i){const sp=prompt('Speaker-Label:',cSegs[i].speaker||'');if(sp===null)return;
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,speaker:sp})});loadSegs(aJobId)}catch(e){toast('Err','err')}}
+
+// ── Segment Operations ──
+async function doReplace(){if(!aJobId)return;const s=document.getElementById('srchIn').value,r=document.getElementById('replIn').value;
+if(!s)return;try{const res=await(await fetch(B+'/api/jobs/'+aJobId+'/segments/search-replace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({search:s,replace:r})})).json();toast(res.replaced_in_segments+' replaced');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function doUndo(){if(!aJobId)return;try{await fetch(B+'/api/jobs/'+aJobId+'/undo',{method:'POST'});toast('↩ Undo');loadSegs(aJobId)}catch(e){toast('Nichts','err')}}
+async function doRedo(){if(!aJobId)return;try{await fetch(B+'/api/jobs/'+aJobId+'/redo',{method:'POST'});toast('↪ Redo');loadSegs(aJobId)}catch(e){toast('Nichts','err')}}
+async function tShift(){const ms=prompt('Offset in ms (±):','0');if(!ms)return;
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/time-shift',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset_ms:parseFloat(ms)})});toast('Shifted '+ms+'ms');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function fixGaps(){if(!aJobId)return;try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/fix-gaps?strategy=split',{method:'POST'})).json();toast(r.fixed+' fixed');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function applyDict(){if(!aJobId)return;try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/apply-dictionary',{method:'POST'})).json();toast(r.applied+' korrigiert');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function regenFmt(){if(!aJobId)return;const s=gS();const fmts=["srt","ass"];if(s.generate_vtt)fmts.push("vtt");if(s.generate_lrc)fmts.push("lrc");if(s.generate_txt)fmts.push("txt");
+try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/regenerate-ass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({karaoke_mode:s.karaoke_mode,preset:s.preset,formats:fmts})})).json();toast('Generiert: '+r.regenerated.join(', '));refreshJobs()}catch(e){toast('Err','err')}}
+async function copyC(ext){if(!aJobId)return;try{const j=await(await fetch(B+'/api/jobs/'+aJobId)).json();const fn=j.result[ext+'_file'];if(!fn)return toast('N/A','err');
+const d=await(await fetch(B+'/api/jobs/'+aJobId+'/content/'+fn)).json();await navigator.clipboard.writeText(d.content);toast(ext.toUpperCase()+' → Clipboard')}catch(e){toast('Err','err')}}
+async function exportProject(){if(!aJobId)return;try{const d=await(await fetch(B+'/api/jobs/'+aJobId+'/project-export')).json();
+const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=aJobId+'_project.json';a.click();toast('Project exported')}catch(e){toast('Err','err')}}
+
+// ── Stats ──
+async function loadStats(jid){try{const s=await(await fetch(B+'/api/jobs/'+jid+'/stats')).json();
+const p=s.processing||{};
+const procTags=Object.entries(p).filter(([k,v])=>k!=='bpm').map(([k,v])=>
+  `<span style="color:${v?'var(--accent)':'var(--dim)'}">${v?'✓':'✗'} ${k}</span>`
+).join(' ');
+document.getElementById('statsGrid').innerHTML=[
+sv(s.total_segments,'Segments'),sv(s.total_words,'Wörter'),sv(s.total_chars,'Zeichen'),
+sv(fmt(s.duration_sec),'Dauer'),sv(s.avg_cps.toFixed(1),'∅ CPS'),
+sv(s.max_cps.toFixed(1),'Max CPS',s.max_cps>25),sv(s.min_cps.toFixed(1),'Min CPS'),
+sv(s.avg_segment_duration.toFixed(2)+'s','∅ Seg-Dauer'),
+sv((s.avg_confidence*100).toFixed(0)+'%','∅ Confidence'),
+sv(s.segments_with_words,'Word-TS'),sv(s.segments_needing_review,'⚠ Review',s.segments_needing_review>0),
+sv(s.gaps,'Gaps',s.gaps>0),sv(s.overlaps,'Overlaps',s.overlaps>0),sv(s.pinned,'📌 Pinned'),
+s.bpm>0?sv(s.bpm.toFixed(1),'♩ BPM'):'',
+].join('')+
+(procTags?`<div style="grid-column:1/-1;padding:6px 0;font-size:.7rem;border-top:1px solid var(--border);margin-top:4px">${procTags}</div>`:'')
+}catch(e){}}
+function sv(v,l,w){return`<div class="stat"><div class="stat-val${w?' warn':''}">${v}</div><div class="stat-label">${l}</div></div>`}
+
+// ── Dictionary ──
+async function loadDict(){try{const d=await(await fetch(B+'/api/dictionary')).json();
+const el=document.getElementById('dictList');el.innerHTML='';
+(d.entries||[]).forEach((e,i)=>{addDictUI(e.wrong,e.correct)})}catch(e){}}
+function addDictRow(){addDictUI('','')}
+function addDictUI(w,c){const el=document.getElementById('dictList');
+const div=document.createElement('div');div.className='dict-row';
+div.innerHTML=`<input placeholder="Falsch" value="${esc(w)}"><span style="color:var(--dim)">→</span><input placeholder="Korrekt" value="${esc(c)}"><button class="btn-s btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+el.appendChild(div)}
+async function saveDict(){const rows=document.querySelectorAll('.dict-row');const entries=[];
+rows.forEach(r=>{const inputs=r.querySelectorAll('input');if(inputs[0].value&&inputs[1].value)entries.push({wrong:inputs[0].value,correct:inputs[1].value})});
+try{await fetch(B+'/api/dictionary',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(entries)});toast(entries.length+' gespeichert')}catch(e){toast('Err','err')}}
+
+// ── Report ──
+async function loadRep(jid){try{const d=await(await fetch(B+'/api/jobs/'+jid+'/report')).json();document.getElementById('repC').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('repC').textContent='N/A'}}
+
+// ── Tabs ──
+function stab(t){document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('on',e.dataset.tab===t));
+['tSeg','tStats','tRhyme','tQuick','tDict','tRep'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+const map={seg:'tSeg',stats:'tStats',rhyme:'tRhyme',quick:'tQuick',dict:'tDict',rep:'tRep'};
+const target=document.getElementById(map[t]);if(target)target.style.display='block'}
+
+// ── Help Modal ──
+function toggleHelp(){const m=document.getElementById('helpModal');m.classList.toggle('open')}
+
+// ── AI Chat ──
+let aiOk=false,chatBusy=false;
+async function checkAI(){try{const r=await(await fetch(B+'/api/ai/health')).json();aiOk=r.available;
+const btn=document.getElementById('chatBtn');btn.classList.toggle('disabled',!aiOk);
+const label=r.model+(r.reasoning?' ⚡':'');
+document.getElementById('aiModel').textContent=label;
+if(!aiOk)document.getElementById('chatWelcome').innerHTML='<div style="font-size:1.5rem;margin-bottom:6px">⚠️</div><b>AI nicht konfiguriert</b><br>Setze <code>AI_MODEL</code> + API-Key in <code>.env</code><br><code>AI_MODEL=openai:gpt-5.2</code><br><code>OPENAI_API_KEY=sk-...</code>'}catch(e){}}
+
+function toggleChat(){if(!aiOk&&!document.getElementById('chatPanel').classList.contains('open'))return;
+const p=document.getElementById('chatPanel');p.classList.toggle('open');
+if(p.classList.contains('open')){loadChatHist();document.getElementById('chatIn').focus()}}
+
+async function loadChatHist(){if(!aJobId)return;try{const r=await fetch(B+'/api/ai/chat/'+aJobId);
+if(r.ok){const txt=await r.text();if(txt.trim())renderChatMsgs(txt)}}catch(e){}}
+
+function renderChatMsgs(text){const el=document.getElementById('chatMsgs');
+const lines=text.split('\n').filter(l=>l.length>1);
+const msgs=lines.map(j=>JSON.parse(j)).filter(m=>m.content&&m.content!=='__SEGMENTS_UPDATED__');
+if(!msgs.length)return;
+document.getElementById('chatWelcome').style.display='none';
+// Deduplicate by timestamp
+for(const m of msgs){const id='cm-'+m.timestamp;
+let div=document.getElementById(id);if(!div){div=document.createElement('div');div.id=id;div.className='chat-msg '+m.role;el.appendChild(div)}
+div.innerHTML=m.role==='user'?esc(m.content):renderMd(m.content)}
+el.scrollTop=el.scrollHeight}
+
+function renderMd(text){
+// Simple markdown: **bold**, `code`, ```blocks```, lists, paragraphs
+text=text.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
+.replace(/`([^`]+)`/g,'<code>$1</code>')
+.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+// Split paragraphs
+return text.split('\n\n').map(p=>{
+  p=p.trim();if(!p)return'';
+  if(p.startsWith('<pre>'))return p;
+  if(p.startsWith('- ')||p.startsWith('* '))return'<ul>'+p.split('\n').map(l=>'<li>'+l.replace(/^[-*] /,'')+'</li>').join('')+'</ul>';
+  if(/^\d+\. /.test(p))return'<ol>'+p.split('\n').map(l=>'<li>'+l.replace(/^\d+\. /,'')+'</li>').join('')+'</ol>';
+  return'<p>'+p.replace(/\n/g,'<br>')+'</p>'
+}).join('')}
+
+async function sendChat(){if(chatBusy||!aJobId)return;const inp=document.getElementById('chatIn');
+const msg=inp.value.trim();if(!msg)return;inp.value='';inp.disabled=true;chatBusy=true;
+document.getElementById('chatSend').disabled=true;
+try{await streamChat({prompt:msg})}finally{inp.disabled=false;chatBusy=false;
+document.getElementById('chatSend').disabled=false;inp.focus()}}
+
+async function sendCmd(cmd){if(chatBusy||!aJobId)return;chatBusy=true;
+document.querySelectorAll('.chat-cmd').forEach(b=>b.disabled=true);
+let extra='';
+if(cmd==='translate'){extra=prompt('Zielsprache:','English');if(!extra){chatBusy=false;document.querySelectorAll('.chat-cmd').forEach(b=>b.disabled=false);return}}
+try{await streamChat({prompt:'',command:cmd,target_language:extra||'English'})}
+finally{chatBusy=false;document.querySelectorAll('.chat-cmd').forEach(b=>b.disabled=false)}}
+
+async function streamChat(body){const el=document.getElementById('chatMsgs');
+document.getElementById('chatWelcome').style.display='none';
+// Add typing indicator
+const typing=document.createElement('div');typing.className='chat-typing';typing.textContent='Denkt nach';el.appendChild(typing);el.scrollTop=el.scrollHeight;
+try{const r=await fetch(B+'/api/ai/chat/'+aJobId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+if(!r.ok)throw new Error('HTTP '+r.status);
+const reader=r.body.getReader();const dec=new TextDecoder();let text='';
+while(true){const{done,value}=await reader.read();if(done)break;
+text+=dec.decode(value);
+// Remove typing indicator on first chunk
+if(typing.parentElement)typing.remove();
+renderChatMsgs(text);}}catch(e){toast('AI: '+e.message,'err')}
+finally{if(typing.parentElement)typing.remove();
+// Check if segments were updated
+if(aJobId)loadSegs(aJobId)}}
+
+async function clearChat(){if(!aJobId)return;if(!confirm('Chat-Verlauf loeschen?'))return;
+try{await fetch(B+'/api/ai/chat/'+aJobId,{method:'DELETE'});
+const el=document.getElementById('chatMsgs');el.innerHTML='';
+document.getElementById('chatWelcome').style.display='block';toast('Chat geloescht')}catch(e){}}
+
+// ── Keyboard ──
+document.addEventListener('keydown',e=>{
+if(e.key==='F1'){e.preventDefault();toggleHelp();return}
+// Close modals on Escape (unless in special modes — handled by new handler)
+if(e.key==='Escape'&&!tttActive&&!fskActive){
+  const tm=document.getElementById('tagModal');if(tm.classList.contains('open')){tm.classList.remove('open');return}
+  const lb=document.getElementById('libModal');if(lb.classList.contains('open')){lb.classList.remove('open');return}
+  const m=document.getElementById('helpModal');if(m.classList.contains('open')){m.classList.remove('open');return}
+  const c=document.getElementById('chatPanel');if(c.classList.contains('open')){c.classList.remove('open');return}
+}
+// Input fields: only undo/redo
+if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'){if(e.ctrlKey&&e.key==='z'){e.preventDefault();doUndo()}if(e.ctrlKey&&e.key==='y'){e.preventDefault();doRedo()}return}
+// Skip basic shortcuts when in special modes
+if(tttActive||fskActive)return;
+if(e.code==='Space'){e.preventDefault();togglePlay()}
+if(e.ctrlKey&&e.key==='z'){e.preventDefault();doUndo()}
+if(e.ctrlKey&&e.key==='y'){e.preventDefault();doRedo()}
+if(e.ctrlKey&&e.key==='f'){e.preventDefault();document.getElementById('srchIn').focus()}
+if(e.key==='ArrowLeft'){e.preventDefault();skipTo(-2)}
+if(e.key==='ArrowRight'){e.preventDefault();skipTo(2)}})
+
+// ── Rhyme Scheme Analysis ──
+async function analyzeRhyme(){
+if(!aJobId)return;
+const el=document.getElementById('rhymeScheme');
+const stats=document.getElementById('rhymeStats');
+const map=document.getElementById('rhymeMap');
+el.innerHTML='<div style="color:var(--dim);font-size:.75rem">Analysiere...</div>';
+try{
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/rhyme')).json();
+// Scheme visualization
+const colors=['#00e5a0','#00b8ff','#ff6b9d','#ffd700','#b8a0ff','#ff8c42','#42f5e0','#ff4242',
+  '#a0ff60','#60a0ff','#ff60a0','#ffa060','#60ffa0','#a060ff','#ff6060','#60ff60'];
+const labelColor={};let ci=0;
+r.labels.forEach(l=>{if(!labelColor[l])labelColor[l]=colors[ci++%colors.length]});
+// Get segment texts
+const lines=cSegs.map(s=>s.text);
+let schH='<div class="rhyme-grid">';
+r.labels.forEach((l,i)=>{
+  const txt=lines[i]||'';
+  const endWord=txt.trim().split(/\s+/).pop()||'';
+  const c=labelColor[l]||'var(--dim)';
+  schH+=`<div class="rhyme-line" style="border-color:${c}30" onclick="playSeg(${i})" title="${esc(txt)}">
+    <span class="rhyme-label" style="color:${c}">${l}</span>
+    <span class="rhyme-text">${esc(txt.slice(0,45))}</span>
+    <span class="rhyme-end" style="color:${c}">${esc(endWord)}</span></div>`});
+schH+='</div>';
+el.innerHTML=schH;
+// Stats
+let stH=`<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:.7rem;margin-top:6px">`;
+stH+=`<span>Muster: <b style="font-family:var(--mono);letter-spacing:1px">${esc(r.scheme.slice(0,60))}${r.scheme.length>60?'...':''}</b></span>`;
+stH+=`<span>Dichte: <b style="color:var(--accent)">${(r.density*100).toFixed(0)}%</b></span>`;
+stH+=`<span>Paare: <b>${r.pairs.length}</b></span>`;
+if(r.internal.length)stH+=`<span style="color:#b8a0ff">Internal: <b>${r.internal.length}</b></span>`;
+if(r.multi.length)stH+=`<span style="color:#ffd700">Multi: <b>${r.multi.length}</b></span>`;
+stH+='</div>';
+stats.innerHTML=stH;
+// Pairs
+let pairsH='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">';
+r.pairs.slice(0,30).forEach(p=>{
+  pairsH+=`<span class="rhyme-pair end" title="Score: ${p.score}">${esc(p.words[0])} ↔ ${esc(p.words[1])}</span>`});
+r.internal.slice(0,15).forEach(p=>{
+  pairsH+=`<span class="rhyme-pair internal" title="Internal">${esc(p.words[0])} ↔ ${esc(p.words[1])}</span>`});
+r.multi.slice(0,10).forEach(p=>{
+  pairsH+=`<span class="rhyme-pair multi" title="Multi-syllabic">${esc(p.words[0])} ↔ ${esc(p.words[1])}</span>`});
+pairsH+='</div>';
+map.innerHTML=pairsH;
+toast(`Reimschema: ${r.scheme.slice(0,20)}... (${r.pairs.length} Paare, ${(r.density*100).toFixed(0)}%)`)
+}catch(e){el.innerHTML=`<div style="color:var(--danger)">${e.message}</div>`}}
+
+// ── Auto CPS Fix ──
+async function doAutoFixCps(){
+if(!aJobId)return;
+const maxCps=parseFloat(prompt('Max CPS Limit:','22'))||22;
+try{
+toast('CPS Fix läuft...');
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/auto-fix-cps?max_cps='+maxCps,{method:'POST'})).json();
+loadSegs(aJobId);
+toast(`CPS Fix: ${r.segments_split} gesplittet, max CPS ${r.max_cps_before}→${r.max_cps_after}`)
+}catch(e){toast('CPS Fix: '+e.message,'err')}}
+
+// ── Karaoke HTML Export ──
+async function doKaraokeHtml(theme){
+if(!aJobId)return;
+try{
+toast('Karaoke HTML generieren...');
+const url=B+'/api/jobs/'+aJobId+'/karaoke-html?theme='+theme+'&embed_audio=false';
+const resp=await fetch(url,{method:'POST'});
+if(!resp.ok)throw new Error(await resp.text());
+const blob=await resp.blob();
+const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+a.download=(aJobId+'_karaoke_'+theme+'.html');a.click();URL.revokeObjectURL(a.href);
+toast('Karaoke HTML heruntergeladen ('+theme+')')
+}catch(e){toast('Karaoke: '+e.message,'err')}}
+
+// ── Export Presets ──
+async function applyPreset(name){
+if(!aJobId)return;
+try{
+toast('Export Preset: '+name+'...');
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/export-preset/'+name,{method:'POST'})).json();
+loadSegs(aJobId);
+toast(`Preset "${r.name}": ${r.exported.join(', ')}`)
+}catch(e){toast('Preset: '+e.message,'err')}}
+
+// ── Gap Scanner ──
+function doGapScan(){
+if(!cSegs.length)return;
+const results=[];
+for(let i=0;i<cSegs.length-1;i++){
+  const gap=cSegs[i+1].start-cSegs[i].end;
+  if(gap>2.0){results.push({type:'gap',idx:i,value:gap,
+    desc:`${fmt(cSegs[i].end)} → ${fmt(cSegs[i+1].start)}: ${gap.toFixed(1)}s Lücke`})}
+  if(gap<-0.05){results.push({type:'overlap',idx:i,value:Math.abs(gap),
+    desc:`#${i+1}↔#${i+2}: ${Math.abs(gap).toFixed(2)}s Overlap`})}}
+// Also check first/last
+if(cSegs[0].start>3){results.unshift({type:'gap',idx:-1,value:cSegs[0].start,
+  desc:`Start: ${cSegs[0].start.toFixed(1)}s Vorlauf`})}
+document.getElementById('gapResults').style.display='block';
+const el=document.getElementById('gapList');
+if(!results.length){el.innerHTML='<div style="color:var(--accent);font-size:.75rem;padding:8px">✅ Keine Probleme gefunden</div>';
+toast('Keine Gaps/Overlaps');return}
+el.innerHTML=results.map(r=>`<div class="gap-item ${r.type}" onclick="${r.idx>=0?'playSeg('+r.idx+')':''}">
+  <span class="gap-badge ${r.type==='gap'?'warn':'err'}">${r.type==='gap'?'GAP':'OVL'}</span>
+  <span>${esc(r.desc)}</span>
+  <span style="margin-left:auto;font-family:var(--mono);font-size:.65rem;color:var(--dim)">${r.value.toFixed(2)}s</span>
+</div>`).join('');
+toast(`${results.length} Probleme: ${results.filter(r=>r.type==='gap').length} Gaps, ${results.filter(r=>r.type==='overlap').length} Overlaps`)}
+
+// ── CPS Heatmap ──
+function doSegHeatmap(){
+if(!cSegs.length||!wfDur)return;
+document.getElementById('heatmapCard').style.display='block';
+const cv=document.getElementById('heatCv');
+const rect=cv.parentElement.getBoundingClientRect();
+cv.width=rect.width*2;cv.height=120;
+const ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);
+// Draw background
+ctx.fillStyle='var(--bg3)';ctx.fillRect(0,0,cv.width,cv.height);
+// Draw segments as colored bars
+for(const s of cSegs){
+  const dur=s.end-s.start;
+  const cps=dur>0?s.text.length/dur:0;
+  const conf=s.confidence||0.5;
+  const x1=s.start/wfDur*cv.width;
+  const x2=s.end/wfDur*cv.width;
+  const w=Math.max(1,x2-x1);
+  // CPS color: green→yellow→orange→red
+  let color;
+  if(cps<15)color='rgba(0,229,160,0.7)';
+  else if(cps<20)color='rgba(245,166,35,0.7)';
+  else if(cps<25)color='rgba(255,140,0,0.85)';
+  else color='rgba(231,76,60,0.9)';
+  // Top half: CPS
+  ctx.fillStyle=color;
+  const h=Math.min(cv.height/2,cps*2);
+  ctx.fillRect(x1,cv.height/2-h,w,h);
+  // Bottom half: confidence
+  const ch=conf*(cv.height/2);
+  ctx.fillStyle=conf>=.8?'rgba(0,184,255,0.4)':conf>=.6?'rgba(245,166,35,0.4)':'rgba(231,76,60,0.4)';
+  ctx.fillRect(x1,cv.height/2,w,ch)}
+// Center line
+ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(0,cv.height/2);ctx.lineTo(cv.width,cv.height/2);ctx.stroke();
+// Labels
+ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px sans-serif';
+ctx.fillText('CPS ↑',4,12);ctx.fillText('Conf ↓',4,cv.height-4);
+toast('Heatmap: oben=CPS, unten=Confidence')}
+
+function seekHM(ev){
+if(!wfDur)return;
+const r=ev.currentTarget.getBoundingClientRect();
+au.currentTime=(ev.clientX-r.left)/r.width*wfDur}
+
+// ── Gap Filler ──
+async function doFillGaps(){
+if(!aJobId)return;
+const minGap=parseFloat(prompt('Min Gap (Sekunden):','2'))||2;
+try{toast('Gaps füllen...');
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/fill-gaps?min_gap='+minGap+'&fill_text=%E2%99%AA',{method:'POST'})).json();
+loadSegs(aJobId);
+toast(`${r.gaps_filled} Gaps gefüllt, ${r.micro_gaps_merged} Micro-Gaps merged (${r.total_gap_duration}s total)`)
+}catch(e){toast('Gap fill: '+e.message,'err')}}
+
+// ── Redistribute Timing ──
+async function doRedistribute(){
+if(!aJobId)return;
+if(!confirm('Alle Timestamps gleichmäßig neu verteilen? (Undo möglich)'))return;
+try{toast('Timing wird neu verteilt...');
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/redistribute-timing',{method:'POST'})).json();
+loadSegs(aJobId);
+toast(`Timing verteilt: ${r.count} Segmente über ${r.duration.toFixed(1)}s`)
+}catch(e){toast('Redistribute: '+e.message,'err')}}
+
+// ── Text Statistics ──
+async function doTextStats(){
+if(!aJobId)return;
+try{toast('Text analysieren...');
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/text-stats')).json();
+document.getElementById('textStatsCard').style.display='block';
+// Stats grid
+document.getElementById('textStatsGrid').innerHTML=[
+  sv(r.total_words,'Wörter'),sv(r.unique_words,'Unique'),
+  sv(r.total_syllables,'Silben'),sv(r.total_lines,'Zeilen'),
+  sv(r.avg_words_per_line,'∅ W/Zeile'),sv(r.avg_word_length,'∅ Wortlänge'),
+  sv(r.avg_syllables_per_word,'∅ Silben/W'),
+  sv((r.type_token_ratio*100).toFixed(1)+'%','Wortschatz (TTR)',r.type_token_ratio<0.3),
+  sv(r.hapax_legomena,'Einmalwörter'),
+  sv((r.flow_score*100).toFixed(0)+'%','Flow Score'),
+  sv(fmt(r.reading_time_sec),'Lesezeit'),
+].join('');
+// Top words
+let wH='<div style="font-size:.65rem;color:var(--dim);margin-bottom:4px">Top Wörter:</div>';
+wH+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+r.top_words.slice(0,25).forEach(w=>{
+  const sz=Math.max(10,Math.min(18,8+w.count));
+  wH+=`<span style="font-size:${sz}px;padding:1px 5px;border-radius:3px;background:var(--bg3);border:1px solid var(--border);font-family:var(--mono)">${esc(w.word)}<sup style="font-size:8px;color:var(--dim)">${w.count}</sup></span>`});
+wH+='</div>';
+document.getElementById('textStatsWords').innerHTML=wH;
+// Syllable distribution
+let sH='<div style="font-size:.65rem;color:var(--dim);margin-bottom:4px;margin-top:8px">Silbenverteilung:</div>';
+sH+='<div style="display:flex;align-items:flex-end;gap:2px;height:40px">';
+const maxSyl=Math.max(...Object.values(r.syllable_distribution));
+for(const[syl,count]of Object.entries(r.syllable_distribution)){
+  const h=count/maxSyl*36;
+  sH+=`<div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+    <div style="width:20px;height:${h}px;background:var(--accent);border-radius:2px 2px 0 0;opacity:.7"></div>
+    <span style="font-size:8px;color:var(--dim)">${syl}</span></div>`}
+sH+='</div>';
+document.getElementById('textStatsSyl').innerHTML=sH;
+toast(`Text: ${r.total_words} Wörter, TTR ${(r.type_token_ratio*100).toFixed(0)}%, Flow ${(r.flow_score*100).toFixed(0)}%`)
+}catch(e){toast('Stats: '+e.message,'err')}}
+
+// ── Remove Short ──
+async function doRemoveShort(){
+if(!aJobId)return;
+try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/segments/remove-short',{method:'POST'})).json();
+loadSegs(aJobId);toast(`${r.removed} kurze Segmente entfernt, ${r.remaining} übrig`)
+}catch(e){toast('Remove: '+e.message,'err')}}
+
+// ── Normalize Text ──
+async function doNormalizeText(){
+if(!aJobId)return;
+try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/segments/normalize-text',{method:'POST'})).json();
+loadSegs(aJobId);toast(`${r.changed}/${r.total} Segmente normalisiert`)
+}catch(e){toast('Normalize: '+e.message,'err')}}
+
+// ── Export All ──
+async function doExportAll(){
+if(!aJobId)return;
+try{toast('Alle Formate exportieren...');
+await applyPreset('karaoke');
+await doKaraokeHtml('dark');
+toast('Alle Formate exportiert!')}catch(e){toast('Export: '+e.message,'err')}}
+
+// ── Library ──
+let libPage=0,libST=null,libPerPage=20;
+function toggleLibrary(){const m=document.getElementById('libModal');m.classList.toggle('open');if(m.classList.contains('open')){libPage=0;loadLibrary()}}
+async function loadLibrary(){
+const q=document.getElementById('libSearch').value.trim();
+try{const r=await(await fetch(B+`/api/library?limit=${libPerPage}&offset=${libPage*libPerPage}&q=${encodeURIComponent(q)}`)).json();
+const el=document.getElementById('libList');el.innerHTML='';
+document.getElementById('libCount').textContent=`${r.total} Einträge`;
+document.getElementById('libPrev').disabled=libPage===0;
+document.getElementById('libNext').disabled=(libPage+1)*libPerPage>=r.total;
+if(!r.items.length){el.innerHTML='<div class="lib-empty">Keine Transcriptions gefunden</div>';return}
+for(const it of r.items){
+const d=new Date(it.created_at);const ds=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'});
+const dur=it.duration_sec>0?fmt(it.duration_sec):'';
+const conf=it.avg_confidence>0?`${(it.avg_confidence*100).toFixed(0)}%`:'';
+const rev=it.needs_review>0?`<span class="li-badge rev">⚠ ${it.needs_review}</span>`:'';
+const bpm=it.bpm>0?`<span style="color:var(--accent)">${it.bpm.toFixed(0)}♩</span>`:'';
+const div=document.createElement('div');div.className='lib-item';
+div.innerHTML=`<div class="li-title" title="${esc(it.source_filename)}">${esc(it.title)}</div>
+<div class="li-meta">${esc(it.backend)} · ${esc(it.language||'?')} · ${dur} ${conf} ${bpm} ${rev} · ${ds}</div>
+<button class="li-del" onclick="event.stopPropagation();delLib('${it.id}','${esc(it.title)}')" title="Löschen">🗑</button>`;
+div.onclick=()=>openLib(it);el.appendChild(div)}
+}catch(e){toast('Library: '+e.message,'err')}}
+
+async function openLib(item){
+toggleLibrary();
+// Strategy 1: If job still in active session, use native selJob
+if(item.job_id){
+  try{const j=await(await fetch(B+'/api/jobs/'+item.job_id)).json();
+  if(j.status==='completed'){selJob(item.job_id);toast(`"${item.title}" geladen`);return}}catch(e){}}
+// Strategy 2: Reconstruct UI from library record
+try{const r=await(await fetch(B+'/api/library/'+item.id)).json();
+await loadFromLibrary(r)}catch(e){toast('Fehler: '+e.message,'err')}}
+
+async function loadFromLibrary(r){
+// Show editor section, hide empty state
+document.getElementById('es').style.display='none';
+const jd=document.getElementById('jd');jd.style.display='flex';jd.style.flexDirection='column';jd.style.gap='12px';
+
+// Header info
+document.getElementById('dI').textContent='📚';
+document.getElementById('dF').textContent=r.source_filename||r.title;
+document.getElementById('dS').textContent='library';
+document.getElementById('dP').style.width='100%';
+const st=document.getElementById('dSt');
+st.textContent=`${r.backend} · ${r.language||'auto'} · ${r.segments_count} seg`;
+st.style.color='var(--dim)';
+
+// Audio player — try job output dir, then uploads
+if(r.job_id&&r.source_filename){
+  au.src=B+'/data/output/'+r.job_id+'/'+r.source_filename;
+  au.onerror=()=>{au.src=B+'/data/uploads/'+r.source_filename};
+  document.getElementById('playerSec').style.display='block';
+  au.onloadedmetadata=()=>updPT();
+  au.ontimeupdate=()=>{updPT();hlSeg();updKaraoke()}
+}
+
+// Segments — parse segments_json from library
+if(r.segments_json){
+  try{
+    cSegs=JSON.parse(r.segments_json);
+    // reconstruct aJobId for segment editing if job output exists
+    aJobId=r.job_id||null;
+    renderSegs();drawMM();
+    // Try loading waveform if job output exists
+    if(r.job_id){loadWF(r.job_id).catch(()=>{})}
+  }catch(e){console.warn('Segments parse error:',e)}
+}
+
+// Downloads section
+const dlSec=document.getElementById('dlSec');
+if(r.job_id){
+  dlSec.style.display='block';
+  document.getElementById('zipDl').href=B+'/api/jobs/'+r.job_id+'/download-zip';
+  let dlH='';
+  // Reconstruct download links from job output directory
+  const stem=r.source_filename?r.source_filename.replace(/\.[^.]+$/,''):'output';
+  for(const[ext,label]of[['srt','SRT'],['ass','ASS'],['vtt','VTT'],['lrc','LRC'],['txt','TXT']]){
+    const fn=stem+'.'+ext;
+    dlH+=`<a class="dl" href="${B}/api/jobs/${r.job_id}/download/${fn}" download><span class="x">${ext.toUpperCase()}</span>${label}</a>`}
+  dlH+=`<span style="font-size:.65rem;color:var(--dim);margin-left:4px">${r.segments_count} seg · ${r.backend} · ${r.language||'auto'}${r.has_word_timestamps?' · ✓words':''}${r.needs_review>0?` · <b style="color:var(--warn)">${r.needs_review}⚠</b>`:''}</span>`;
+  document.getElementById('dlBtns').innerHTML=dlH
+}else{dlSec.style.display='none'}
+
+// Editor section
+document.getElementById('edSec').style.display='block';
+
+// Report tab — show metadata + confidence summary
+const repEl=document.getElementById('repC');
+if(repEl){
+  let repText=`📚 Library: ${r.title}\n`;
+  repText+=`${'─'.repeat(50)}\n`;
+  repText+=`Backend: ${r.backend}\nLanguage: ${r.language||'auto'}\n`;
+  repText+=`Duration: ${fmt(r.duration_sec)}\nSegments: ${r.segments_count}\n`;
+  if(r.bpm>0)repText+=`BPM: ${r.bpm.toFixed(1)}\n`;
+  repText+=`Confidence: ${(r.avg_confidence*100).toFixed(1)}%\n`;
+  repText+=`Needs Review: ${r.needs_review}\n`;
+  repText+=`Word Timestamps: ${r.has_word_timestamps?'✓':'✗'}\n`;
+  repText+=`Created: ${new Date(r.created_at).toLocaleString('de-DE')}\n`;
+  if(r.tags&&r.tags.length)repText+=`Tags: ${r.tags.join(', ')}\n`;
+  repEl.textContent=repText}
+
+// Stats tab — basic info from library data
+const statsEl=document.getElementById('statsGrid');
+if(statsEl){
+  statsEl.innerHTML=[
+    sv(r.segments_count,'Segments'),
+    sv(fmt(r.duration_sec),'Dauer'),
+    sv((r.avg_confidence*100).toFixed(0)+'%','∅ Confidence'),
+    sv(r.needs_review,'⚠ Review',r.needs_review>0),
+    r.bpm>0?sv(r.bpm.toFixed(1),'♩ BPM'):'',
+    sv(r.has_word_timestamps?'✓':'✗','Word-TS'),
+  ].join('')}
+
+// Switch to segments tab
+stab('seg');
+toast(`"${r.title}" aus Library geladen`)}
+
+async function delLib(id,title){if(!confirm(`"${title}" wirklich löschen?`))return;
+try{await fetch(B+'/api/library/'+id,{method:'DELETE'});toast('Gelöscht');loadLibrary()}catch(e){toast('Err','err')}}
+
+// ── Video Render ──
+async function startRender(){
+const bgFile=document.getElementById('vrBg').files[0];
+const audioFile=document.getElementById('vrAudio').files[0];
+if(!bgFile){toast('Hintergrund-Datei auswählen!','err');return}
+if(!aJobId){toast('Erst transkribieren!','err');return}
+const preset=document.getElementById('vrPreset').value;
+const pos=document.getElementById('vrPos').value;
+toast('Video-Render startet...');
+const fd=new FormData();
+fd.append('background_file',bgFile);
+fd.append('source_job_id',aJobId);
+if(audioFile)fd.append('audio_file',audioFile);
+fd.append('options',JSON.stringify({preset,position:pos}));
+try{const r=await fetch(B+'/api/render-video',{method:'POST',body:fd});
+const j=await r.json();
+if(r.ok){toast('Render-Job gestartet: '+j.job_id);
+  setTimeout(()=>window.open(B+'/api/render/'+j.job_id+'/download','_blank'),5000)}
+else toast(j.detail||'Err','err')
+}catch(e){toast('Render: '+e.message,'err')}}
+
+// ── Init ──
+checkH();checkAI();setInterval(checkH,30000);connectSSE();startPoll();
+window.addEventListener('resize',()=>{if(wfPeaks)drawWF()})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ██ NEW FEATURES v3.2
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Theme System ──────────────────────────────────────────────────────────────
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t==='dark'?'':t);
+  document.querySelectorAll('.theme-sw button').forEach(b=>b.classList.toggle('on',
+    b.classList.contains('tsw-'+t)));
+  try{localStorage.setItem('kst-theme',t)}catch(e){}
+  // Redraw canvases
+  if(wfPeaks)drawWF();if(specAn)drawSpec()}
+(function(){try{const t=localStorage.getItem('kst-theme');if(t&&t!=='dark')setTheme(t)}catch(e){}})();
+
+// ── Audio Spectrum Visualizer (Web Audio API) ─────────────────────────────────
+let audioCtx=null,analyser=null,specAn=null,specRaf=0;
+function initSpectrum(){
+  if(audioCtx)return;
+  try{
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=256;analyser.smoothingTimeConstant=0.82;
+    const src=audioCtx.createMediaElementSource(au);
+    src.connect(analyser);analyser.connect(audioCtx.destination);
+    specAn=new Uint8Array(analyser.frequencyBinCount);
+    drawSpec()
+  }catch(e){console.warn('Spectrum init failed:',e)}}
+
+function drawSpec(){
+  if(!analyser||!specAn)return;
+  const cv=document.getElementById('specCv');if(!cv)return;
+  const r=cv.parentElement.getBoundingClientRect();
+  cv.width=r.width*2;cv.height=64;
+  const ctx=cv.getContext('2d');
+  const bars=analyser.frequencyBinCount;
+  const w=cv.width/bars;
+  function frame(){
+    specRaf=requestAnimationFrame(frame);
+    analyser.getByteFrequencyData(specAn);
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const accent2=getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim();
+    for(let i=0;i<bars;i++){
+      const v=specAn[i]/255;
+      const h=v*cv.height;
+      const grad=ctx.createLinearGradient(0,cv.height-h,0,cv.height);
+      grad.addColorStop(0,accent);grad.addColorStop(1,accent2+'40');
+      ctx.fillStyle=grad;
+      ctx.fillRect(i*w,cv.height-h,w-1,h)}}
+  frame()}
+
+au.addEventListener('play',()=>{initSpectrum();if(audioCtx?.state==='suspended')audioCtx.resume()});
+
+// ── A/B Loop Region ───────────────────────────────────────────────────────────
+let abA=null,abB=null,abDragging=false,abStartX=0;
+function loopDragStart(e){
+  if(!wfDur||e.button!==0||!e.shiftKey)return;
+  e.preventDefault();abDragging=true;
+  const r=e.currentTarget.getBoundingClientRect();
+  abStartX=(e.clientX-r.left)/r.width;
+  abA=abStartX*wfDur;abB=abA}
+function loopDragMove(e){
+  if(!abDragging||!wfDur)return;
+  const r=document.getElementById('wfC').getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width;
+  abB=Math.max(0,Math.min(1,x))*wfDur;
+  renderABLoop()}
+function loopDragEnd(e){
+  if(!abDragging)return;abDragging=false;
+  if(abA!==null&&abB!==null&&Math.abs(abB-abA)>0.3){
+    if(abA>abB){const t=abA;abA=abB;abB=t}
+    document.getElementById('abClear').style.display='inline-block';
+    toast(`A/B Loop: ${fmt(abA)} → ${fmt(abB)}`)
+  }else{clearABLoop()}}
+function renderABLoop(){
+  const el=document.getElementById('loopRegion');
+  const la=document.getElementById('loopLabelA');
+  const lb=document.getElementById('loopLabelB');
+  if(abA===null||abB===null||!wfDur){el.style.display='none';la.style.display='none';lb.style.display='none';return}
+  let a=Math.min(abA,abB)/wfDur*100,b=Math.max(abA,abB)/wfDur*100;
+  el.style.display='block';el.style.left=a+'%';el.style.width=(b-a)+'%';
+  la.style.display='block';la.style.left=a+'%';
+  lb.style.display='block';lb.style.left=b+'%'}
+function clearABLoop(){abA=null;abB=null;renderABLoop();
+  document.getElementById('abClear').style.display='none'}
+// A/B loop enforcement during playback
+au.addEventListener('timeupdate',()=>{
+  if(abA!==null&&abB!==null&&abA<abB){
+    if(au.currentTime>=abB)au.currentTime=abA;
+    if(au.currentTime<abA-0.5)au.currentTime=abA}});
+
+// ── Split at Playhead ─────────────────────────────────────────────────────────
+async function splitAtPlayhead(){
+  if(!aJobId||!cSegs.length)return;
+  const t=au.currentTime;
+  // Find segment containing current time
+  let idx=-1;
+  for(let i=0;i<cSegs.length;i++){
+    if(t>=cSegs[i].start&&t<cSegs[i].end){idx=i;break}}
+  if(idx<0){toast('Kein Segment bei Playhead','err');return}
+  try{
+    const r=await(await fetch(B+'/api/jobs/'+aJobId+'/segments/split',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({index:idx,at_time:t})})).json();
+    loadSegs(aJobId);toast(`Segment #${idx+1} gesplittet bei ${fmt(t)}`)
+  }catch(e){toast('Split: '+e.message,'err')}}
+
+// ── Tap-to-Time Mode ──────────────────────────────────────────────────────────
+let tttActive=false,tttTaps=[],tttLineIdx=0;
+function toggleTapToTime(){
+  if(!cSegs.length&&!tttActive){toast('Erst Segmente laden','err');return}
+  const ov=document.getElementById('tttOverlay');
+  if(tttActive){
+    tttActive=false;ov.classList.remove('open');au.pause();
+    if(tttTaps.length>1)applyTapTimings();return}
+  tttActive=true;tttTaps=[];tttLineIdx=0;
+  ov.classList.add('open');renderTTTLines();
+  au.currentTime=0;
+  toast('Tap-to-Time: Audio startet, SPACE für jede Zeile drücken')}
+
+function renderTTTLines(){
+  const el=document.getElementById('tttLines');if(!el)return;
+  let h='';
+  cSegs.forEach((s,i)=>{
+    const cls=i<tttLineIdx?'ttt-line done':i===tttLineIdx?'ttt-line active':'ttt-line';
+    h+=`<div class="${cls}" id="tttL${i}">${esc(s.text)}</div>`});
+  el.innerHTML=h;
+  // Scroll active into view
+  const act=document.getElementById('tttL'+tttLineIdx);
+  if(act)act.scrollIntoView({behavior:'smooth',block:'center'})}
+
+function tttTap(){
+  if(!tttActive)return;
+  const t=au.currentTime;
+  tttTaps.push(t);
+  // Flash effect
+  const fl=document.getElementById('tttFlash');
+  fl.style.opacity='0.15';setTimeout(()=>fl.style.opacity='0',80);
+  // Counter pulse
+  const ctr=document.getElementById('tttCounter');
+  ctr.textContent=tttTaps.length;
+  ctr.classList.add('pulse');setTimeout(()=>ctr.classList.remove('pulse'),100);
+  // Advance line
+  tttLineIdx++;
+  if(tttLineIdx>=cSegs.length){
+    toast('Alle Zeilen getappt! Anwenden...');
+    setTimeout(()=>{tttActive=false;
+      document.getElementById('tttOverlay').classList.remove('open');
+      au.pause();applyTapTimings()},500);return}
+  renderTTTLines();
+  // Progress bar
+  const pct=tttLineIdx/cSegs.length*100;
+  document.getElementById('tttPBar').style.width=pct+'%'}
+
+function tttStartAudio(){
+  if(!tttActive)return;
+  au.currentTime=0;au.play();
+  document.getElementById('tttHintStart').style.display='none';
+  document.getElementById('tttHintTap').style.display='block'}
+
+function applyTapTimings(){
+  if(tttTaps.length<2||!cSegs.length)return;
+  const was=[...cSegs];
+  // Each tap = start of that line, end of previous line
+  for(let i=0;i<Math.min(tttTaps.length,cSegs.length);i++){
+    cSegs[i].start=Math.round(tttTaps[i]*1000)/1000;
+    if(i>0)cSegs[i-1].end=cSegs[i].start;
+    // Estimate end of last tapped segment
+    if(i===tttTaps.length-1&&i<cSegs.length-1){
+      const avgDur=tttTaps.length>1?(tttTaps[tttTaps.length-1]-tttTaps[0])/(tttTaps.length-1):2;
+      cSegs[i].end=Math.round((cSegs[i].start+avgDur)*1000)/1000}}
+  // Save to server
+  if(aJobId){
+    fetch(B+'/api/jobs/'+aJobId+'/segments',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(cSegs)}).then(()=>loadSegs(aJobId))}
+  renderSegs();drawMM();
+  toast(`Tap-to-Time: ${tttTaps.length} Timestamps angewendet`)}
+
+// ── Fullscreen Karaoke Mode ───────────────────────────────────────────────────
+let fskActive=false;
+function toggleFSKaraoke(){
+  if(!cSegs.length){toast('Erst Segmente laden','err');return}
+  const el=document.getElementById('fskOverlay');
+  if(fskActive){fskActive=false;el.classList.remove('open');return}
+  fskActive=true;el.classList.add('open');
+  if(au.paused)au.play();
+  fskRender()}
+function fskRender(){
+  if(!fskActive)return;
+  requestAnimationFrame(fskRender);
+  const t=au.currentTime;
+  const txt=document.getElementById('fskText');
+  const nxt=document.getElementById('fskNext');
+  const bar=document.getElementById('fskBar');
+  const time=document.getElementById('fskTime');
+  // Find current segment
+  let ci=-1;
+  for(let i=0;i<cSegs.length;i++){
+    if(t>=cSegs[i].start&&t<cSegs[i].end){ci=i;break}}
+  if(ci<0){
+    // Between segments — find next
+    for(let i=0;i<cSegs.length;i++){if(cSegs[i].start>t){
+      txt.innerHTML=`<span style="opacity:.3">♪</span>`;
+      nxt.textContent=cSegs[i].text;break};
+      if(i===cSegs.length-1){txt.innerHTML='<span style="opacity:.3">— Ende —</span>';nxt.textContent=''}}
+  }else{
+    const seg=cSegs[ci];
+    // Word-level highlighting if available
+    if(seg.words&&seg.words.length>1){
+      let wH='';
+      for(const w of seg.words){
+        const hl=t>=w.start&&t<w.end;
+        wH+=`<span class="fsk-word${hl?' hl':''}">${esc(w.word)} </span>`}
+      txt.innerHTML=wH
+    }else{txt.innerHTML=`<span class="fsk-word hl">${esc(seg.text)}</span>`}
+    nxt.textContent=ci<cSegs.length-1?cSegs[ci+1].text:''}
+  // Progress
+  if(wfDur>0)bar.style.width=(t/wfDur*100)+'%';
+  time.textContent=fmt(t)+' / '+fmt(wfDur||0)}
+
+// ── Keyboard Shortcuts (extended) ─────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  // Tap-to-Time intercepts
+  if(tttActive){
+    if(e.code==='Space'){e.preventDefault();if(au.paused)tttStartAudio();else tttTap();return}
+    if(e.key==='Escape'){toggleTapToTime();return}
+    return}
+  // Fullscreen karaoke
+  if(fskActive){
+    if(e.key==='Escape'||e.key==='f'||e.key==='F'){toggleFSKaraoke();return}
+    if(e.code==='Space'){e.preventDefault();togglePlay();return}
+    if(e.key==='ArrowLeft'){e.preventDefault();skipTo(-5);return}
+    if(e.key==='ArrowRight'){e.preventDefault();skipTo(5);return}
+    return}
+  // Normal mode
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key==='t'||e.key==='T'){e.preventDefault();toggleTapToTime();return}
+  if(e.key==='f'&&!e.ctrlKey){e.preventDefault();toggleFSKaraoke();return}
+  if(e.key==='s'&&!e.ctrlKey){e.preventDefault();splitAtPlayhead();return}
+  if(e.key==='c'&&e.shiftKey&&!e.ctrlKey){e.preventDefault();clearABLoop();return}
+});
+
+</script>
+
+<!-- Tap-to-Time Overlay -->
+<div class="ttt-overlay" id="tttOverlay">
+  <div id="tttFlash" class="ttt-flash"></div>
+  <div class="ttt-counter" id="tttCounter">0</div>
+  <div id="tttLines" style="max-height:50vh;overflow-y:auto;width:80vw;display:flex;flex-direction:column;align-items:center;gap:8px"></div>
+  <div class="ttt-progress"><div class="ttt-progress-bar" id="tttPBar" style="width:0%"></div></div>
+  <div class="ttt-hint" id="tttHintStart">▶ SPACE drücken zum Starten</div>
+  <div class="ttt-hint" id="tttHintTap" style="display:none">⎵ SPACE = nächste Zeile &nbsp;|&nbsp; ESC = Abbrechen &amp; anwenden</div>
+</div>
+
+<!-- Fullscreen Karaoke Overlay -->
+<div class="fsk" id="fskOverlay">
+  <div class="fsk-text" id="fskText">♪</div>
+  <div class="fsk-next" id="fskNext"></div>
+  <div class="fsk-progress" id="fskBar" style="width:0%"></div>
+  <div class="fsk-time" id="fskTime"></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,75 @@
+# karaoke-sub-tool configuration
+# Copy to your project root as config.yaml
+
+preprocess:
+  vad:
+    enabled: true
+    aggressiveness: 2          # 0-3 (3 = most aggressive)
+    min_speech_ms: 300
+    min_silence_ms: 500
+  normalize:
+    enabled: true
+    target_lufs: -16.0
+  vocal_isolation:
+    enabled: false
+    model: htdemucs
+    device: cpu                # cpu | cuda
+
+transcription:
+  backend: voxtral             # voxtral | openai_whisper | local_whisper | whisperx
+  language: auto               # de | en | auto
+  word_timestamps: auto        # on | auto | off
+  model: "voxtral-mini-latest" # Voxtral model name / whisperx: large-v3
+  diarize: true                # Speaker diarization (Voxtral)
+
+whisperx:
+  model_size: "large-v3"       # tiny | base | small | medium | large-v3
+  compute_type: "float16"      # float16 | int8 | float32
+  batch_size: 16               # batch size for transcription
+  device: "auto"               # auto | cpu | cuda
+
+refinement:
+  cps: 18.0                    # max characters per second
+  min_duration: 1.0            # min subtitle duration (s)
+  max_duration: 6.0            # max subtitle duration (s)
+  max_chars_per_line: 42
+  max_lines: 2
+  min_gap_ms: 80               # min gap between subtitles (ms)
+  auto_punctuation: false
+  dictionary_path: ""          # path to custom_words.txt
+
+beat_grid:
+  enabled: false
+  bpm: detect                  # number or 'detect'
+  time_signature: "4/4"
+  beat_offset_ms: 0.0
+  snap_tolerance_ms: 80.0
+  snap_strength: 0.5
+
+karaoke:
+  mode: kf                     # k (fill) | kf (fade) | ko (outline wipe)
+  approx_karaoke: true         # approximate word times if not available
+  highlight_color: "&H0000FFFF"  # karaoke highlight color (ASS AABBGGRR)
+
+theme:
+  preset: classic
+  # Presets: classic | neon | high_contrast | landscape_1080p | portrait_1080x1920 | mobile_safe
+  safe_area: ""                # "top,bottom,left,right" in px
+
+preview:
+  duration: "15s"
+  start: "60s"
+  resolution: "1920x1080"
+  background: "#000000"
+  bg_image: ""
+
+cache:
+  enabled: true
+  skip_existing: true
+  force: false
+  id_method: hash              # hash | mtime
+
+confidence:
+  low_threshold: 0.6
+  mark_in_ass: true
+  report_format: json          # json | csv

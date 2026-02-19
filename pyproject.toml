@@ -1,0 +1,16 @@
+[project]
+name = "karaoke-sub-tool"
+version = "3.0.0"
+description = "Professional karaoke subtitle generator with 4 transcription backends, live audio player, and segment editor"
+requires-python = ">=3.10"
+
+[project.scripts]
+karaoke-sub = "main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

@@ -1,0 +1,18 @@
+# Custom Dictionary / Glossar
+# Format: falsch=richtig (ein Eintrag pro Zeile)
+# Lines starting with # are comments
+
+# German corrections
+Strasse=Straße
+groesse=Größe
+ueber=über
+fuer=für
+
+# Brand names / proper nouns
+youtube=YouTube
+spotify=Spotify
+tiktok=TikTok
+
+# Music terms
+acapella=a cappella
+autotune=Auto-Tune

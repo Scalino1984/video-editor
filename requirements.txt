@@ -1,0 +1,43 @@
+# Core / Server
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.6
+python-dotenv>=1.0
+pydantic>=2.0
+pyyaml>=6.0
+httpx>=0.25
+rich>=13.0
+typer[all]>=0.9.0
+mistralai>=1.0
+
+# Audio processing
+numpy>=1.24
+soundfile>=0.12
+webrtcvad>=2.0.10
+
+# AI Chat (PydanticAI v2)
+pydantic-ai>=0.2
+
+# BPM Detection (Essentia preferred, librosa fallback)
+# pip install essentia
+# pip install librosa>=0.10
+
+# Watch mode
+watchdog>=3.0
+
+# Optional: WhisperX (forced alignment)
+# whisperx>=3.1
+# torch>=2.0
+# torchaudio>=2.0
+
+# Optional: OpenAI API (transcription + AI chat)
+# openai>=1.0
+
+# Optional: Anthropic API (AI chat)
+# anthropic>=0.50
+
+# Optional: Local Whisper (faster-whisper)
+# faster-whisper>=0.10
+
+# Optional: Vocal isolation
+# demucs>=4.0
