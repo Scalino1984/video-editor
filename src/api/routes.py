@@ -299,8 +299,9 @@ async def delete_job(job_id: str):
     except Exception:
         pass  # non-critical
 
-    d = tasks.OUTPUT_DIR / job_id
-    if d.exists(): shutil.rmtree(d)
+    d = (tasks.OUTPUT_DIR / job_id).resolve()
+    if d.is_relative_to(tasks.OUTPUT_DIR.resolve()) and d.exists():
+        shutil.rmtree(d)
     with tasks._jobs_lock:
         tasks._jobs.pop(job_id, None)
     return {"deleted": job_id}
@@ -311,7 +312,9 @@ async def delete_job(job_id: str):
 @router.get("/jobs/{job_id}/files")
 async def list_job_files(job_id: str):
     """List available files in a job output directory (works without in-memory job)."""
-    job_dir = tasks.OUTPUT_DIR / job_id
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
     if not job_dir.exists():
         raise HTTPException(404, "Job directory not found")
     files = {}
@@ -355,7 +358,10 @@ async def get_file_content(job_id: str, filename: str):
 # ── Segments CRUD ─────────────────────────────────────────────────────────────
 
 def _load_segs(job_id: str) -> tuple[Path, list[dict]]:
-    p = tasks.OUTPUT_DIR / job_id / "segments.json"
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
+    p = job_dir / "segments.json"
     if not p.exists(): raise HTTPException(404, "Segments not found")
     return p, json.loads(p.read_text(encoding="utf-8"))
 
@@ -669,7 +675,9 @@ async def export_project(job_id: str):
 @router.get("/jobs/{job_id}/download-zip")
 async def download_job_zip(job_id: str):
     """Download entire job output folder as a ZIP file."""
-    job_dir = tasks.OUTPUT_DIR / job_id
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
     if not job_dir.exists():
         raise HTTPException(404, "Job directory not found")
     files = [f for f in job_dir.iterdir() if f.is_file()]
@@ -1544,7 +1552,10 @@ def _separation_sync(job_id: str, audio_path: Path, model: str, device: str,
 @router.get("/separation/{job_id}/stems")
 async def get_separation_stems(job_id: str):
     """Get the stems from a completed separation job."""
-    result_path = tasks.OUTPUT_DIR / job_id / "separation_result.json"
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
+    result_path = job_dir / "separation_result.json"
     if not result_path.exists():
         raise HTTPException(404, "Separation result not found")
     data = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1554,7 +1565,10 @@ async def get_separation_stems(job_id: str):
 @router.get("/separation/{job_id}/download/{stem}")
 async def download_stem(job_id: str, stem: str):
     """Download a specific stem file from a separation job."""
-    result_path = tasks.OUTPUT_DIR / job_id / "separation_result.json"
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
+    result_path = job_dir / "separation_result.json"
     if not result_path.exists():
         raise HTTPException(404, "Separation result not found")
     data = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1565,8 +1579,10 @@ async def download_stem(job_id: str, stem: str):
     stem_file = stem_paths.get(stem)
     if not stem_file:
         raise HTTPException(404, f"Stem '{stem}' not found in results")
-    stem_path = Path(stem_file)
+    stem_path = Path(stem_file).resolve()
+    if not stem_path.is_relative_to(job_dir):
+        raise HTTPException(403, "Access denied")
     if not stem_path.exists():
-        raise HTTPException(404, f"Stem file not found on disk")
+        raise HTTPException(404, "Stem file not found on disk")
     return FileResponse(stem_path, filename=f"{stem}{stem_path.suffix}",
                         media_type="audio/wav" if stem_path.suffix == ".wav" else "audio/mpeg")
