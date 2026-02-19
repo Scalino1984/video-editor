@@ -147,7 +147,12 @@ class VocalSeparator:
         env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
 
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+            from src.utils.media_executor import run_media_subprocess
+            r = run_media_subprocess(
+                cmd, tool="demucs",
+                description=f"demucs {self.model} {stems} {a_path.name}",
+                timeout=timeout, heavy=True, env=env,
+            )
             if r.returncode != 0:
                 error(f"Demucs failed (exit {r.returncode}): {r.stderr.strip()}")
                 return SeparationResult()

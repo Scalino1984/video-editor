@@ -36,6 +36,13 @@ async def health():
     return HealthResponse(status="ok", version="3.2.0", ffmpeg=ff.available, backends=backends)
 
 
+@router.get("/media-queue")
+async def media_queue_status():
+    """Return current media executor status (concurrency, queued/running jobs)."""
+    from src.utils.media_executor import get_media_queue_status
+    return get_media_queue_status()
+
+
 @router.get("/presets")
 async def list_presets():
     from src.export.themes import PRESETS
