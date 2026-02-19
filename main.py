@@ -96,6 +96,7 @@ app.include_router(editor_router)
 # ── Static / WebUI ────────────────────────────────────────────────────────────
 
 STATIC_DIR = Path(__file__).parent / "src" / "static"
+TEMPLATES_DIR = Path(__file__).parent / "src" / "templates"
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 (DATA_DIR / "uploads").mkdir(exist_ok=True)
@@ -104,13 +105,16 @@ DATA_DIR.mkdir(exist_ok=True)
 
 @app.get("/", include_in_schema=False)
 async def serve_ui():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(TEMPLATES_DIR / "index.html")
 
 
 @app.get("/editor", include_in_schema=False)
 async def serve_editor():
-    return FileResponse(STATIC_DIR / "editor.html")
+    return FileResponse(TEMPLATES_DIR / "editor.html")
 
+
+# serve static assets (CSS, JS, favicons, images)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static_files")
 
 # serve output files (for audio playback, preview, downloads)
 app.mount("/data/output", StaticFiles(directory=str(DATA_DIR / "output")), name="output_files")

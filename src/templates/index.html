@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Karaoke Sub Tool v3</title>
+<link rel="icon" type="image/x-icon" href="/static/favicon/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/favicon-180x180.png">
+<link rel="manifest" href="/static/favicon/site.webmanifest">
+<meta name="theme-color" content="#00ffb4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -255,6 +261,37 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .chat-input button{padding:8px 14px;border-radius:7px;font-weight:600}
 .chat-no-ai{padding:20px;text-align:center;color:var(--dim);font-size:.78rem}
 .chat-no-ai code{font-family:var(--mono);font-size:.7rem;background:var(--bg);padding:1px 4px;border-radius:3px;display:inline-block;margin-top:4px}
+/* Ref correction diff */
+.ref-diff{padding:8px 10px;border-radius:8px;font-size:.72rem;background:var(--bg3);border:1px solid var(--border);align-self:stretch}
+.ref-diff-head{font-weight:700;margin-bottom:6px;color:var(--accent)}
+.ref-diff-summary{font-size:.65rem;color:var(--dim);margin-bottom:8px}
+.ref-diff-item{padding:4px 6px;margin:3px 0;border-radius:4px;border-left:3px solid var(--accent2);background:var(--bg)}
+.ref-diff-item .seg-num{font-family:var(--mono);font-size:.6rem;color:var(--dim);margin-bottom:2px}
+.ref-diff-item .old-text{color:var(--warn);text-decoration:line-through;opacity:.7;font-size:.68rem}
+.ref-diff-item .new-text{color:var(--accent);font-weight:500;font-size:.7rem}
+.ref-diff-actions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.ref-diff-actions button{padding:5px 14px;font-size:.72rem;border-radius:6px;font-weight:600}
+/* Merge diff */
+.merge-diff{padding:8px 10px;border-radius:8px;font-size:.72rem;background:var(--bg3);border:1px solid var(--border);align-self:stretch}
+.merge-diff-head{font-weight:700;margin-bottom:6px;color:var(--accent2)}
+.merge-diff-summary{font-size:.65rem;color:var(--dim);margin-bottom:8px}
+.merge-item{padding:5px 6px;margin:3px 0;border-radius:4px;border-left:3px solid var(--accent2);background:var(--bg)}
+.merge-item.skip{border-left-color:var(--warn);opacity:.7}
+.merge-item .m-head{display:flex;gap:6px;align-items:center;font-size:.62rem;color:var(--dim);margin-bottom:2px;font-family:var(--mono)}
+.merge-item .m-head .m-badge{padding:1px 5px;border-radius:3px;font-size:.55rem;font-weight:700;text-transform:uppercase}
+.merge-item .m-badge.ok{background:var(--accent2);color:var(--bg)}
+.merge-item .m-badge.no{background:var(--warn);color:var(--bg)}
+.merge-item .m-texts{font-size:.68rem}
+.merge-item .m-old{color:var(--dim);opacity:.7}
+.merge-item .m-arrow{color:var(--accent2);font-weight:600}
+.merge-item .m-new{color:var(--fg);font-weight:500}
+.merge-item .m-reason{font-size:.58rem;color:var(--warn);margin-top:2px;font-style:italic}
+.merge-actions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.merge-actions button{padding:5px 14px;font-size:.72rem;border-radius:6px;font-weight:600}
+.ref-upload-bar{display:flex;gap:4px;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;background:var(--bg3)}
+.ref-upload-bar label{font-size:.6rem;color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:4px;transition:all .15s}
+.ref-upload-bar label:hover{border-color:var(--accent);color:var(--accent)}
+.ref-upload-bar .ref-filename{font-family:var(--mono);font-size:.58rem;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Library Modal */
 .lib-btn{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0}
 .lib-btn:hover{color:var(--accent);border-color:var(--accent)}
@@ -298,6 +335,21 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .rhyme-end{font-weight:600;margin-left:auto;padding-left:4px;flex-shrink:0}
 .rhyme-pair{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:10px;font-size:.6rem;font-family:var(--mono);border:1px solid}
 .rhyme-pair.end{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.06)}
+/* ── Text Editor Modal ── */
+.sube-bg{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:950;display:none;align-items:center;justify-content:center;padding:12px}
+.sube-bg.open{display:flex}
+.sube{background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:100%;max-width:900px;height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.sube-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sube-head h2{font-size:1rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sube-head .sube-info{font-family:var(--mono);font-size:.6rem;color:var(--dim);background:var(--bg4);padding:2px 6px;border-radius:4px}
+.sube-body{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:0}
+.sube-hint{font-size:.6rem;color:var(--dim);padding:6px 16px;background:var(--bg3);border-bottom:1px solid var(--border);flex-shrink:0}
+.sube-ta{flex:1;width:100%;resize:none;font-family:var(--mono);font-size:.82rem;line-height:1.6;padding:12px 16px;border:none;outline:none;background:var(--bg);color:var(--text);tab-size:2}
+.sube-ta:focus{background:var(--bg)}
+.sube-foot{display:flex;align-items:center;gap:6px;padding:8px 16px;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg3)}
+.sube-foot .sube-stats{font-size:.65rem;color:var(--dim);flex:1;font-family:var(--mono)}
+.sube-foot button{padding:5px 12px;font-size:.75rem}
+.sube-dirty{color:var(--warn) !important}
 .rhyme-pair.internal{border-color:#b8a0ff;color:#b8a0ff;background:rgba(184,160,255,.06)}
 .rhyme-pair.multi{border-color:#ffd700;color:#ffd700;background:rgba(255,215,0,.06)}
 /* Gap scanner */
@@ -492,6 +544,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
           <button class="btn-s btn-sm" onclick="fixGaps()">🔧 Fix Gaps</button>
           <button class="btn-s btn-sm" onclick="applyDict()">📖 Dict</button>
           <div style="margin-left:auto;display:flex;gap:3px">
+            <button class="btn btn-sm" onclick="openSubEditor()" title="Subtitle-Editor öffnen">📝 Editor</button>
             <button class="btn-s btn-sm" onclick="regenFmt()">🔄 Regen</button>
             <button class="btn-s btn-sm" onclick="copyC('srt')">📋SRT</button>
             <button class="btn-s btn-sm" onclick="copyC('ass')">📋ASS</button>
@@ -700,6 +753,15 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <button class="chat-cmd" onclick="sendCmd('structure')" title="Verse/Hook/Bridge erkennen">🏗️ Struktur</button>
     <button class="chat-cmd" onclick="sendCmd('translate')" title="Lyrics uebersetzen">🌍 Translate</button>
     <button class="chat-cmd" onclick="sendCmd('generate')" title="Fehlende Lyrics generieren">✨ Generate</button>
+    <button class="chat-cmd" onclick="startMerge(true)" title="Kurze Segmente zusammenführen (Dry-Run)">🔗 Merge</button>
+  </div>
+  <div class="ref-upload-bar">
+    <label title="Referenztext hochladen (.txt/.lrc/.srt/.vtt)">📄 Referenztext
+      <input type="file" id="refFileIn" accept=".txt,.lrc,.srt,.vtt" hidden onchange="onRefFileSelected(this)">
+    </label>
+    <span class="ref-filename" id="refFileName">—</span>
+    <button class="btn-s btn-sm" onclick="startRefCorrect(false)" id="refDryRunBtn" disabled title="Dry-Run: Änderungen anzeigen">🔍 Prüfen</button>
+    <button class="btn-s btn-sm" onclick="pasteRefText()" title="Text aus Zwischenablage einfügen">📋</button>
   </div>
   <div class="chat-msgs" id="chatMsgs">
     <div class="chat-no-ai" id="chatWelcome">
@@ -1060,7 +1122,7 @@ function rJL(jobs){const el=document.getElementById('jl');if(!jobs.length){el.in
 const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
 el.innerHTML=jobs.map(j=>{const c=['completed'].includes(j.status)?'c':['failed'].includes(j.status)?'f':['pending','queued'].includes(j.status)?'p':'r';
 return`<div class="ji${j.job_id===aJobId?' active':''}" onclick="selJob('${j.job_id}')"><div class="jic ${c}">${ic[j.status]||'⏳'}</div><div class="jm"><div class="jn">${esc(j.filename)}</div><div class="js">${j.stage} ${Math.round(j.progress*100)}%</div>${j.progress>0&&j.progress<1?`<div class="pb"><div class="pf" style="width:${j.progress*100}%"></div></div>`:''}</div></div>`}).join('')}
-function selJob(id){aJobId=id;document.getElementById('es').style.display='none';const jd=document.getElementById('jd');jd.style.display='flex';jd.style.flexDirection='column';jd.style.gap='12px';refreshJobs();if(!poll)startPoll()}
+function selJob(id){aJobId=id;_persistSession({job_id:id});document.getElementById('es').style.display='none';const jd=document.getElementById('jd');jd.style.display='flex';jd.style.flexDirection='column';jd.style.gap='12px';refreshJobs();if(!poll)startPoll()}
 
 async function rDetail(j){
 const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌'};
@@ -1229,10 +1291,27 @@ async function fixGaps(){if(!aJobId)return;try{const r=await(await fetch(B+'/api
 async function applyDict(){if(!aJobId)return;try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/apply-dictionary',{method:'POST'})).json();toast(r.applied+' korrigiert');loadSegs(aJobId)}catch(e){toast('Err','err')}}
 async function regenFmt(){if(!aJobId)return;const s=gS();const fmts=["srt","ass"];if(s.generate_vtt)fmts.push("vtt");if(s.generate_lrc)fmts.push("lrc");if(s.generate_txt)fmts.push("txt");
 try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/regenerate-ass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({karaoke_mode:s.karaoke_mode,preset:s.preset,formats:fmts})})).json();toast('Generiert: '+r.regenerated.join(', '));refreshJobs()}catch(e){toast('Err','err')}}
-async function copyC(ext){if(!aJobId)return;try{const j=await(await fetch(B+'/api/jobs/'+aJobId)).json();const fn=j.result[ext+'_file'];if(!fn)return toast('N/A','err');
-const d=await(await fetch(B+'/api/jobs/'+aJobId+'/content/'+fn)).json();await navigator.clipboard.writeText(d.content);toast(ext.toUpperCase()+' → Clipboard')}catch(e){toast('Err','err')}}
-async function exportProject(){if(!aJobId)return;try{const d=await(await fetch(B+'/api/jobs/'+aJobId+'/project-export')).json();
-const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=aJobId+'_project.json';a.click();toast('Project exported')}catch(e){toast('Err','err')}}
+async function copyC(ext){if(!aJobId)return;try{
+  // Try to find the file: first from job files list, fallback to guessing stem
+  let fn=null;
+  try{const fl=await(await fetch(B+'/api/jobs/'+aJobId+'/files')).json();fn=fl.files[ext]}catch{}
+  if(!fn){
+    // Guess filename from existing download links or segments
+    const dlLink=document.querySelector(`#dlBtns a[href*=".${ext}"]`);
+    if(dlLink){const u=dlLink.getAttribute('href');fn=u.split('/').pop()}
+  }
+  if(!fn)return toast(ext.toUpperCase()+' nicht verfügbar','err');
+  const d=await(await fetch(B+'/api/jobs/'+aJobId+'/content/'+fn)).json();
+  if(d.content!=null){await navigator.clipboard.writeText(d.content);toast(ext.toUpperCase()+' → Clipboard')}
+  else toast(ext.toUpperCase()+' nicht verfügbar','err')
+}catch(e){toast('Fehler: '+e.message,'err')}}
+async function exportProject(){if(!aJobId)return;try{
+  const resp=await fetch(B+'/api/jobs/'+aJobId+'/project-export');
+  if(!resp.ok){const e=await resp.json().catch(()=>({}));toast('Export Fehler: '+(e.detail||'Unbekannt'),'err');return}
+  const d=await resp.json();
+  const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=aJobId+'_project.json';a.click();
+  toast('Project exportiert')}catch(e){toast('Export Fehler: '+e.message,'err')}}
 
 // ── Stats ──
 async function loadStats(jid){try{const s=await(await fetch(B+'/api/jobs/'+jid+'/stats')).json();
@@ -1354,11 +1433,176 @@ try{await fetch(B+'/api/ai/chat/'+aJobId,{method:'DELETE'});
 const el=document.getElementById('chatMsgs');el.innerHTML='';
 document.getElementById('chatWelcome').style.display='block';toast('Chat geloescht')}catch(e){}}
 
+// ── Reference Text Correction ──
+let _refText='',_refFilename='—';
+function onRefFileSelected(inp){
+  if(!inp.files||!inp.files[0])return;
+  const f=inp.files[0];
+  if(f.size>1048576){toast('Datei zu groß (max 1MB)','err');inp.value='';return}
+  _refFilename=f.name;
+  document.getElementById('refFileName').textContent=f.name;
+  const reader=new FileReader();
+  reader.onload=e=>{_refText=e.target.result;document.getElementById('refDryRunBtn').disabled=false};
+  reader.readAsText(f,'UTF-8');
+}
+async function pasteRefText(){
+  try{const t=await navigator.clipboard.readText();
+    if(!t||!t.trim()){toast('Zwischenablage leer','err');return}
+    _refText=t;_refFilename='clipboard';
+    document.getElementById('refFileName').textContent='📋 Clipboard ('+t.split('\n').length+' Zeilen)';
+    document.getElementById('refDryRunBtn').disabled=false;
+    toast('Referenztext eingefügt');
+  }catch(e){toast('Clipboard nicht verfügbar','err')}}
+
+async function startRefCorrect(apply){
+  if(!aJobId||!_refText){toast('Referenztext fehlt','err');return}
+  const el=document.getElementById('chatMsgs');
+  document.getElementById('chatWelcome').style.display='none';
+  try{
+    const r=await fetch(B+'/api/ai/chat/'+aJobId+'/refcorrect',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({reference_text:_refText,filename:_refFilename,apply})});
+    if(!r.ok){const e=await r.json();toast(e.detail||'Fehler','err');return}
+    const data=await r.json();
+    if(!apply){
+      // Dry-run: show diff
+      _showRefDiff(data);
+    }else{
+      // Applied
+      _showRefApplied(data);
+      if(aJobId)loadSegs(aJobId);
+    }
+  }catch(e){toast('Ref-Korrektur: '+e.message,'err')}}
+
+function _showRefDiff(data){
+  const el=document.getElementById('chatMsgs');
+  const div=document.createElement('div');div.className='ref-diff';
+  if(!data.changes||!data.changes.length){
+    div.innerHTML='<div class="ref-diff-head">📄 Referenz-Korrektur</div><p style="color:var(--dim);font-size:.72rem">Keine Änderungen nötig — Texte stimmen überein.</p>';
+    el.appendChild(div);el.scrollTop=el.scrollHeight;return}
+  let html='<div class="ref-diff-head">📄 Referenz-Korrektur — Dry Run</div>';
+  html+='<div class="ref-diff-summary">'+data.changes.length+' von '+data.total_segments+' Segmenten werden geändert · '+data.unchanged+' unverändert · '+data.total_ref_lines+' Referenzzeilen</div>';
+  for(const c of data.changes){
+    html+='<div class="ref-diff-item">';
+    html+='<div class="seg-num">#'+(c.index+1)+'</div>';
+    html+='<div class="old-text">'+esc(c.old_text)+'</div>';
+    html+='<div class="new-text">→ '+esc(c.new_text)+'</div>';
+    html+='</div>';
+  }
+  html+='<div class="ref-diff-actions">';
+  html+='<button class="btn-s" onclick="this.closest(\'.ref-diff\').remove()">✕ Verwerfen</button>';
+  html+='<button class="btn" onclick="applyRefCorrect()">✓ Anwenden ('+data.changes.length+' Änderungen)</button>';
+  html+='</div>';
+  div.innerHTML=html;
+  el.appendChild(div);el.scrollTop=el.scrollHeight;
+}
+
+function _showRefApplied(data){
+  const el=document.getElementById('chatMsgs');
+  const div=document.createElement('div');div.className='chat-msg model';
+  div.innerHTML='<strong>✓ Referenz-Korrektur angewendet</strong><br>'+
+    (data.changes?data.changes.length:0)+' Segmente aktualisiert.';
+  el.appendChild(div);el.scrollTop=el.scrollHeight;
+}
+
+async function applyRefCorrect(){
+  // Remove the diff preview
+  document.querySelectorAll('.ref-diff').forEach(e=>e.remove());
+  await startRefCorrect(true);
+}
+
+// ── Segment Merge ──
+async function startMerge(dryRun){
+  if(!aJobId){toast('Kein Job geladen','err');return}
+  const el=document.getElementById('chatMsgs');
+  document.getElementById('chatWelcome').style.display='none';
+  if(dryRun){
+    const loading=document.createElement('div');loading.className='chat-typing';loading.id='mergeLoading';
+    loading.textContent='Merge-Analyse läuft';el.appendChild(loading);el.scrollTop=el.scrollHeight;
+  }
+  try{
+    const r=await fetch(B+'/api/ai/segments/'+aJobId+'/merge',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({dry_run:dryRun})});
+    const ld=document.getElementById('mergeLoading');if(ld)ld.remove();
+    if(!r.ok){const e=await r.json();toast(e.detail||'Fehler','err');return}
+    const data=await r.json();
+    if(dryRun){
+      _showMergeDiff(data);
+    }else{
+      _showMergeApplied(data);
+      if(aJobId)loadSegs(aJobId);
+    }
+  }catch(e){
+    const ld=document.getElementById('mergeLoading');if(ld)ld.remove();
+    toast('Merge: '+e.message,'err');
+  }
+}
+
+function _fmtTime(s){
+  const m=Math.floor(s/60),sec=(s%60).toFixed(2);
+  return m+':'+sec.padStart(5,'0');
+}
+
+function _showMergeDiff(data){
+  const el=document.getElementById('chatMsgs');
+  const div=document.createElement('div');div.className='merge-diff';
+  if(!data.candidates||!data.candidates.length){
+    div.innerHTML='<div class="merge-diff-head">🔗 Segment-Merge</div>'+
+      '<p style="color:var(--dim);font-size:.72rem">Keine Merge-Kandidaten gefunden.</p>';
+    el.appendChild(div);el.scrollTop=el.scrollHeight;return;
+  }
+  const merges=data.candidates.filter(c=>c.decision==='MERGE');
+  const skips=data.candidates.filter(c=>c.decision==='SKIP');
+  let html='<div class="merge-diff-head">🔗 Segment-Merge — Dry Run</div>';
+  html+='<div class="merge-diff-summary">'+data.candidates.length+' Kandidaten · '+
+    merges.length+' Merges · '+skips.length+' übersprungen · '+
+    data.total_segments+' → '+data.result_segments+' Segmente</div>';
+  for(const c of data.candidates){
+    const isMerge=c.decision==='MERGE';
+    html+='<div class="merge-item'+(isMerge?'':' skip')+'">';
+    html+='<div class="m-head">';
+    html+='<span class="m-badge '+(isMerge?'ok':'no')+'">'+c.decision+'</span>';
+    html+='#'+(c.index_a+1)+'+#'+(c.index_b+1)+' ';
+    html+='gap='+c.gap_ms.toFixed(0)+'ms ';
+    html+='cps='+c.cps_after.toFixed(1);
+    html+='</div>';
+    html+='<div class="m-texts">';
+    html+='<span class="m-old">'+esc(c.text_a)+'</span> + <span class="m-old">'+esc(c.text_b)+'</span>';
+    html+='<br><span class="m-arrow">→</span> <span class="m-new">'+esc(c.merged_text)+'</span>';
+    html+='</div>';
+    if(c.skip_reason) html+='<div class="m-reason">'+esc(c.skip_reason)+'</div>';
+    html+='</div>';
+  }
+  if(merges.length>0){
+    html+='<div class="merge-actions">';
+    html+='<button class="btn-s" onclick="this.closest(\'.merge-diff\').remove()">✕ Verwerfen</button>';
+    html+='<button class="btn" onclick="applyMerge()">✓ '+merges.length+' Merges anwenden</button>';
+    html+='</div>';
+  }
+  div.innerHTML=html;
+  el.appendChild(div);el.scrollTop=el.scrollHeight;
+}
+
+function _showMergeApplied(data){
+  const el=document.getElementById('chatMsgs');
+  const div=document.createElement('div');div.className='chat-msg model';
+  div.innerHTML='<strong>✓ Merge angewendet</strong><br>'+
+    (data.changes||0)+' Segmente zusammengeführt. Neue Gesamtzahl: '+(data.new_total||'?')+'.';
+  el.appendChild(div);el.scrollTop=el.scrollHeight;
+}
+
+async function applyMerge(){
+  document.querySelectorAll('.merge-diff').forEach(e=>e.remove());
+  await startMerge(false);
+}
+
 // ── Keyboard ──
 document.addEventListener('keydown',e=>{
 if(e.key==='F1'){e.preventDefault();toggleHelp();return}
 // Close modals on Escape (unless in special modes — handled by new handler)
 if(e.key==='Escape'&&!tttActive&&!fskActive){
+  const se=document.getElementById('subEditorBg');if(se.classList.contains('open')){closeSubEditor();return}
   const tm=document.getElementById('tagModal');if(tm.classList.contains('open')){tm.classList.remove('open');return}
   const lb=document.getElementById('libModal');if(lb.classList.contains('open')){lb.classList.remove('open');return}
   const m=document.getElementById('helpModal');if(m.classList.contains('open')){m.classList.remove('open');return}
@@ -1641,6 +1885,7 @@ if(item.job_id){
   if(j.status==='completed'){selJob(item.job_id);toast(`"${item.title}" geladen`);return}}catch(e){}}
 // Strategy 2: Reconstruct UI from library record
 try{const r=await(await fetch(B+'/api/library/'+item.id)).json();
+_persistSession({lib_id:item.id,job_id:r.job_id||null});
 await loadFromLibrary(r)}catch(e){toast('Fehler: '+e.message,'err')}}
 
 async function loadFromLibrary(r){
@@ -1751,8 +1996,32 @@ if(r.ok){toast('Render-Job gestartet: '+j.job_id);
 else toast(j.detail||'Err','err')
 }catch(e){toast('Render: '+e.message,'err')}}
 
+// ── Session Persistence ──
+function _persistSession(s){try{localStorage.setItem('kst-session',JSON.stringify(s))}catch(e){}}
+function _clearSession(){try{localStorage.removeItem('kst-session')}catch(e){}}
+async function _restoreSession(){
+  let s;try{s=JSON.parse(localStorage.getItem('kst-session'))}catch(e){return}
+  if(!s)return;
+  // Try restoring from active job first
+  if(s.job_id){
+    try{const j=await(await fetch(B+'/api/jobs/'+s.job_id)).json();
+    if(j.status==='completed'){selJob(s.job_id);return}}catch(e){}}
+  // Try restoring from library
+  if(s.lib_id){
+    try{const r=await(await fetch(B+'/api/library/'+s.lib_id)).json();
+    await loadFromLibrary(r);return}catch(e){}}
+  // If job_id exists but not in active jobs, try library search by job_id
+  if(s.job_id){
+    try{const r=await(await fetch(B+'/api/library?q=&limit=100')).json();
+    const match=r.items.find(it=>it.job_id===s.job_id);
+    if(match){const full=await(await fetch(B+'/api/library/'+match.id)).json();
+      _persistSession({lib_id:match.id,job_id:s.job_id});
+      await loadFromLibrary(full);return}}catch(e){}}
+  _clearSession()}
+
 // ── Init ──
 checkH();checkAI();setInterval(checkH,30000);connectSSE();startPoll();
+_restoreSession();
 window.addEventListener('resize',()=>{if(wfPeaks)drawWF()})
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1998,7 +2267,125 @@ document.addEventListener('keydown',e=>{
   if(e.key==='c'&&e.shiftKey&&!e.ctrlKey){e.preventDefault();clearABLoop();return}
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ██ TEXT EDITOR MODAL — plain text editing (one line = one segment)
+// ══════════════════════════════════════════════════════════════════════════════
+(function(){
+let _open=false, _dirty=false, _origText='';
+
+window.openSubEditor=function(){
+  if(!aJobId||!cSegs.length){toast('Erst transkribieren','err');return}
+  _open=true;_dirty=false;
+  const ta=document.getElementById('subeTa');
+  const text=cSegs.map(s=>s.text).join('\n');
+  ta.value=text;_origText=text;
+  document.getElementById('subEditorBg').classList.add('open');
+  _updateInfo();_updateStats();
+  ta.focus();
+  ta.setSelectionRange(0,0);
+};
+
+window.saveTextEditor=async function(){
+  if(!aJobId||!cSegs.length)return;
+  const ta=document.getElementById('subeTa');
+  const lines=ta.value.split('\n');
+  // Map lines back to segments — update text only, keep timing
+  let changed=0;
+  for(let i=0;i<cSegs.length;i++){
+    const newText=(i<lines.length?lines[i]:'').trim();
+    if(cSegs[i].text!==newText){cSegs[i].text=newText;changed++}
+  }
+  // Handle extra lines: append as info to last segment
+  if(lines.length>cSegs.length){
+    const extra=lines.slice(cSegs.length).filter(l=>l.trim()).join(' ');
+    if(extra){cSegs[cSegs.length-1].text+=' '+extra;changed++}
+  }
+  if(changed===0){toast('Keine Änderungen');return}
+  try{
+    toast('Speichere '+changed+' Änderungen…');
+    await fetch(B+'/api/jobs/'+aJobId+'/segments/bulk',{method:'PUT',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(cSegs)});
+    _dirty=false;_origText=ta.value;
+    _updateStats();
+    toast('✓ '+changed+' Segmente aktualisiert');
+  }catch(e){toast('Fehler: '+e.message,'err')}
+};
+
+function _updateInfo(){
+  document.getElementById('subeInfo').textContent=cSegs.length+' Segmente';
+}
+
+function _updateStats(){
+  const ta=document.getElementById('subeTa');
+  const text=ta.value;
+  const lines=text.split('\n').length;
+  const words=text.trim()?text.trim().split(/\s+/).length:0;
+  const chars=text.length;
+  const el=document.getElementById('subeStats');
+  el.textContent=lines+' Zeilen · '+words+' Wörter · '+chars+' Zeichen';
+  el.classList.toggle('sube-dirty',_dirty);
+  document.getElementById('subeSaveBtn').style.opacity=_dirty?'1':'.5';
+}
+
+// Track dirty state
+function _onTaInput(){
+  _dirty=this.value!==_origText;
+  _updateStats();
+}
+
+// Keyboard shortcuts
+function _onKeydown(e){
+  if(!_open)return;
+  if(e.key==='Escape'){e.stopPropagation();closeSubEditor();return}
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();e.stopPropagation();saveTextEditor();return}
+}
+
+// Bind events lazily (DOM elements are below this script)
+function _bindEvents(){
+  const ta=document.getElementById('subeTa');
+  const bg=document.getElementById('subEditorBg');
+  if(ta&&!ta._bound){ta.addEventListener('input',_onTaInput);ta._bound=true}
+  if(bg&&!bg._bound){bg.addEventListener('keydown',_onKeydown);bg._bound=true}
+}
+// Bind on DOMContentLoaded + also on open (belt & suspenders)
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_bindEvents)}
+else{setTimeout(_bindEvents,0)}
+
+const _origOpen=window.openSubEditor;
+window.openSubEditor=function(){_bindEvents();_origOpen();};
+
+// Close + refresh main UI
+window.closeSubEditor=function(){
+  if(_dirty&&!confirm('Ungespeicherte Änderungen verwerfen?'))return;
+  _open=false;_dirty=false;
+  document.getElementById('subEditorBg').classList.remove('open');
+  renderSegs();drawWF();drawMM();
+};
+
+})(); // end IIFE
+
 </script>
+
+<!-- Text Editor Modal -->
+<div class="sube-bg" id="subEditorBg" onclick="if(event.target===this)closeSubEditor()">
+<div class="sube">
+  <div class="sube-head">
+    <span style="font-size:1.1rem">📝</span>
+    <h2>Text Editor</h2>
+    <span class="sube-info" id="subeInfo">—</span>
+    <div class="modal-close" onclick="closeSubEditor()">✕</div>
+  </div>
+  <div class="sube-body">
+    <div class="sube-hint">Eine Zeile = ein Segment · Timings bleiben erhalten · Ctrl+S zum Speichern · Esc zum Schließen</div>
+    <textarea class="sube-ta" id="subeTa" spellcheck="true"></textarea>
+  </div>
+  <div class="sube-foot">
+    <span class="sube-stats" id="subeStats">—</span>
+    <button class="btn-s" id="subeSaveBtn" onclick="saveTextEditor()" style="opacity:.5">💾 Speichern (Ctrl+S)</button>
+    <button class="btn" onclick="closeSubEditor()">✕ Schließen</button>
+  </div>
+</div>
+</div>
 
 <!-- Tap-to-Time Overlay -->
 <div class="ttt-overlay" id="tttOverlay">

@@ -789,6 +789,32 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
             continue
 
         sub_path = Path(asset.path)
+
+        # If subtitle comes from a job output dir, regenerate from segments.json
+        # to ensure we always use the latest edited version
+        _refreshed = False
+        try:
+            if "data/output/" in str(sub_path):
+                seg_json = sub_path.parent / "segments.json"
+                if seg_json.exists():
+                    import json as _json
+                    segs_data = _json.loads(seg_json.read_text(encoding="utf-8"))
+                    from src.transcription.base import TranscriptSegment
+                    segs = [TranscriptSegment.from_dict(s) for s in segs_data]
+                    ext = sub_path.suffix.lower()
+                    if ext == ".srt":
+                        from src.export.srt_writer import write_srt
+                        write_srt(segs, sub_path)
+                    elif ext == ".ass":
+                        from src.refine.alignment import ensure_word_timestamps
+                        from src.export.ass_writer import write_ass
+                        segs = ensure_word_timestamps(segs)
+                        write_ass(segs, sub_path)
+                    _refreshed = True
+                    info(f"[editor] Refreshed {sub_path.name} from segments.json before render")
+        except Exception as e:
+            warn(f"[editor] Could not refresh subtitle from segments.json: {e}")
+
         if not sub_path.exists():
             warn(f"[editor] Subtitle file not found: {sub_path}")
             continue
@@ -915,13 +941,12 @@ def _effect_to_filter(eff: Effect, clip: Clip) -> str:
     return ""
 
 
-def render_project(pid: str) -> tuple[Path | None, str]:
-    """Render the full project to MP4. Returns (path, error_msg)."""
+def _prepare_render(pid: str) -> tuple[Path | None, list[str] | None, float, str]:
+    """Prepare render: build output path + ffmpeg command. Returns (output, cmd, duration, error)."""
     p = _projects.get(pid)
     if not p or not p.clips:
-        return None, "No clips"
+        return None, None, 0, "No clips"
 
-    # Build meaningful filename: audio_name + datetime
     from datetime import datetime
     audio_clips = [c for c in p.clips if c.track == "audio"]
     if audio_clips:
@@ -929,18 +954,53 @@ def render_project(pid: str) -> tuple[Path | None, str]:
         base_name = Path(asset.filename).stem if asset else p.name
     else:
         base_name = p.name
-    # Sanitize
     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in base_name).strip()[:60]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output = EDITOR_DIR / "renders" / f"{safe_name}_{ts}.mp4"
     cmd = build_render_cmd(pid, output)
     if not cmd:
-        return None, "Failed to build render command"
+        return None, None, 0, "Failed to build render command"
+    return output, cmd, p.computed_duration, ""
+
+
+def _parse_ffmpeg_time(line: str) -> float | None:
+    """Extract elapsed seconds from ffmpeg stderr line (time=HH:MM:SS.cs)."""
+    import re
+    m = re.search(r"time=\s*(-?)(\d+):(\d+):(\d+(?:\.\d+)?)", line)
+    if not m:
+        return None
+    sign, h, mi, s = m.group(1), int(m.group(2)), int(m.group(3)), float(m.group(4))
+    t = h * 3600 + mi * 60 + s
+    return -t if sign == "-" else t
+
+
+def _extract_ffmpeg_error(stderr_text: str) -> str:
+    """Extract meaningful error from ffmpeg stderr (strip banner/config)."""
+    err_lines = stderr_text.strip().split("\n")
+    useful = []
+    skip_banner = True
+    for line in err_lines:
+        if skip_banner:
+            if any(x in line for x in (
+                "--enable-", "--disable-", "configuration:", "built with",
+                "ffmpeg version", "Copyright",
+            )):
+                continue
+            if line.strip().startswith("lib") and "/" in line:
+                continue
+            skip_banner = False
+        useful.append(line)
+    return "\n".join(useful[-15:]) if useful else stderr_text[-500:]
+
+
+def render_project(pid: str) -> tuple[Path | None, str]:
+    """Render the full project to MP4. Returns (path, error_msg)."""
+    output, cmd, duration, err = _prepare_render(pid)
+    if not cmd:
+        return None, err
 
     info(f"[editor] Rendering project {pid} → {output}")
-    # Log full command for debugging
     debug(f"[editor] Full CMD:\n{' '.join(str(c) for c in cmd)}")
-    # Log filter_complex separately for readability
     for i, arg in enumerate(cmd):
         if arg == "-filter_complex" and i + 1 < len(cmd):
             debug(f"[editor] filter_complex:\n{cmd[i+1]}")
@@ -948,22 +1008,9 @@ def render_project(pid: str) -> tuple[Path | None, str]:
 
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=max(600, p.computed_duration * 5))
+                           timeout=max(600, duration * 5))
         if r.returncode != 0:
-            # Extract the last meaningful error lines — strip ffmpeg banner/config
-            err_lines = r.stderr.strip().split("\n")
-            useful = []
-            skip_banner = True
-            for line in err_lines:
-                # Skip ffmpeg version banner and configuration block
-                if skip_banner:
-                    if any(x in line for x in ("--enable-", "--disable-", "configuration:", "built with", "ffmpeg version", "Copyright")):
-                        continue
-                    if line.strip().startswith("lib") and "/" in line:
-                        continue
-                    skip_banner = False
-                useful.append(line)
-            err_msg = "\n".join(useful[-15:]) if useful else r.stderr[-500:]
+            err_msg = _extract_ffmpeg_error(r.stderr)
             error(f"[editor] Render failed:\n{err_msg}")
             return None, err_msg
     except subprocess.TimeoutExpired:
@@ -974,6 +1021,81 @@ def render_project(pid: str) -> tuple[Path | None, str]:
         mb = output.stat().st_size / (1024 * 1024)
         info(f"[editor] Rendered: {output.name} ({mb:.1f} MB)")
         return output, ""
+    return None, "Output file not created"
+
+
+def render_project_with_progress(
+    pid: str,
+    progress_cb: callable | None = None,
+) -> tuple[Path | None, str]:
+    """Render with real-time progress via callback.
+
+    progress_cb(phase: str, percent: int) is called during rendering.
+    Percent is 0–100.  Phase is a short German label.
+    """
+    output, cmd, duration, err = _prepare_render(pid)
+    if not cmd:
+        return None, err
+
+    info(f"[editor] Rendering (streamed) project {pid} → {output}")
+    debug(f"[editor] Full CMD:\n{' '.join(str(c) for c in cmd)}")
+    for i, arg in enumerate(cmd):
+        if arg == "-filter_complex" and i + 1 < len(cmd):
+            debug(f"[editor] filter_complex:\n{cmd[i+1]}")
+            break
+
+    if progress_cb:
+        progress_cb("Vorbereitung", 0)
+
+    timeout_sec = max(600, duration * 5)
+    try:
+        proc = subprocess.Popen(
+            cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            text=True, bufsize=1,
+        )
+    except FileNotFoundError:
+        return None, "ffmpeg not found"
+
+    if progress_cb:
+        progress_cb("Rendering gestartet", 2)
+
+    last_pct = 0
+    stderr_lines: list[str] = []
+    try:
+        for line in proc.stderr:
+            stderr_lines.append(line)
+            if not progress_cb or duration <= 0:
+                continue
+            elapsed = _parse_ffmpeg_time(line)
+            if elapsed is not None and elapsed >= 0:
+                pct = min(int(elapsed / duration * 100), 99)
+                if pct > last_pct:
+                    last_pct = pct
+                    progress_cb("Rendering", pct)
+
+        proc.wait(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        error("[editor] Render timed out (streamed)")
+        return None, "Render timed out"
+
+    if proc.returncode != 0:
+        full_stderr = "".join(stderr_lines)
+        err_msg = _extract_ffmpeg_error(full_stderr)
+        error(f"[editor] Render failed:\n{err_msg}")
+        if progress_cb:
+            progress_cb("Fehler", -1)
+        return None, err_msg
+
+    if output.exists():
+        mb = output.stat().st_size / (1024 * 1024)
+        info(f"[editor] Rendered (streamed): {output.name} ({mb:.1f} MB)")
+        if progress_cb:
+            progress_cb("Fertig", 100)
+        return output, ""
+
+    if progress_cb:
+        progress_cb("Fehler", -1)
     return None, "Output file not created"
 
 

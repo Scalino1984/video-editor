@@ -11,7 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, BackgroundTasks, Query
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile, BackgroundTasks, Query
 from fastapi.responses import FileResponse, StreamingResponse
 
 from src.api.models import (
@@ -235,6 +235,19 @@ async def delete_job(job_id: str):
 
 # ── Downloads ─────────────────────────────────────────────────────────────────
 
+@router.get("/jobs/{job_id}/files")
+async def list_job_files(job_id: str):
+    """List available files in a job output directory (works without in-memory job)."""
+    job_dir = tasks.OUTPUT_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(404, "Job directory not found")
+    files = {}
+    for f in sorted(job_dir.iterdir()):
+        if f.is_file() and f.name not in ("segments.json", "waveform.json", ".chat_history.sqlite"):
+            files[f.suffix.lstrip(".")] = f.name
+    return {"job_id": job_id, "files": files}
+
+
 @router.get("/jobs/{job_id}/download/{filename}")
 async def download_result(job_id: str, filename: str):
     job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
@@ -359,6 +372,15 @@ async def reorder_segment(job_id: str, req: SegmentReorder):
     data.insert(req.new_index, item)
     _save_segs(p, data, job_id)
     return {"moved": req.old_index, "to": req.new_index}
+
+
+@router.put("/jobs/{job_id}/segments/bulk")
+async def bulk_replace_segments(job_id: str, segments: list[dict] = Body(...)):
+    """Replace the entire segments array (for add/delete/reorder operations)."""
+    tasks.push_undo(job_id)
+    p, _ = _load_segs(job_id)
+    _save_segs(p, segments, job_id)
+    return {"count": len(segments)}
 
 
 @router.post("/jobs/{job_id}/segments/time-shift")
@@ -559,12 +581,13 @@ async def translate_segments(job_id: str, req: TranslateRequest):
 @router.get("/jobs/{job_id}/project-export")
 async def export_project(job_id: str):
     """Export full project state as JSON for backup/sharing."""
-    job = tasks.get_job(job_id)
-    if not job: raise HTTPException(404, "Job not found")
     job_dir = tasks.OUTPUT_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(404, "Job directory not found")
+    job = tasks.get_job(job_id)
     project = {
         "version": "3.0", "exported_at": datetime.now(timezone.utc).isoformat(),
-        "job": job.model_dump(mode="json"),
+        "job": job.model_dump(mode="json") if job else {"job_id": job_id},
         "segments": [], "dictionary": [],
     }
     seg_path = job_dir / "segments.json"
@@ -702,8 +725,19 @@ def _sync_srt(job_id: str, data: list[dict]) -> None:
     from src.transcription.base import TranscriptSegment
     from src.export.srt_writer import write_srt
     segs = [TranscriptSegment.from_dict(s) for s in data]
-    for f in (tasks.OUTPUT_DIR / job_id).glob("*.srt"):
+    job_dir = tasks.OUTPUT_DIR / job_id
+    for f in job_dir.glob("*.srt"):
         write_srt(segs, f); break
+    # Also sync ASS if it exists on disk
+    for f in job_dir.glob("*.ass"):
+        try:
+            from src.refine.alignment import ensure_word_timestamps
+            from src.export.ass_writer import write_ass
+            segs_wt = ensure_word_timestamps(segs)
+            write_ass(segs_wt, f)
+        except Exception:
+            pass  # non-critical: ASS regeneration may fail without word timestamps
+        break
 
 
 # ── Rhyme Scheme Detection ────────────────────────────────────────────────────

@@ -163,6 +163,13 @@ COMMAND_PROMPTS: dict[str, str] = {
         "Genre, Reimschema und Flow der bestehenden Texte. "
         "Nutze update_multiple_segments um die generierten Texte einzusetzen."
     ),
+    "refcorrect": (
+        "Der User gibt dir einen Referenztext. Vergleiche ihn Zeile fuer Zeile mit den "
+        "aktuellen Segmenten und korrigiere NUR inhaltliche Fehler (falsch transkribierte Woerter). "
+        "NICHT aendern: Zeitcodes, Segmentstruktur, Zeilenumbrueche, ASS-Tags. "
+        "Nutze update_multiple_segments fuer alle Korrekturen. "
+        "Gib eine Zusammenfassung mit Segment-Nummern und was geaendert wurde."
+    ),
 }
 
 

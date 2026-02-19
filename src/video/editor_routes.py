@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +21,7 @@ from src.video.editor import (
     add_asset, add_clip, remove_clip, update_clip,
     split_clip, add_effect, remove_effect,
     undo, redo, _push_undo,
-    render_project, render_loop_video,
+    render_project, render_project_with_progress, render_loop_video,
     get_timeline_summary,
 )
 
@@ -35,10 +37,10 @@ async def api_list_projects():
 
 @router.post("/projects")
 async def api_create_project(
-    name: str = "Untitled",
-    width: int = 1920,
-    height: int = 1080,
-    fps: float = 30,
+    name: str = Form("Untitled"),
+    width: int = Form(1920),
+    height: int = Form(1080),
+    fps: float = Form(30),
 ):
     p = create_project(name, width, height, fps)
     return p.to_dict()
@@ -326,6 +328,54 @@ async def api_render_project(pid: str):
         "size_mb": round(output.stat().st_size / (1024 * 1024), 1),
         "download_url": f"/api/editor/renders/{output.name}",
     }
+
+
+_render_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="render")
+
+
+@router.post("/projects/{pid}/render-stream")
+async def api_render_stream(pid: str):
+    """Render with real-time SSE progress (percent + phase text)."""
+    p = get_project(pid)
+    if not p or not p.clips:
+        raise HTTPException(400, "No clips to render")
+
+    loop = asyncio.get_event_loop()
+    q: asyncio.Queue = asyncio.Queue()
+
+    def _progress_cb(phase: str, pct: int) -> None:
+        loop.call_soon_threadsafe(q.put_nowait, {"phase": phase, "percent": pct})
+
+    def _run() -> tuple[Path | None, str]:
+        return render_project_with_progress(pid, progress_cb=_progress_cb)
+
+    async def _generate():
+        future = loop.run_in_executor(_render_pool, _run)
+        try:
+            while not future.done():
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=1.0)
+                    yield f"data: {json.dumps(ev)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'phase': '', 'percent': -1})}\n\n"
+            # Drain remaining events
+            while not q.empty():
+                ev = q.get_nowait()
+                yield f"data: {json.dumps(ev)}\n\n"
+            # Get result
+            output, err = future.result()
+            if output and output.exists():
+                mb = round(output.stat().st_size / (1024 * 1024), 1)
+                yield f"data: {json.dumps({'status': 'done', 'percent': 100, 'phase': 'Fertig', 'file': output.name, 'size_mb': mb, 'download_url': f'/api/editor/renders/{output.name}'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'status': 'error', 'percent': -1, 'phase': 'Fehler', 'message': err or 'Unbekannter Fehler'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'status': 'error', 'percent': -1, 'phase': 'Fehler', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        _generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/projects/{pid}/render-loop")

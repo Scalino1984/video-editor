@@ -7,7 +7,7 @@
 **Sprache:** Python ≥ 3.10 (Ziel: 3.12)  
 **Framework:** FastAPI (Server) + Typer (CLI) + PydanticAI v2 (AI-Chat)  
 **DB:** SQLite (Library + Chat-History, kein ORM)  
-**UI:** SPA in `src/static/index.html` + `editor.html`  
+**UI:** SPA in `src/templates/index.html` + `editor.html`  
 **Linter:** Ruff (line-length=120, target py312)  
 **Tests:** pytest mit `asyncio_mode = "auto"`  
 **Sprache der Benutzeroberfläche & Prompts:** Deutsch  
@@ -333,3 +333,123 @@ python -m src.cli export --input subs/ --karaoke-mode kf --preset neon
 8. **UTF-8 überall** — `encoding="utf-8"` bei allen Datei-Operationen explizit angeben
 9. **Karaoke-Tags brauchen Word-Timestamps** — `ensure_word_timestamps()` vor ASS-Export aufrufen
 10. **Config via Dot-Notation** — `merge_cli_overrides(cfg, {"transcription.backend": "whisperx"})`
+
+---
+
+## Internes Entwicklungsverzeichnis: `.intern/`
+
+Das Verzeichnis `.intern/` (in `.gitignore`, wird **nicht** mit GitHub synchronisiert) dient als zentraler Ablageort für alle internen Entwicklungsdokumente:
+
+```
+.intern/
+  BESTANDSAUFNAHME.md                ← Vollständige Code-Inventur (PFLICHTDOKUMENT)
+  worklog/
+    YYYY-MM.md                       ← Monatliches Arbeitsprotokoll (Journal)
+  changes/
+    YYYYMMDD-<kurztitel>.md           ← Change-Reports (Refactor/Security/Arch/Breaking)
+  archive/
+    worklog/
+      YYYY-MM.md                     ← Archivierte/komprimierte ältere Worklogs
+```
+
+### Regeln für `.intern/`
+
+1. **Alle Entwicklungsdokumente** (Analysen, Audits, Planungen, Protokolle, Notizen) werden **ausschließlich in `.intern/`** gespeichert — **niemals** im Repository-Root oder anderen Verzeichnissen
+2. **Keine internen Dokumente im Repo** — nur `README.md`, `HANDBUCH.md`, `API.md` und Code-Dateien werden committed
+3. **Keine sensiblen Secrets** in Protokollen (Tokens, Passwörter, Private Keys) — wenn relevant: `[REDACTED]`
+
+---
+
+### Arbeitsschritte protokollieren (Pflichtverhalten)
+
+1. **Zu Beginn jeder Bearbeitung**:
+   - Ziel (1–2 Sätze)
+   - Annahmen (nur wenn nötig, als `[ASSUMPTION]`)
+   - Plan (max. 5 Schritte)
+
+2. **Nach JEDEM einzelnen Schritt** (auch Teilschritte) muss das Worklog aktualisiert werden:
+   - Pfad: `.intern/worklog/YYYY-MM.md` (monatliches Sammellog)
+   - Zusätzlich bei größeren Änderungen (Refactor/Security/Arch/Breaking Change): `.intern/changes/YYYYMMDD-<kurztitel>.md`
+
+3. **Protokolleinträge müssen reproduzierbar sein**:
+   - Konkrete Dateien/Module nennen
+   - Commands/Tests zur Verifikation angeben (oder „nicht ausgeführt" begründen)
+   - Risiken/Side-Effects dokumentieren
+
+4. **Workflow-Änderungen nur nach Bestätigung**:
+   Eine „Workflow-Änderung" betrifft Prozesse, Regeln, Dateistrukturen oder Konventionen (Protokoll-Pfade, Log-Format, Konsolidierungsregeln, Verifikationsanforderungen, Trigger).
+   → Vor Umsetzung als **„VORSCHLAG – BESTÄTIGUNG ERFORDERLICH"** formulieren mit: Was ändert sich, warum, Auswirkungen, Migration. Erst nach expliziter Bestätigung anwenden.
+
+---
+
+### Worklog-Format (monatlich)
+
+Füge am Anfang der Datei einen Datum-Header hinzu, wenn nicht vorhanden.
+
+**Eintrag-Format** (immer so schreiben):
+```markdown
+### YYYY-MM-DD HH:MM
+
+- **Kontext:** Ticket/Issue/PR/Branch (wenn unbekannt: "n/a")
+- **Ziel:** …
+- **Schritt:** <kurze Bezeichnung des gerade erledigten Schritts>
+- **Status:** IN_ARBEIT | ERLEDIGT | VERWORFEN
+- **Änderungen:**
+  - `<pfad>` — <Änderung> (<Grund>)
+- **Risiken/Side-Effects:** …
+- **Verifikation:**
+  - `<command/test>` → ✅/❌/— + Kurzinfo
+```
+
+---
+
+### Change-Report-Format (bei größeren Änderungen)
+
+Datei: `.intern/changes/YYYYMMDD-<kurztitel>.md`
+
+```markdown
+# <Titel>
+- **Datum/Zeit:** YYYY-MM-DD HH:MM (Europe/Berlin)
+- **Kontext:** …
+- **Motivation:** …
+- **Umsetzung:** (Stichpunkte, betroffene Dateien)
+- **Sicherheits-/Compliance-Aspekte:** (falls relevant)
+- **Rollback-Plan:** (kurz)
+- **Verifikation:** (Commands/Tests + Ergebnis)
+```
+
+---
+
+### Pflege- und Aufräumregeln
+
+Diese Regeln sind verpflichtend und bei JEDEM Log-Update anzuwenden:
+
+1. **Keine TODO-/Checklisten im Worklog** — Worklog ist ein Journal, keine Aufgabenliste. Nur der gerade bearbeitete Schritt wird protokolliert.
+
+2. **Erledigte Schritte komprimieren** — Einträge mit Status `ERLEDIGT` oder `VERWORFEN` am selben Tag auf 1–3 Bullets reduzieren (Dateien + Kernaussage). Redundante Zwischenstände entfernen — nur letzter gültiger Stand bleibt.
+
+3. **Tagesabschluss-Konsolidierung** — Mehrere Updates zum gleichen Ziel am selben Tag zu einem konsolidierten Eintrag zusammenfassen. Vorherige Zwischenstände vollständig löschen.
+
+4. **Größenlimit & Rotation** — Wenn `.intern/worklog/YYYY-MM.md` > ~300 Zeilen: zuerst konsolidieren (Punkt 2–3). Falls weiterhin zu groß: ältere erledigte Einträge nach `.intern/archive/worklog/YYYY-MM.md` verschieben. Im aktuellen Worklog bleibt nur der laufende Monat in kompakter Form.
+
+5. **Nur Relevantes behalten** — Einträge ohne echte Änderung entfernen oder in „Analyse" innerhalb des finalen Eintrags konsolidieren. Keine Duplikate von Befehlen/Outputs.
+
+---
+
+### Ausgabeformat im Chat
+
+Wenn Protokolle erzeugt/aktualisiert werden, immer angeben:
+- Liste der neu/aktualisierten Protokolldateien
+- Den vollständigen Inhalt der Dateien im Markdown-Block
+
+---
+
+### BESTANDSAUFNAHME.md — Pflege & Protokoll
+
+Die Datei `.intern/BESTANDSAUFNAHME.md` ist die **verbindliche Referenz** für den aktuellen Stand des Codes:
+
+- **Vor jeder größeren Änderung**: Bestandsaufnahme lesen, um den aktuellen Stand zu kennen
+- **Nach jeder strukturellen Änderung** (neue Dateien, neue Module, geänderte APIs, neue Endpunkte, geänderte Datentypen): Bestandsaufnahme **aktualisieren**
+- **Änderungsprotokoll führen**: Am Ende der Bestandsaufnahme ein `## Änderungsprotokoll` pflegen mit Datum, Beschreibung der Änderung und betroffenen Modulen
+- **Format beibehalten**: Bestehende Struktur (Module → Dateien → Funktionen/Klassen → Abhängigkeiten) nicht ändern, nur ergänzen/aktualisieren
+- **An die Bestandsaufnahme halten**: Die dort dokumentierte Architektur und die beschriebenen Patterns sind verbindlich — Abweichungen nur nach bewusster Entscheidung und Aktualisierung

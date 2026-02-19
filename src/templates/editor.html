@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Video Editor — Karaoke Sub Tool</title>
+<link rel="icon" type="image/x-icon" href="/static/favicon/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/favicon-180x180.png">
+<link rel="manifest" href="/static/favicon/site.webmanifest">
+<meta name="theme-color" content="#00ffb4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -221,6 +227,20 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   .timeline-area{grid-column:1}
   .center{grid-column:1}
 }
+/* ── Render Progress ── */
+.render-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center}
+.render-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 36px;width:420px;max-width:90vw;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.render-card h3{margin:0 0 16px;font-size:1rem;color:var(--fg)}
+.render-track{background:var(--bg);border-radius:6px;height:22px;overflow:hidden;position:relative;border:1px solid var(--border)}
+.render-fill{height:100%;background:linear-gradient(90deg,var(--accent),#0de);border-radius:5px;transition:width .3s ease;min-width:0}
+.render-pct{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:var(--fg);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.render-phase{margin-top:10px;font-size:.75rem;color:var(--dim);min-height:1.2em}
+.render-card.done .render-fill{background:linear-gradient(90deg,#0b5,#0d8)}
+.render-card.error .render-fill{background:#e44;width:100%!important}
+.render-card .render-actions{margin-top:16px;display:flex;gap:10px;justify-content:center}
+.render-card .render-actions a,.render-card .render-actions button{padding:6px 16px;border-radius:6px;font-size:.8rem;font-weight:600;text-decoration:none;cursor:pointer;border:none}
+.render-card .render-actions a{background:var(--accent);color:#000}
+.render-card .render-actions button{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -618,9 +638,30 @@ async function showNewProject(){
     PID=r.id;PROJ=r;
     document.getElementById('projName').textContent=r.name;
     document.getElementById('previewEmpty').style.display='block';
+    // Reset editor state
+    _resetEditorUI();
     renderTimeline();updateProps();updatePreviewAspect();
     toast('Projekt erstellt: '+r.name)
   }catch(e){toast('Fehler: '+e.message,'err')}}
+
+function _resetEditorUI(){
+  // Clear assets list
+  const al=document.getElementById('assetList');if(al)al.innerHTML='';
+  // Clear timeline tracks
+  for(const id of ['trackVideo','trackAudio','trackSub','trackOverlay']){
+    const el=document.getElementById(id);if(el)el.innerHTML=''}
+  // Clear preview media
+  const vid=document.getElementById('previewVideo');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
+  const aud=document.getElementById('previewAudio');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
+  document.getElementById('previewEmpty').style.display='block';
+  // Clear subtitle overlay
+  const subOv=document.getElementById('subtitleOverlay');if(subOv)subOv.textContent='';
+  // Reset AI chat
+  const chatLog=document.getElementById('chatLog');if(chatLog)chatLog.innerHTML='';
+  AI_HISTORY=[];
+  // Clear props panel
+  const propsC=document.getElementById('propsContent');if(propsC)propsC.innerHTML='<div style="color:var(--dim);font-size:.7rem;padding:8px">Kein Element ausgewählt</div>';
+}
 
 async function loadProjectData(){
   if(!PID)return;
@@ -1522,9 +1563,8 @@ async function loadSubtitleCues(){
     else if(ext.endsWith('.ass'))_subtitleCues=parseASS(text);
     else{console.warn('[subs] Unknown format:',ext);return}
     console.log(`[subs] ✓ Loaded ${_subtitleCues.length} cues from ${asset.filename}`);
-    // Apply project subtitle styling and show first cue
+    // Apply project subtitle styling — do NOT display a cue yet, wait for playback
     updateSubtitleStyle();
-    if(_subtitleCues.length)updateSubtitleOverlay(_subtitleCues[0].start)
   }catch(e){console.warn('[subs] Load error:',e)}}
 
 let _lastSubIdx=-1;
@@ -1637,22 +1677,90 @@ function toggleSnap(){SNAP=!SNAP;document.getElementById('snapBtn').style.opacit
 
 async function renderProject(){
   if(!PID||!PROJ||!PROJ.clips.length){toast('Keine Clips zum Rendern','err');return}
-  const btn=document.getElementById('renderBtn');btn.disabled=true;btn.textContent='⏳ Rendering...';
+  const btn=document.getElementById('renderBtn');btn.disabled=true;btn.textContent='⏳ Render…';
+  // Show overlay progress card
+  _showRenderProgress();
   try{
-    const resp=await fetch(B+'/api/editor/projects/'+PID+'/render',{method:'POST'});
-    const r=await resp.json();
-    if(!resp.ok){toast('Render Fehler: '+(r.detail||r.message||'Unbekannt'),'err')}
-    else{
-      toast(`✅ Gerendert: ${r.file} (${r.size_mb} MB)`);
-      // Trigger actual download via hidden a-tag
-      const a=document.createElement('a');
-      a.href=B+(r.download_url||'/api/editor/renders/'+r.file);
-      a.download=r.file;a.style.display='none';
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      // Also show persistent download bar
-      showRenderResult(r)}
-  }catch(e){toast('Render: '+e.message,'err')}
+    const resp=await fetch(B+'/api/editor/projects/'+PID+'/render-stream',{method:'POST'});
+    if(!resp.ok){
+      const j=await resp.json().catch(()=>({}));
+      _renderError(j.detail||j.message||'Render fehlgeschlagen');
+      btn.disabled=false;btn.textContent='🎬 Render';return}
+    const reader=resp.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        let ev;try{ev=JSON.parse(line.slice(6))}catch{continue}
+        if(ev.status==='done'){
+          _renderDone(ev);
+          const a=document.createElement('a');
+          a.href=B+(ev.download_url||'/api/editor/renders/'+ev.file);
+          a.download=ev.file;a.style.display='none';
+          document.body.appendChild(a);a.click();document.body.removeChild(a)
+        }else if(ev.status==='error'){
+          _renderError(ev.message||'Unbekannter Fehler')
+        }else if(ev.percent>=0){
+          _renderUpdate(ev.phase,ev.percent)
+        }
+      }
+    }
+  }catch(e){_renderError(e.message)}
   btn.disabled=false;btn.textContent='🎬 Render'}
+
+/* ── Render progress helpers ── */
+function _showRenderProgress(){
+  let ov=document.getElementById('renderOverlay');
+  if(ov)ov.remove();
+  ov=document.createElement('div');ov.id='renderOverlay';ov.className='render-overlay';
+  ov.innerHTML=`<div class="render-card" id="renderCard">
+    <h3>🎬 Video wird gerendert…</h3>
+    <div class="render-track"><div class="render-fill" id="renderFill" style="width:0%"></div>
+      <div class="render-pct" id="renderPct">0 %</div></div>
+    <div class="render-phase" id="renderPhase">Vorbereitung…</div>
+  </div>`;
+  document.body.appendChild(ov)}
+
+function _renderUpdate(phase,pct){
+  const fill=document.getElementById('renderFill');
+  const pctEl=document.getElementById('renderPct');
+  const phEl=document.getElementById('renderPhase');
+  if(fill)fill.style.width=pct+'%';
+  if(pctEl)pctEl.textContent=pct+' %';
+  if(phEl&&phase)phEl.textContent=phase+'…'}
+
+function _renderDone(ev){
+  const card=document.getElementById('renderCard');
+  if(card)card.className='render-card done';
+  _renderUpdate('Fertig',100);
+  const phEl=document.getElementById('renderPhase');
+  if(phEl)phEl.textContent=`✅ ${ev.file} — ${ev.size_mb} MB`;
+  const card2=document.getElementById('renderCard');
+  if(card2){
+    let acts=card2.querySelector('.render-actions');
+    if(!acts){acts=document.createElement('div');acts.className='render-actions';card2.appendChild(acts)}
+    acts.innerHTML=`<a href="${B}${ev.download_url}" download="${esc(ev.file)}">⬇ Download</a>
+      <button onclick="document.getElementById('renderOverlay')?.remove()">Schließen</button>`}
+  toast(`✅ Gerendert: ${ev.file} (${ev.size_mb} MB)`)}
+
+function _renderError(msg){
+  const card=document.getElementById('renderCard');
+  if(card)card.className='render-card error';
+  const pctEl=document.getElementById('renderPct');
+  if(pctEl)pctEl.textContent='Fehler';
+  const phEl=document.getElementById('renderPhase');
+  if(phEl)phEl.textContent=msg;
+  const fill=document.getElementById('renderFill');
+  if(fill)fill.style.width='100%';
+  const card2=document.getElementById('renderCard');
+  if(card2){
+    let acts=card2.querySelector('.render-actions');
+    if(!acts){acts=document.createElement('div');acts.className='render-actions';card2.appendChild(acts)}
+    acts.innerHTML=`<button onclick="document.getElementById('renderOverlay')?.remove()">Schließen</button>`}
+  toast('Render Fehler: '+msg,'err')}
 
 function showRenderResult(r){
   let bar=document.getElementById('renderBar');
