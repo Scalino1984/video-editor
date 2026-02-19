@@ -115,7 +115,7 @@ venv/
 .venv/
 env/
 ENV/
-
+.intern/
 htmlcov/
 .tox/
 .nox/

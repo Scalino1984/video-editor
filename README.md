@@ -2,10 +2,55 @@
 
 **Professioneller Karaoke-Untertitel-Generator mit Video-Editor, KI-Chat und 4 Transkriptions-Backends.**
 
+> **Audio rein → Karaoke-Untertitel raus.** Wortgenau. Automatisch. In Sekunden.
+
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)
+![PydanticAI](https://img.shields.io/badge/PydanticAI-v2-E92063?logo=pydantic&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Version](https://img.shields.io/badge/Version-3.2.0-purple)
+
+<table>
+<tr>
+<td width="50%">
+
+#### 🎙️ Transkription — 4 Backends, 1 Klick
+
+| Backend | Typ | Highlight |
+|---------|-----|-----------|
+| **Voxtral** (Mistral AI) | Cloud | Diarization, schnellstes Setup |
+| **OpenAI Whisper** | Cloud | Bewährte Qualität |
+| **faster-whisper** | Lokal | 100 % offline, kein API-Key |
+| **WhisperX** | Lokal | Forced Alignment, präziseste Wort-Timestamps |
+
+</td>
+<td width="50%">
+
+#### ⚡ Auf einen Blick
+
+- 🔤 **Wort-Level-Timestamps** mit Silben-Approximation
+- 🗣️ **Speaker Diarization** — wer spricht wann?
+- 🎵 **BPM-Erkennung + Beat-Snap** für rhythmische Untertitel
+- 🧠 **KI-Korrektur** via PydanticAI (GPT-4o, Claude, Gemini, Mistral)
+- 🎬 **Video-Editor** mit Timeline, Preview & Social-Media-Formate
+- 📱 **1 Klick → TikTok / Reels / Shorts** (9:16, 1:1, 16:9, 4K)
+
+</td>
+</tr>
+</table>
+
+### Kernkonzepte
+
+🎙️ **4 Transkriptions-Backends** — Voxtral (Mistral AI), OpenAI Whisper, faster-whisper (100 % offline), WhisperX (Forced Alignment)
+&nbsp;&nbsp;→ Wort-Level-Timestamps · Speaker Diarization · VAD · Vocal Isolation
+
+🤖 **PydanticAI v2 Chat-Agent** — Multi-Provider KI (OpenAI, Anthropic, Mistral, Google) mit 5 Commands + 8 Tools für automatische Textkorrektur, Übersetzung und Segment-Bearbeitung
+
+🎬 **Integrierter Video-Editor** — Multi-Track-Timeline mit Echtzeit-Preview, Untertitel-Overlay, Karaoke-Rendering und Format-Presets (16:9, 9:16, 1:1, 4K)
+
+📝 **6 Export-Formate** — SRT, ASS (mit `\k`/`\kf`/`\ko` Karaoke-Tags), VTT, LRC, TXT, Standalone HTML-Player
+
+🔧 **Automatische Refinement-Pipeline** — CPS-Optimierung, Beat-Snap, Reimschema-Erkennung, Song-Struktur, Lyrics-Alignment, Konfidenz-Report
 
 ---
 
