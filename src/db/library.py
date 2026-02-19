@@ -475,6 +475,9 @@ def delete_media(media_id: str) -> bool:
 #  FILE REGISTRY — Central file tracking across Karaoke & Video Editor
 # ══════════════════════════════════════════════════════════════════════════════
 
+_ALLOWED_BASES = [Path("data")]
+
+
 def register_file(
     storage_path: str,
     original_name: str,
@@ -490,7 +493,13 @@ def register_file(
 
     file_type: original | derived | project_asset
     tool_scope: karaoke | editor | both
+    Raises ValueError if storage_path is outside allowed base directories.
     """
+    # Validate storage path is within allowed directories
+    resolved = Path(storage_path).resolve()
+    if not any(resolved.is_relative_to(b.resolve()) for b in _ALLOWED_BASES):
+        raise ValueError(f"Path outside allowed directory: {storage_path}")
+
     con = get_con()
     now = datetime.now(timezone.utc).isoformat()
 

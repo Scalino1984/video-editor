@@ -366,8 +366,10 @@ async def api_import_from_job(pid: str, job_id: str):
     if not p:
         raise HTTPException(404, "Project not found")
 
-    # Check both output dir and uploads dir
-    job_dir = Path("data/output") / job_id
+    # Validate job_id to prevent path traversal
+    job_dir = (Path("data/output") / job_id).resolve()
+    if not job_dir.is_relative_to(Path("data/output").resolve()):
+        raise HTTPException(400, "Invalid job_id")
     upload_dir = Path("data/uploads")
     assets_dir = EDITOR_DIR / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)

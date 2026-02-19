@@ -544,6 +544,9 @@ async def list_orphaned_files():
     return {"items": orphans, "total": len(orphans)}
 
 
+_SAFE_BASES = [Path("data").resolve()]
+
+
 @router.post("/api/file-registry/cleanup")
 async def cleanup_orphaned_files(dry_run: bool = Query(True)):
     """Clean up orphaned files (no references). Use dry_run=false to actually delete."""
@@ -553,7 +556,11 @@ async def cleanup_orphaned_files(dry_run: bool = Query(True)):
     errors = []
 
     for f in orphans:
-        file_path = Path(f["storage_path"])
+        file_path = Path(f["storage_path"]).resolve()
+        # Safety: only delete files within allowed base directories
+        if not any(file_path.is_relative_to(base) for base in _SAFE_BASES):
+            errors.append({"id": f["id"], "path": f["storage_path"], "error": "Outside allowed directory"})
+            continue
         if dry_run:
             cleaned.append({"id": f["id"], "path": f["storage_path"], "action": "would_delete"})
         else:
