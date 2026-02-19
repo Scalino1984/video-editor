@@ -117,6 +117,7 @@ env/
 ENV/
 .intern/*
 !.intern/sqlite-registry.json
+!.intern/api-registry.json
 htmlcov/
 .tox/
 .nox/

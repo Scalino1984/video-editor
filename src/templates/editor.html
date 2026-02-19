@@ -95,6 +95,16 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 .at-image{background:#2a3a1a;color:#8bc34a}
 .at-subtitle{background:#3a2a1a;color:var(--warn)}
 
+/* ── Loop Video Library ── */
+.loop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:6px}
+.loop-card{position:relative;border-radius:6px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:all .2s;aspect-ratio:16/9;background:var(--bg4)}
+.loop-card:hover{border-color:var(--accent);transform:scale(1.03)}
+.loop-card img{width:100%;height:100%;object-fit:cover;display:block}
+.loop-card .loop-label{position:absolute;bottom:0;left:0;right:0;padding:2px 6px;background:linear-gradient(transparent,rgba(0,0,0,.85));font-size:.6rem;font-weight:600;color:#fff;text-align:center}
+.loop-card.lc-portrait{aspect-ratio:9/16}
+.loop-card.lc-square{aspect-ratio:1/1}
+.loop-empty{color:var(--dim);font-size:.65rem;text-align:center;padding:8px}
+
 /* ── Center — Preview + Player ── */
 .preview-area{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;min-height:200px;overflow:hidden}
 .preview-frame{position:relative;max-width:100%;max-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center}
@@ -488,6 +498,12 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
         </select></div>
       </div>
       <div class="prop-section">
+        <h4>🎞️ Loop-Video Bibliothek</h4>
+        <div id="loopVideoGrid" class="loop-grid">
+          <div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>
+        </div>
+      </div>
+      <div class="prop-section">
         <h4>💬 Untertitel-Stil</h4>
         <div class="prop-row"><label>Font</label><select id="ppSubFont" onchange="updateSubSetting('sub_font',this.value)">
           <option value="Arial">Arial</option><option value="Roboto">Roboto</option>
@@ -673,6 +689,7 @@ async function loadProjectData(){
     _syncClipDurations();
     renderAssets();renderTimeline();syncMediaSources();loadSubtitleCues();
     updateProps();updateSubtitleStyle();updatePreviewAspect();
+    loadLoopVideos(PROJ.width,PROJ.height);
   }catch(e){toast('Laden: '+e.message,'err')}}
 
 async function saveProject(){
@@ -1257,7 +1274,41 @@ function setFormat(w,h,fps){
   updatePreviewAspect();
   fetch(B+'/api/editor/projects/'+PID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({width:w,height:h,fps:fps})}).catch(e=>console.warn('setFormat:',e));
   renderTimeline();
+  loadLoopVideos(w,h);
   toast(`Format: ${w}×${h} @ ${fps}fps`)}
+
+// ── Loop Video Library ───────────────────────────────────────────────────────
+async function loadLoopVideos(w,h){
+  const grid=document.getElementById('loopVideoGrid');
+  if(!grid)return;
+  w=w||PROJ?.width||0;h=h||PROJ?.height||0;
+  if(!w||!h){grid.innerHTML='<div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>';return}
+  grid.innerHTML='<div class="loop-empty">Lade…</div>';
+  try{
+    const r=await(await fetch(B+'/api/editor/loop-videos?width='+w+'&height='+h)).json();
+    const folders=Object.keys(r);
+    if(!folders.length){grid.innerHTML='<div class="loop-empty">Keine Loop-Videos für dieses Format</div>';return}
+    // Determine aspect class
+    const ratio=w/h;
+    const cardClass=ratio<0.9?'lc-portrait':ratio>1.1?'':'lc-square';
+    let html='';
+    for(const folder of folders){
+      for(const v of r[folder]){
+        html+=`<div class="loop-card ${cardClass}" onclick="importLoopVideo('${v.folder}','${v.filename}')" title="${v.display_name} (${v.size_mb} MB)">
+          <img src="${B}${v.thumb_url}" alt="${v.display_name}" loading="lazy">
+          <div class="loop-label">${esc(v.display_name)}</div>
+        </div>`}}
+    grid.innerHTML=html;
+  }catch(e){grid.innerHTML='<div class="loop-empty">Fehler: '+esc(e.message)+'</div>'}}
+
+async function importLoopVideo(folder,filename){
+  if(!PID){toast('Erst Projekt erstellen','err');return}
+  try{
+    const fd=new URLSearchParams({folder,filename,add_to_timeline:'true'});
+    const r=await(await fetch(B+'/api/editor/projects/'+PID+'/import-loop-video',{method:'POST',body:fd})).json();
+    toast('Loop-Video importiert: '+r.asset.filename);
+    await loadProjectData();
+  }catch(e){toast('Import: '+e.message,'err')}}
 
 async function deleteSelectedClip(){
   if(!PID||!SEL_CLIP)return;

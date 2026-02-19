@@ -1,0 +1,351 @@
+{
+  "generated_at": "2025-07-15",
+  "app": {
+    "entrypoint": "main.py:app",
+    "title": "Karaoke Sub Tool",
+    "version": "3.2.0",
+    "routers": [
+      {
+        "module": "src.api.routes",
+        "prefix": "/api",
+        "tags": ["api"],
+        "included_at": "main.py:91"
+      },
+      {
+        "module": "src.ai.routes",
+        "prefix": "/api/ai",
+        "tags": ["ai"],
+        "included_at": "main.py:92"
+      },
+      {
+        "module": "src.db.routes",
+        "prefix": "",
+        "tags": ["library", "video"],
+        "included_at": "main.py:93"
+      },
+      {
+        "module": "src.video.editor_routes",
+        "prefix": "/api/editor",
+        "tags": ["editor"],
+        "included_at": "main.py:94"
+      }
+    ],
+    "middleware": {
+      "CORSMiddleware": {
+        "allow_origins": ["*"],
+        "allow_credentials": true,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+        "defined_at": "main.py:77-83"
+      }
+    },
+    "exception_handlers": null,
+    "lifespan": {
+      "startup": ["deps_check", "backend_check", "ai_check", "library_db_init"],
+      "shutdown": ["close_db"]
+    },
+    "static_mounts": ["/static", "/data/output", "/data/uploads", "/data/editor"]
+  },
+  "endpoints": {
+    "main.py": {
+      "count": 2,
+      "note": "include_in_schema=false",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/",
+          "name": "serve_ui",
+          "tags": [],
+          "response_model": "FileResponse",
+          "body_model": null,
+          "impl": "main.py:107"
+        },
+        {
+          "method": "GET",
+          "path": "/editor",
+          "name": "serve_editor",
+          "tags": [],
+          "response_model": "FileResponse",
+          "body_model": null,
+          "impl": "main.py:112"
+        }
+      ]
+    },
+    "src/api/routes.py": {
+      "count": 62,
+      "prefix": "/api",
+      "routes": [
+        { "method": "GET", "path": "/api/health", "name": "health", "tags": ["api"], "response_model": "HealthResponse", "body_model": null, "impl": "src/api/routes.py:32" },
+        { "method": "GET", "path": "/api/presets", "name": "list_presets", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:40" },
+        { "method": "GET", "path": "/api/events", "name": "sse_events", "tags": ["api"], "response_model": "StreamingResponse (SSE)", "body_model": null, "impl": "src/api/routes.py:49" },
+        { "method": "POST", "path": "/api/upload", "name": "upload_file", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:70", "notes": "file upload (UploadFile)" },
+        { "method": "GET", "path": "/api/files", "name": "list_uploaded_files", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:104" },
+        { "method": "DELETE", "path": "/api/files/{filename}", "name": "delete_file", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:117" },
+        { "method": "GET", "path": "/api/files/{filename}/probe", "name": "probe_audio_file", "tags": ["api"], "response_model": "AudioProbeInfo", "body_model": null, "impl": "src/api/routes.py:127" },
+        { "method": "POST", "path": "/api/transcribe", "name": "start_transcription", "tags": ["api"], "response_model": "JobInfo", "body_model": "TranscribeRequest", "impl": "src/api/routes.py:143", "notes": "query: filename (required), lyrics_file (optional)" },
+        { "method": "POST", "path": "/api/transcribe/batch", "name": "batch_transcribe", "tags": ["api"], "response_model": null, "body_model": "TranscribeRequest", "impl": "src/api/routes.py:162", "notes": "query: filenames (required)" },
+        { "method": "POST", "path": "/api/transcribe/upload", "name": "transcribe_with_upload", "tags": ["api"], "response_model": "JobInfo", "body_model": null, "impl": "src/api/routes.py:175", "notes": "file upload + form fields" },
+        { "method": "POST", "path": "/api/refine", "name": "start_refine", "tags": ["api"], "response_model": "JobInfo", "body_model": "RefineRequest", "impl": "src/api/routes.py:193", "notes": "query: filename" },
+        { "method": "POST", "path": "/api/export", "name": "start_export", "tags": ["api"], "response_model": "JobInfo", "body_model": "ExportRequest", "impl": "src/api/routes.py:203", "notes": "query: filename" },
+        { "method": "GET", "path": "/api/jobs", "name": "list_jobs", "tags": ["api"], "response_model": "list[JobInfo]", "body_model": null, "impl": "src/api/routes.py:214" },
+        { "method": "GET", "path": "/api/jobs/{job_id}", "name": "get_job", "tags": ["api"], "response_model": "JobInfo", "body_model": null, "impl": "src/api/routes.py:220" },
+        { "method": "DELETE", "path": "/api/jobs/{job_id}", "name": "delete_job", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:226" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/files", "name": "list_job_files", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:238" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/download/{filename}", "name": "download_result", "tags": ["api"], "response_model": "FileResponse", "body_model": null, "impl": "src/api/routes.py:251" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/download-zip", "name": "download_zip", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:267", "notes": "COLLISION: same path defined again at line 602" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/content/{filename}", "name": "get_file_content", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:282" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/segments", "name": "get_segments", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:307" },
+        { "method": "PUT", "path": "/api/jobs/{job_id}/segments", "name": "update_segment", "tags": ["api"], "response_model": null, "body_model": "SegmentUpdate", "impl": "src/api/routes.py:313" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/split", "name": "split_segment", "tags": ["api"], "response_model": null, "body_model": "SegmentSplit", "impl": "src/api/routes.py:328" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/merge", "name": "merge_segments", "tags": ["api"], "response_model": null, "body_model": "SegmentMerge", "impl": "src/api/routes.py:350" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/reorder", "name": "reorder_segment", "tags": ["api"], "response_model": null, "body_model": "SegmentReorder", "impl": "src/api/routes.py:365" },
+        { "method": "PUT", "path": "/api/jobs/{job_id}/segments/bulk", "name": "bulk_replace_segments", "tags": ["api"], "response_model": null, "body_model": "list[dict]", "impl": "src/api/routes.py:377" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/time-shift", "name": "time_shift_segments", "tags": ["api"], "response_model": null, "body_model": "TimeShift", "impl": "src/api/routes.py:386" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/search-replace", "name": "search_replace_segments", "tags": ["api"], "response_model": null, "body_model": "SearchReplace", "impl": "src/api/routes.py:405" },
+        { "method": "GET", "path": "/api/dictionary", "name": "get_dictionary", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:427" },
+        { "method": "PUT", "path": "/api/dictionary", "name": "update_dictionary", "tags": ["api"], "response_model": null, "body_model": "list[DictionaryEntry]", "impl": "src/api/routes.py:441" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/apply-dictionary", "name": "apply_dictionary", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:452" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/gaps-overlaps", "name": "detect_gaps_overlaps", "tags": ["api"], "response_model": "list[GapOverlap]", "body_model": null, "impl": "src/api/routes.py:478" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/fix-gaps", "name": "fix_gaps", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:496", "notes": "query: strategy" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/speakers", "name": "get_speakers", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:527" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/speakers/assign", "name": "assign_speaker", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:537", "notes": "query: indices, speaker" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/toggle-pin", "name": "toggle_pin", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:549", "notes": "query: index" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/translate", "name": "translate_segments", "tags": ["api"], "response_model": null, "body_model": "TranslateRequest", "impl": "src/api/routes.py:561" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/project-export", "name": "export_project", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:581" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/download-zip", "name": "download_job_zip", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:602", "notes": "COLLISION: same path as line 267" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/project-import", "name": "import_project", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:629", "notes": "file upload" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/undo", "name": "undo_action", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:645" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/redo", "name": "redo_action", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:650" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/regenerate-ass", "name": "regenerate_ass", "tags": ["api"], "response_model": null, "body_model": "ExportRequest", "impl": "src/api/routes.py:658" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/stats", "name": "get_job_stats", "tags": ["api"], "response_model": "JobStats", "body_model": null, "impl": "src/api/routes.py:686" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/waveform", "name": "get_waveform", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:737" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/report", "name": "get_report", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:742" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/rhyme", "name": "get_rhyme_scheme", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:783", "notes": "query: window, threshold" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/auto-fix-cps", "name": "auto_fix_cps_route", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:797", "notes": "query: max_cps" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/karaoke-html", "name": "export_karaoke_html_route", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:817", "notes": "query: theme, embed_audio, font_size, highlight_color" },
+        { "method": "GET", "path": "/api/export-presets", "name": "get_export_presets", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:889" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/export-preset/{preset_name}", "name": "apply_export_preset", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:893" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/fill-gaps", "name": "fill_gaps_route", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:956", "notes": "query: min_gap, fill_text" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/redistribute-timing", "name": "redistribute_timing_route", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:974", "notes": "query: duration" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/text-stats", "name": "get_text_stats", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:994" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/remove-short", "name": "remove_short_segments", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1009", "notes": "query: min_chars, min_duration" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/segments/normalize-text", "name": "normalize_text_route", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1026", "notes": "query: fix_case, fix_punctuation" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/structure", "name": "get_song_structure", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1054", "notes": "query: gap_threshold" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/export-markers/{format}", "name": "export_markers", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1070" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/paste-lyrics", "name": "paste_lyrics_align", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1117", "notes": "query: text" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/duplicates", "name": "find_duplicates", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1169", "notes": "query: threshold" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/snapshot", "name": "save_snapshot", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1213", "notes": "query: name" },
+        { "method": "GET", "path": "/api/jobs/{job_id}/snapshots", "name": "list_snapshots", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1231" },
+        { "method": "POST", "path": "/api/jobs/{job_id}/snapshot/restore/{name}", "name": "restore_snapshot", "tags": ["api"], "response_model": null, "body_model": null, "impl": "src/api/routes.py:1244" }
+      ]
+    },
+    "src/ai/routes.py": {
+      "count": 7,
+      "prefix": "/api/ai",
+      "routes": [
+        { "method": "GET", "path": "/api/ai/health", "name": "ai_health", "tags": ["ai"], "response_model": null, "body_model": null, "impl": "src/ai/routes.py:93" },
+        { "method": "GET", "path": "/api/ai/chat/{job_id}", "name": "get_chat", "tags": ["ai"], "response_model": null, "body_model": null, "impl": "src/ai/routes.py:104" },
+        { "method": "DELETE", "path": "/api/ai/chat/{job_id}", "name": "clear_chat", "tags": ["ai"], "response_model": null, "body_model": null, "impl": "src/ai/routes.py:121" },
+        { "method": "POST", "path": "/api/ai/chat/{job_id}", "name": "post_chat", "tags": ["ai"], "response_model": null, "body_model": "ChatRequest", "impl": "src/ai/routes.py:134" },
+        { "method": "POST", "path": "/api/ai/chat/{job_id}/refcorrect", "name": "ref_correct", "tags": ["ai"], "response_model": null, "body_model": "RefCorrectRequest", "impl": "src/ai/routes.py:349" },
+        { "method": "POST", "path": "/api/ai/chat/{job_id}/refcorrect/upload", "name": "ref_correct_upload", "tags": ["ai"], "response_model": null, "body_model": null, "impl": "src/ai/routes.py:420", "notes": "file upload" },
+        { "method": "POST", "path": "/api/ai/segments/{job_id}/merge", "name": "smart_merge", "tags": ["ai"], "response_model": null, "body_model": "MergeRequest", "impl": "src/ai/routes.py:697", "notes": "architectural misplacement — segment mutation in AI router" }
+      ]
+    },
+    "src/db/routes.py": {
+      "count": 12,
+      "prefix": "",
+      "routes": [
+        { "method": "GET", "path": "/api/library", "name": "list_library", "tags": ["library"], "response_model": "LibraryListResponse", "body_model": null, "impl": "src/db/routes.py:71" },
+        { "method": "GET", "path": "/api/library/{rec_id}", "name": "get_library_item", "tags": ["library"], "response_model": "LibraryDetail", "body_model": null, "impl": "src/db/routes.py:86" },
+        { "method": "PATCH", "path": "/api/library/{rec_id}", "name": "update_library_item", "tags": ["library"], "response_model": null, "body_model": "LibraryUpdateRequest", "impl": "src/db/routes.py:96" },
+        { "method": "DELETE", "path": "/api/library/{rec_id}", "name": "delete_library_item", "tags": ["library"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:109" },
+        { "method": "GET", "path": "/api/library/{rec_id}/srt", "name": "get_library_srt", "tags": ["library"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:119" },
+        { "method": "POST", "path": "/api/render-video", "name": "render_video_endpoint", "tags": ["video"], "response_model": "RenderJobResponse", "body_model": null, "impl": "src/db/routes.py:170" },
+        { "method": "GET", "path": "/api/render/{job_id}/download", "name": "download_rendered_video", "tags": ["video"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:361" },
+        { "method": "GET", "path": "/api/media", "name": "list_media_endpoint", "tags": ["library"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:377" },
+        { "method": "GET", "path": "/api/media/{media_id}", "name": "get_media_endpoint", "tags": ["library"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:385" },
+        { "method": "GET", "path": "/api/media/by-filename/{filename:path}", "name": "get_media_by_filename_endpoint", "tags": ["library"], "response_model": null, "body_model": null, "impl": "src/db/routes.py:395" },
+        { "method": "GET", "path": "/api/media/{media_id}/tags", "name": "get_media_tags", "tags": ["library"], "response_model": "MediaTagsResponse", "body_model": null, "impl": "src/db/routes.py:405" },
+        { "method": "PUT", "path": "/api/media/{media_id}/tags", "name": "update_media_tags", "tags": ["library"], "response_model": null, "body_model": "dict (raw)", "impl": "src/db/routes.py:437", "notes": "uses raw dict instead of MediaTagsUpdate model" }
+      ]
+    },
+    "src/video/editor_routes.py": {
+      "count": 27,
+      "prefix": "/api/editor",
+      "routes": [
+        { "method": "GET", "path": "/api/editor/projects", "name": "api_list_projects", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:33" },
+        { "method": "POST", "path": "/api/editor/projects", "name": "api_create_project", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:38", "notes": "form fields" },
+        { "method": "GET", "path": "/api/editor/projects/{pid}", "name": "api_get_project", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:49" },
+        { "method": "PUT", "path": "/api/editor/projects/{pid}", "name": "api_update_project", "tags": ["editor"], "response_model": null, "body_model": "dict", "impl": "src/video/editor_routes.py:57" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/save", "name": "api_save_project", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:80" },
+        { "method": "GET", "path": "/api/editor/saved-projects", "name": "api_list_saved_projects", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:88" },
+        { "method": "POST", "path": "/api/editor/load-project/{filename}", "name": "api_load_project", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:110" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/undo", "name": "api_undo", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:122" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/redo", "name": "api_redo", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:129" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/assets", "name": "api_upload_asset", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:138", "notes": "file upload" },
+        { "method": "DELETE", "path": "/api/editor/projects/{pid}/assets/{asset_id}", "name": "api_remove_asset", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:158" },
+        { "method": "GET", "path": "/api/editor/projects/{pid}/assets/{asset_id}/thumb", "name": "api_asset_thumbnail", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:172" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/import-job/{job_id}", "name": "api_import_from_job", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:185" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/clips", "name": "api_add_clip", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:232", "notes": "form fields" },
+        { "method": "PUT", "path": "/api/editor/projects/{pid}/clips/{clip_id}", "name": "api_update_clip", "tags": ["editor"], "response_model": null, "body_model": "dict", "impl": "src/video/editor_routes.py:252" },
+        { "method": "DELETE", "path": "/api/editor/projects/{pid}/clips/{clip_id}", "name": "api_remove_clip", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:260" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/clips/{clip_id}/split", "name": "api_split_clip", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:268" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/clips/{clip_id}/effects", "name": "api_add_effect", "tags": ["editor"], "response_model": null, "body_model": "dict", "impl": "src/video/editor_routes.py:277" },
+        { "method": "DELETE", "path": "/api/editor/projects/{pid}/clips/{clip_id}/effects/{idx}", "name": "api_remove_effect", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:285" },
+        { "method": "PUT", "path": "/api/editor/projects/{pid}/sub-settings", "name": "api_update_sub_settings", "tags": ["editor"], "response_model": null, "body_model": "dict", "impl": "src/video/editor_routes.py:295" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/render", "name": "api_render_project", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:314" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/render-stream", "name": "api_render_stream", "tags": ["editor"], "response_model": "StreamingResponse (SSE)", "body_model": null, "impl": "src/video/editor_routes.py:333" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/render-loop", "name": "api_render_loop", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:378", "notes": "form fields" },
+        { "method": "GET", "path": "/api/editor/renders/{filename}", "name": "api_download_render", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:407" },
+        { "method": "GET", "path": "/api/editor/projects/{pid}/assets/{asset_id}/file", "name": "api_asset_file", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:418" },
+        { "method": "GET", "path": "/api/editor/projects/{pid}/summary", "name": "api_timeline_summary", "tags": ["editor"], "response_model": null, "body_model": null, "impl": "src/video/editor_routes.py:445" },
+        { "method": "POST", "path": "/api/editor/projects/{pid}/ai-chat", "name": "api_editor_ai_chat", "tags": ["editor"], "response_model": null, "body_model": "dict", "impl": "src/video/editor_routes.py:450" }
+      ]
+    }
+  },
+  "models": {
+    "src/api/models.py": {
+      "enums": [
+        { "name": "BackendEnum", "values": ["voxtral", "openai", "local", "whisperx"] },
+        { "name": "LanguageEnum", "values": ["de", "en", "fr", "es", "it", "pt", "nl", "ja", "ko", "zh", "auto"] },
+        { "name": "KaraokeModeEnum", "values": ["k", "kf", "ko"] },
+        { "name": "PresetEnum", "values": ["default", "speech", "singing", "rap"] },
+        { "name": "ExportFormatEnum", "values": ["srt", "ass", "vtt", "lrc", "txt"] },
+        { "name": "LyricsTemplateModeEnum", "values": ["align", "replace", "merge"] },
+        { "name": "LyricsModeEnum", "values": ["off", "align", "replace", "merge"] },
+        { "name": "MatchModeEnum", "values": ["exact", "fuzzy"] },
+        { "name": "ApproxKaraokeEnum", "values": ["off", "linear", "syllable"] },
+        { "name": "JobStatus", "values": ["pending", "preprocessing", "transcribing", "refining", "exporting", "rendering_preview", "completed", "failed", "cancelled"] }
+      ],
+      "request_models": [
+        { "name": "TranscribeRequest", "used": true },
+        { "name": "RefineRequest", "used": true },
+        { "name": "ExportRequest", "used": true },
+        { "name": "SegmentUpdate", "used": true },
+        { "name": "SegmentSplit", "used": true },
+        { "name": "SegmentMerge", "used": true },
+        { "name": "SegmentReorder", "used": true },
+        { "name": "TimeShift", "used": true },
+        { "name": "SearchReplace", "used": true },
+        { "name": "DictionaryEntry", "used": true },
+        { "name": "TranslateRequest", "used": true },
+        { "name": "RetranscribeSegment", "used": false, "notes": "imported but never used in routes" }
+      ],
+      "response_models": [
+        { "name": "JobInfo", "used": true },
+        { "name": "JobResult", "used": true },
+        { "name": "SegmentInfo", "used": false },
+        { "name": "WordInfoSchema", "used": false },
+        { "name": "FileInfo", "used": true },
+        { "name": "AudioProbeInfo", "used": true },
+        { "name": "GapOverlap", "used": true },
+        { "name": "JobStats", "used": true },
+        { "name": "HealthResponse", "used": true },
+        { "name": "MediaInfo", "used": false },
+        { "name": "MediaTagsResponse", "used": true },
+        { "name": "MediaTagsUpdate", "used": false, "notes": "exists but update_media_tags uses raw dict" },
+        { "name": "LyricsTemplateInfo", "used": false }
+      ]
+    },
+    "src/ai/routes.py": [
+      { "name": "ChatRequest", "used": true },
+      { "name": "RefCorrectRequest", "used": true },
+      { "name": "MergeRequest", "used": true },
+      { "name": "MergeCandidate", "used": true }
+    ],
+    "src/db/routes.py": [
+      { "name": "LibraryItem", "used": true },
+      { "name": "LibraryDetail", "used": true },
+      { "name": "LibraryListResponse", "used": true },
+      { "name": "LibraryUpdateRequest", "used": true },
+      { "name": "RenderRequestOpts", "used": true },
+      { "name": "RenderJobResponse", "used": true }
+    ]
+  },
+  "dependencies": {
+    "security": "none",
+    "auth": "none",
+    "rate_limiting": "none",
+    "cors": "allow_all"
+  },
+  "issues": [
+    {
+      "id": 1,
+      "severity": "high",
+      "category": "routing",
+      "description": "Route collision: GET /api/jobs/{job_id}/download-zip defined twice",
+      "locations": ["src/api/routes.py:267", "src/api/routes.py:602"]
+    },
+    {
+      "id": 2,
+      "severity": "low",
+      "category": "hygiene",
+      "description": "Unused models: SegmentInfo, WordInfoSchema, MediaInfo, MediaTagsUpdate, LyricsTemplateInfo, RetranscribeSegment",
+      "locations": ["src/api/models.py"]
+    },
+    {
+      "id": 3,
+      "severity": "medium",
+      "category": "api_quality",
+      "description": "Missing response_model on ~40 endpoints — weakens OpenAPI docs and validation",
+      "locations": ["src/api/routes.py", "src/ai/routes.py", "src/db/routes.py", "src/video/editor_routes.py"]
+    },
+    {
+      "id": 4,
+      "severity": "medium",
+      "category": "api_quality",
+      "description": "update_media_tags uses raw dict instead of MediaTagsUpdate model",
+      "locations": ["src/db/routes.py:437"]
+    },
+    {
+      "id": 5,
+      "severity": "low",
+      "category": "architecture",
+      "description": "Smart merge endpoint in AI routes is a segment mutation — belongs in api/routes.py",
+      "locations": ["src/ai/routes.py:697"]
+    },
+    {
+      "id": 6,
+      "severity": "low",
+      "category": "architecture",
+      "description": "Pydantic models scattered across route files instead of centralized in models.py",
+      "locations": ["src/ai/routes.py", "src/db/routes.py"]
+    },
+    {
+      "id": 7,
+      "severity": "high",
+      "category": "security",
+      "description": "No authentication or authorization on any endpoint",
+      "locations": ["main.py"]
+    },
+    {
+      "id": 8,
+      "severity": "high",
+      "category": "security",
+      "description": "CORS allows all origins with credentials=true",
+      "locations": ["main.py:77-83"]
+    },
+    {
+      "id": 9,
+      "severity": "low",
+      "category": "hygiene",
+      "description": "RetranscribeSegment imported but never used in routes.py",
+      "locations": ["src/api/routes.py"]
+    },
+    {
+      "id": 10,
+      "severity": "medium",
+      "category": "security",
+      "description": "No rate limiting on any endpoint",
+      "locations": ["main.py"]
+    },
+    {
+      "id": 11,
+      "severity": "low",
+      "category": "api_quality",
+      "description": "export-markers format path param validated at runtime with no enum constraint",
+      "locations": ["src/api/routes.py:1070"]
+    }
+  ]
+}
