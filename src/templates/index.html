@@ -59,7 +59,7 @@
 /* ── Tap-to-Time ── */
 .ttt-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;font-family:var(--font)}
 .ttt-overlay.open{display:flex}
-.ttt-counter{font-size:5rem;font-weight:700;font-family:var(--mono);background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:20px;transition:transform .08s}
+.ttt-counter{font-size:5rem;font-weight:700;font-family:var(--mono);background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:20px;transition:transform .08s}
 .ttt-counter.pulse{transform:scale(1.15)}
 .ttt-line{font-size:1.5rem;color:var(--text);max-width:80vw;text-align:center;opacity:.6;transition:opacity .15s,transform .15s}
 .ttt-line.active{opacity:1;transform:scale(1.05);color:var(--accent)}
@@ -94,7 +94,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .app{display:grid;grid-template-columns:290px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
 .hdr{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
-.hdr h1{font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr h1{font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hdr .v{font-family:var(--mono);font-size:.6rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:4px}
 .hdr .dot{width:8px;height:8px;border-radius:50%;margin-left:auto}
 .dot-ok{background:var(--accent)}.dot-err{background:var(--danger)}
@@ -253,7 +253,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .chat-panel{position:fixed;top:0;right:0;width:400px;max-width:90vw;height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:800;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;box-shadow:-4px 0 20px rgba(0,0,0,.3)}
 .chat-panel.open{transform:translateX(0)}
 .chat-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
-.chat-head h3{font-size:.88rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.chat-head h3{font-size:.88rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .chat-head .ai-model{font-family:var(--mono);font-size:.55rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:3px}
 .chat-close{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:.8rem;cursor:pointer;padding:0}
 .chat-close:hover{color:var(--text);border-color:var(--accent)}
@@ -358,7 +358,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .sube-bg.open{display:flex}
 .sube{background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:100%;max-width:900px;height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.6)}
 .sube-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-.sube-head h2{font-size:1rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sube-head h2{font-size:1rem;font-weight:700;flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .sube-head .sube-info{font-family:var(--mono);font-size:.6rem;color:var(--dim);background:var(--bg4);padding:2px 6px;border-radius:4px}
 .sube-body{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:0}
 .sube-hint{font-size:.6rem;color:var(--dim);padding:6px 16px;background:var(--bg3);border-bottom:1px solid var(--border);flex-shrink:0}
