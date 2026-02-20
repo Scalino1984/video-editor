@@ -215,7 +215,10 @@ class TestConcurrentDBSafety:
 
         assert not errors
         records, total = list_transcriptions(limit=50)
-        assert total >= 5
+        assert total == 5
+        saved_filenames = {r.source_filename for r in records}
+        for i in range(5):
+            assert f"regression_{i}.mp3" in saved_filenames
 
 
 # ── Regression: bulk replace preserves JSON structure ────────────────────────
