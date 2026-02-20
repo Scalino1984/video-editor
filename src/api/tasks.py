@@ -685,6 +685,7 @@ Regeln:
 - Beachte Reimschemata: wenn Zeile A reimt, muss die korrigierte Version auch reimen
 - Behalte Slang, Umgangssprache und kuenstlerische Freiheiten bei
 - Aendere NUR Woerter die eindeutig falsch transkribiert sind
+- WICHTIG: Die Wortanzahl pro Zeile MUSS exakt gleich bleiben! Nur 1:1-Wortersetzungen, kein Einfuegen/Loeschen/Zusammenfuegen/Aufteilen von Woertern
 - Gib NUR die geaenderten Zeilen zurueck im Format: NUMMER: korrigierter Text
 - Wenn nichts zu korrigieren ist, antworte mit: KEINE KORREKTUREN
 - Sprache: {lang_name}
@@ -709,9 +710,10 @@ Lyrics:
             info(f"[{job_id}] AI: no corrections needed")
             return segments, True
 
-        # Parse corrections
+        # Parse corrections with word-count validation
         import re
         corrections = 0
+        rejected = 0
         for line in result_text.split("\n"):
             line = line.strip()
             match = re.match(r"(\d+)\s*:\s*(.+)", line)
@@ -721,11 +723,21 @@ Lyrics:
             new_text = match.group(2).strip()
             if 0 <= idx < len(segments) and new_text != segments[idx].text:
                 old_text = segments[idx].text
+                # Word count validation: count words per sub-line (split by \n)
+                old_words = old_text.split()
+                new_words = new_text.split()
+                if len(old_words) != len(new_words):
+                    warn(
+                        f"[{job_id}] AI fix [{idx+1}] REJECTED: word count changed "
+                        f"({len(old_words)} -> {len(new_words)})"
+                    )
+                    rejected += 1
+                    continue
                 segments[idx].text = new_text
                 debug(f"[{job_id}] AI fix [{idx+1}]: '{old_text}' -> '{new_text}'")
                 corrections += 1
 
-        info(f"[{job_id}] AI corrected {corrections} segments")
+        info(f"[{job_id}] AI corrected {corrections} segments ({rejected} rejected for word count)")
         return segments, True
 
     except Exception as e:

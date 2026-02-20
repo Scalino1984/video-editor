@@ -152,8 +152,11 @@ Sei praezise und musikaffin — du kennst Reimschemata, Flow, Bars und Songstruk
 COMMAND_PROMPTS: dict[str, str] = {
     "correct": (
         "Analysiere die Lyrics und korrigiere Transkriptionsfehler. Beachte Reimschemata, "
-        "Slang, Kontext der umliegenden Zeilen. Nutze update_multiple_segments um die "
-        "korrigierten Texte zu setzen. Gib eine Zusammenfassung der Aenderungen."
+        "Slang, Kontext der umliegenden Zeilen. "
+        "WICHTIG: Die Wortanzahl pro Zeile MUSS exakt gleich bleiben! Nur 1:1-Wortersetzungen, "
+        "kein Einfuegen, Loeschen, Zusammenfuegen oder Aufteilen von Woertern. "
+        "Nutze update_multiple_segments um die korrigierten Texte zu setzen. "
+        "Gib eine Zusammenfassung der Aenderungen."
     ),
     "punctuate": (
         "Setze Interpunktion in die Lyrics: Kommas, Punkte, Fragezeichen, Ausrufezeichen. "
@@ -177,6 +180,7 @@ COMMAND_PROMPTS: dict[str, str] = {
     "refcorrect": (
         "Der User gibt dir einen Referenztext. Vergleiche ihn Zeile fuer Zeile mit den "
         "aktuellen Segmenten und korrigiere NUR inhaltliche Fehler (falsch transkribierte Woerter). "
+        "WICHTIG: Die Wortanzahl pro Zeile MUSS exakt gleich bleiben! Nur 1:1-Wortersetzungen. "
         "NICHT aendern: Zeitcodes, Segmentstruktur, Zeilenumbrueche, ASS-Tags. "
         "Nutze update_multiple_segments fuer alle Korrekturen. "
         "Gib eine Zusammenfassung mit Segment-Nummern und was geaendert wurde."
@@ -277,8 +281,10 @@ def create_agent() -> Agent[ChatDeps, str]:
         """Aendert mehrere Segmente auf einmal.
         Format: Eine Aenderung pro Zeile als 'NUMMER: neuer text'
         Beispiel: '3: Korrigierter Text\\n7: Anderer Text'
+        WICHTIG: Die Wortanzahl pro Zeile muss exakt gleich bleiben (nur 1:1-Wortersetzungen).
         """
         updated = []
+        rejected = []
         for line in changes.strip().split("\n"):
             line = line.strip()
             if not line:
@@ -290,11 +296,26 @@ def create_agent() -> Agent[ChatDeps, str]:
             text = match.group(2).strip()
             if 0 <= idx < len(ctx.deps.segments):
                 old = ctx.deps.segments[idx].get("text", "")
+                old_wc = len(old.split())
+                new_wc = len(text.split())
+                if old_wc != new_wc:
+                    rejected.append(
+                        f"  [{idx+1}] ABGELEHNT: Wortanzahl {old_wc} -> {new_wc}"
+                    )
+                    continue
                 ctx.deps.segments[idx]["text"] = text
                 updated.append(f"  [{idx+1}] '{old}' -> '{text}'")
         if updated:
             ctx.deps.save_segments()
-            return f"{len(updated)} Segmente geaendert:\n" + "\n".join(updated)
+            result = f"{len(updated)} Segmente geaendert:\n" + "\n".join(updated)
+            if rejected:
+                result += f"\n{len(rejected)} abgelehnt (Wortanzahl geaendert):\n" + "\n".join(rejected)
+            return result
+        if rejected:
+            return (
+                "Keine Segmente geaendert.\n"
+                f"{len(rejected)} abgelehnt (Wortanzahl geaendert):\n" + "\n".join(rejected)
+            )
         return "Keine Segmente geaendert."
 
     @agent.tool
