@@ -173,16 +173,13 @@ class TestTrackManagement:
         )
         from pathlib import Path
         p = create_project("Force Test")
-        # Add an asset and clip to video track
-        # Note: since clips use track type string, and we have only one video track,
-        # removing it with clips present requires force
-        # We simulate by having only 1 video track
         vid_tracks = [t for t in p.tracks if t.type == "video"]
         assert len(vid_tracks) == 1
-        # Without actual clips, track is empty — add a dummy
-        from src.video.editor import Clip, _push_undo
-        _push_undo(p.id)
-        p.clips.append(Clip(id="dummy", asset_id="a1", track="video", start=0, duration=5))
+        # Use add_clip with a dummy asset to create a clip on the video track
+        from src.video.editor import Asset
+        asset = Asset(id="a1", filename="test.mp4", path="/tmp/test.mp4", type="video", duration=5)
+        p.assets["a1"] = asset
+        add_clip(p.id, "a1", track="video", start=0, duration=5)
 
         ok = remove_track(p.id, vid_tracks[0].id, force=False)
         assert ok is False  # Can't remove non-empty track without force

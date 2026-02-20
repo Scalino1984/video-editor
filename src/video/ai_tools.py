@@ -104,21 +104,26 @@ def parse_chat_command(message: str, pid: str) -> list[dict] | None:
     """
     msg = message.strip().lower()
 
-    # Track add patterns: "+ video", "füge eine video-ebene hinzu", "neue spur audio"
+    # ── Track add patterns ──
+    # Matches: "+ video", "füge eine video-ebene hinzu", "neue spur audio", "add subtitle track"
     add_patterns = [
-        _re.compile(r"^\+\s*(video|audio|subtitle)$"),
-        _re.compile(r"(?:füge|erstelle|add)\s+(?:eine?\s+)?(?:neue?\s+)?(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+hinzu)?"),
-        _re.compile(r"(?:neue?|new)\s+(?:spur|ebene|track|layer)\s+(video|audio|subtitle)"),
-        _re.compile(r"(?:neue?|new)\s+(video|audio|subtitle)\s+(?:spur|ebene|track|layer)"),
+        _re.compile(r"^\+\s*(video|audio|subtitle)$"),                          # shorthand: "+ video"
+        _re.compile(                                                             # DE/EN verb + type + noun
+            r"(?:füge|erstelle|add)\s+(?:eine?\s+)?(?:neue?\s+)?"
+            r"(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+hinzu)?"
+        ),
+        _re.compile(r"(?:neue?|new)\s+(?:spur|ebene|track|layer)\s+(video|audio|subtitle)"),  # "neue spur video"
+        _re.compile(r"(?:neue?|new)\s+(video|audio|subtitle)\s+(?:spur|ebene|track|layer)"),  # "neue video spur"
     ]
     for pat in add_patterns:
         m = pat.search(msg)
         if m:
             return [{"action": "add_track", "type": m.group(1)}]
 
-    # Track remove patterns: "- ebene 2", "entferne spur 3", "- subtitle"
+    # ── Track remove by index ──
+    # Matches: "- ebene 2", "entferne spur 3", "- track 1 force"
     remove_idx_patterns = [
-        _re.compile(r"^-\s*(?:ebene|spur|track|layer)\s*(\d+)(?:\s+force)?$"),
+        _re.compile(r"^-\s*(?:ebene|spur|track|layer)\s*(\d+)(?:\s+force)?$"),       # "- ebene 2"
         _re.compile(r"(?:entferne|lösche|remove|delete)\s+(?:ebene|spur|track|layer)\s*(\d+)(?:\s+force)?"),
     ]
     for pat in remove_idx_patterns:
@@ -131,10 +136,14 @@ def parse_chat_command(message: str, pid: str) -> list[dict] | None:
                 track = sorted(p.tracks, key=lambda t: t.index)[idx]
                 return [{"action": "remove_track", "track_id": track.id, "force": force}]
 
-    # Remove by type: "- subtitle", "entferne video spur"
+    # ── Track remove by type ──
+    # Matches: "- subtitle", "entferne video spur", "delete audio track force"
     remove_type_patterns = [
-        _re.compile(r"^-\s*(video|audio|subtitle)$"),
-        _re.compile(r"(?:entferne|lösche|remove|delete)\s+(?:die\s+)?(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+force)?"),
+        _re.compile(r"^-\s*(video|audio|subtitle)$"),                                     # "- subtitle"
+        _re.compile(                                                                       # "entferne video spur"
+            r"(?:entferne|lösche|remove|delete)\s+(?:die\s+)?"
+            r"(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+force)?"
+        ),
     ]
     for pat in remove_type_patterns:
         m = pat.search(msg)
