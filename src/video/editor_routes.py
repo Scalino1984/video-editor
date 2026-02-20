@@ -29,6 +29,8 @@ from src.video.editor import (
 
 router = APIRouter(prefix="/api/editor", tags=["editor"])
 
+_INT_FIELDS = {"width", "height", "fps", "crf", "sub_size", "sub_outline_width", "sub_margin_v", "sub_y_percent", "sub_lines"}
+
 LOOP_VIDEOS_DIR = Path("src/library/loop_videos")
 
 # Mapping: project aspect ratio → loop video subfolder
@@ -201,7 +203,6 @@ async def api_update_project(pid: str, data: dict):
         "sub_lines", "sub_bg_enabled", "sub_bg_color", "sub_highlight_color", "video_fit",
     }
     changed = []
-    _INT_FIELDS = {"width", "height", "fps", "crf", "sub_size", "sub_outline_width", "sub_margin_v", "sub_y_percent", "sub_lines"}
     for k, v in data.items():
         if k in allowed:
             if k in _INT_FIELDS:
@@ -610,7 +611,6 @@ async def api_update_sub_settings(pid: str, data: dict | None = None):
         "sub_outline_width", "sub_position", "sub_margin_v", "sub_lines",
         "sub_highlight_color", "sub_y_percent", "sub_bg_enabled", "sub_bg_color",
     }
-    _INT_FIELDS = {"sub_size", "sub_outline_width", "sub_margin_v", "sub_y_percent", "sub_lines"}
     for k, v in data.items():
         if k in allowed:
             if k in _INT_FIELDS:

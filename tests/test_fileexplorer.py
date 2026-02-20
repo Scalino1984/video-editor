@@ -128,6 +128,10 @@ class TestFileExplorer:
         r = editor_client.delete("/api/editor/delete-project/..%2F..%2Fetc%2Fpasswd")
         assert r.status_code in (400, 404)
 
+    def test_delete_path_traversal_unencoded_blocked(self, editor_client):
+        r = editor_client.delete("/api/editor/delete-project/../../etc/passwd")
+        assert r.status_code in (400, 404, 422)
+
     def test_delete_non_json_blocked(self, editor_client, _patch_dirs, storage_root):
         # Create a non-JSON file in projects dir
         proj_dir = storage_root / "editor" / "projects"
