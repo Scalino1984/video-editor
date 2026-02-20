@@ -283,7 +283,117 @@ class TestSubtitleLifecycle:
         assert "hier" in content
 
 
-# ── Logging tests ─────────────────────────────────────────────────────────────
+# ── Karaoke tag round-trip test ───────────────────────────────────────────────
+
+class TestKaraokeTagParsing:
+    """Verify ASS karaoke tags can be parsed back into word-level timing.
+
+    This mirrors the JS `_parseKaraokeTags` logic in editor.html, ensuring
+    the generated ASS output is parseable for the live preview fill effect.
+    """
+
+    @staticmethod
+    def _parse_karaoke_tags_py(raw: str, line_start: float) -> list:
+        """Python equivalent of editor.html's _parseKaraokeTags JS function."""
+        import re as _re
+        pattern = _re.compile(r"\{[^}]*\\(kf|ko|k)(\d+)[^}]*\}([^{]*)")
+        words = []
+        t = line_start
+        for m in pattern.finditer(raw):
+            mode = m.group(1)
+            dur_cs = int(m.group(2))
+            w = m.group(3).replace("\\N", " ").strip()
+            if not w:
+                t += dur_cs / 100
+                continue
+            words.append({"start": t, "end": t + dur_cs / 100, "word": w, "_mode": mode})
+            t += dur_cs / 100
+        return words
+
+    def test_round_trip_kf_tags(self, tmp_path: Path):
+        """Generate ASS with \\kf tags, then parse back word timing."""
+        from src.video.editor import generate_styled_ass
+
+        segments = _make_segments(with_words=True)
+        project = _make_project(sub_lines=1, sub_highlight_color="&H0000FFFF")
+        sub_path = tmp_path / "test.ass"
+        sub_path.write_text("", encoding="utf-8")
+        out_path = tmp_path / "styled.ass"
+
+        generate_styled_ass(sub_path, project, out_path, segments=segments)
+        content = out_path.read_text(encoding="utf-8")
+
+        dialogues = [l for l in content.splitlines() if l.startswith("Dialogue:")]
+        assert len(dialogues) >= 1
+
+        # Parse first dialogue line
+        parts = dialogues[0].split(",", 9)
+        start_str = parts[1].strip()
+        # Parse ASS time
+        sp = start_str.split(":")
+        start_sec = int(sp[0]) * 3600 + int(sp[1]) * 60 + float(sp[2])
+        raw_text = parts[9]
+
+        words = self._parse_karaoke_tags_py(raw_text, start_sec)
+        assert len(words) == 2, f"Expected 2 words, got {len(words)}: {words}"
+
+        # Verify word text
+        assert words[0]["word"] == "Hallo"
+        assert words[1]["word"] == "Welt"
+
+        # Verify mode is kf
+        assert words[0]["_mode"] == "kf"
+        assert words[1]["_mode"] == "kf"
+
+        # Verify timing: durations should match original
+        dur0 = round((words[0]["end"] - words[0]["start"]) * 100)
+        dur1 = round((words[1]["end"] - words[1]["start"]) * 100)
+        assert dur0 == 80, f"Hallo duration: expected 80cs, got {dur0}cs"
+        assert dur1 == 110, f"Welt duration: expected 110cs, got {dur1}cs"
+
+    def test_parse_with_color_override(self, tmp_path: Path):
+        """Ensure \\1c color override in first word doesn't break parsing."""
+        from src.video.editor import generate_styled_ass
+
+        segments = _make_segments(with_words=True)
+        hl_color = "&H00FF00FF"
+        project = _make_project(sub_lines=1, sub_highlight_color=hl_color)
+        sub_path = tmp_path / "test.ass"
+        sub_path.write_text("", encoding="utf-8")
+        out_path = tmp_path / "styled.ass"
+
+        generate_styled_ass(sub_path, project, out_path, segments=segments)
+        content = out_path.read_text(encoding="utf-8")
+
+        dialogues = [l for l in content.splitlines() if l.startswith("Dialogue:")]
+        parts = dialogues[0].split(",", 9)
+        start_str = parts[1].strip()
+        sp = start_str.split(":")
+        start_sec = int(sp[0]) * 3600 + int(sp[1]) * 60 + float(sp[2])
+        raw_text = parts[9]
+
+        # Parse — must handle {\kf80\1c&H00FF00FF}Hallo correctly
+        words = self._parse_karaoke_tags_py(raw_text, start_sec)
+        assert len(words) == 2
+        assert words[0]["word"] == "Hallo"
+        assert words[0]["_mode"] == "kf"
+
+    def test_parse_no_karaoke_tags(self):
+        """Lines without karaoke tags should return empty word list."""
+        words = self._parse_karaoke_tags_py("Just plain text", 0.0)
+        assert words == []
+
+    def test_parse_k_mode(self):
+        """Parse \\k (instant highlight) tags."""
+        raw = r"{\k50}Hello {\k30}World"
+        words = self._parse_karaoke_tags_py(raw, 1.0)
+        assert len(words) == 2
+        assert words[0]["_mode"] == "k"
+        assert words[1]["_mode"] == "k"
+        assert words[0]["word"] == "Hello"
+        assert words[1]["word"] == "World"
+        assert abs(words[0]["end"] - 1.5) < 0.01
+        assert abs(words[1]["start"] - 1.5) < 0.01
 
 class TestLogging:
     """Test correlation IDs, file logging, and context management."""
