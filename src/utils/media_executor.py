@@ -39,6 +39,81 @@ MEDIA_IONICE_LEVEL: int = int(os.environ.get("MEDIA_IONICE_LEVEL", "7"))
 
 IS_LINUX: bool = platform.system() == "Linux"
 
+# x264 thread limit (0 = not set, use ffmpeg_threads)
+X264_THREADS: int = 0
+_configured: bool = False
+
+
+def _auto_threads() -> int:
+    """Calculate automatic thread count: half of cores, min 2, max 8."""
+    cores = os.cpu_count() or 4
+    return max(2, min(cores // 2, 8))
+
+
+def configure_media_executor(
+    ffmpeg_threads: int = 0,
+    x264_threads: int = 0,
+    nice: int = 10,
+    max_concurrent: int = 1,
+) -> dict[str, int]:
+    """Apply rendering config to the media executor.
+
+    Called once at startup. ENV vars take precedence over config values.
+    Args 0 = auto-calculate from CPU cores.
+
+    Returns dict with effective values.
+    """
+    global FFMPEG_THREADS, X264_THREADS, MEDIA_NICE, MAX_MEDIA_JOBS
+    global _semaphore, _async_semaphore, _configured
+
+    # Resolve ffmpeg_threads: env > config > auto
+    env_t = os.environ.get("FFMPEG_THREADS", "")
+    if env_t.isdigit() and int(env_t) > 0:
+        FFMPEG_THREADS = int(env_t)
+    elif ffmpeg_threads > 0:
+        FFMPEG_THREADS = ffmpeg_threads
+    else:
+        FFMPEG_THREADS = _auto_threads()
+
+    # Resolve x264_threads: env > config > same as ffmpeg_threads
+    env_x = os.environ.get("X264_THREADS", "")
+    if env_x.isdigit() and int(env_x) > 0:
+        X264_THREADS = int(env_x)
+    elif x264_threads > 0:
+        X264_THREADS = x264_threads
+    else:
+        X264_THREADS = FFMPEG_THREADS
+
+    # Resolve nice: env > config
+    env_n = os.environ.get("MEDIA_NICE", "")
+    if env_n.isdigit():
+        MEDIA_NICE = int(env_n)
+    else:
+        MEDIA_NICE = nice
+
+    # Resolve max_concurrent: env > config
+    env_m = os.environ.get("MAX_MEDIA_JOBS", "")
+    if env_m.isdigit() and int(env_m) > 0:
+        MAX_MEDIA_JOBS = int(env_m)
+    else:
+        MAX_MEDIA_JOBS = max(1, max_concurrent)
+
+    # Re-create semaphores with new limit
+    _semaphore = threading.Semaphore(MAX_MEDIA_JOBS)
+    _async_semaphore = None  # will be re-created lazily
+
+    _configured = True
+    info(f"Media executor configured: ffmpeg_threads={FFMPEG_THREADS}, "
+         f"x264_threads={X264_THREADS}, nice={MEDIA_NICE}, "
+         f"max_concurrent={MAX_MEDIA_JOBS} (cores={os.cpu_count()})")
+
+    return {
+        "ffmpeg_threads": FFMPEG_THREADS,
+        "x264_threads": X264_THREADS,
+        "nice": MEDIA_NICE,
+        "max_concurrent": MAX_MEDIA_JOBS,
+    }
+
 
 # ── Global semaphore (singleton) ──────────────────────────────────────────────
 
@@ -98,6 +173,7 @@ def get_media_queue_status() -> dict[str, Any]:
         "max_concurrent": MAX_MEDIA_JOBS,
         "max_pending": MAX_PENDING_MEDIA_JOBS,
         "ffmpeg_threads": FFMPEG_THREADS,
+        "x264_threads": X264_THREADS,
         "nice": MEDIA_NICE,
         "queued": queued,
         "running": running,
@@ -145,7 +221,7 @@ def inject_ffmpeg_thread_flags(cmd: list[str]) -> list[str]:
     """Insert -threads flag into an ffmpeg command if not already present.
 
     Inserts right after 'ffmpeg' (position 1) so it applies globally.
-    Also adds -filter_threads and -filter_complex_threads where applicable.
+    Also adds -filter_threads, -filter_complex_threads, and x264 thread limits.
     """
     if not cmd or cmd[0] not in ("ffmpeg", "ffprobe"):
         return cmd
@@ -167,6 +243,27 @@ def inject_ffmpeg_thread_flags(cmd: list[str]) -> list[str]:
         if "-filter_complex" in cmd:
             cmd.insert(insert_pos + 2, t)
             cmd.insert(insert_pos + 2, "-filter_complex_threads")
+
+        # Inject x264 thread limit via -x264opts if libx264 is used
+        if X264_THREADS > 0:
+            try:
+                codec_idx = cmd.index("-c:v")
+                if codec_idx + 1 < len(cmd) and cmd[codec_idx + 1] == "libx264":
+                    # Check if -x264opts already present
+                    if "-x264opts" not in cmd:
+                        # Insert after the codec value
+                        ins = codec_idx + 2
+                        cmd.insert(ins, f"threads={X264_THREADS}")
+                        cmd.insert(ins, "-x264opts")
+                    else:
+                        # Append to existing -x264opts
+                        opts_idx = cmd.index("-x264opts")
+                        if opts_idx + 1 < len(cmd):
+                            existing = cmd[opts_idx + 1]
+                            if "threads=" not in existing:
+                                cmd[opts_idx + 1] = f"{existing}:threads={X264_THREADS}"
+            except ValueError:
+                pass  # no -c:v flag
 
     return cmd
 

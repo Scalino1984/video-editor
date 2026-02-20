@@ -18,6 +18,32 @@ from pathlib import Path
 from src.utils.logging import info, warn, error, debug
 
 
+def _demucs_thread_env(cpu_threads: int = 0) -> dict[str, str]:
+    """Build env vars to limit torch/OMP/MKL threads in the demucs subprocess.
+
+    Resolution: DEMUCS_THREADS env > cpu_threads arg > auto (half cores, max 6).
+    Returns dict of env vars to merge into subprocess env.
+    """
+    env_t = os.environ.get("DEMUCS_THREADS", "")
+    if env_t.isdigit() and int(env_t) > 0:
+        threads = int(env_t)
+    elif cpu_threads > 0:
+        threads = cpu_threads
+    else:
+        cores = os.cpu_count() or 4
+        threads = max(2, min(cores // 2, 6))
+
+    info(f"Demucs CPU thread limit: {threads} (cores={os.cpu_count()})")
+    return {
+        "OMP_NUM_THREADS": str(threads),
+        "MKL_NUM_THREADS": str(threads),
+        "OPENBLAS_NUM_THREADS": str(threads),
+        "VECLIB_MAXIMUM_THREADS": str(threads),
+        "NUMEXPR_NUM_THREADS": str(threads),
+        "TORCH_NUM_THREADS": str(threads),
+    }
+
+
 @dataclass(frozen=True)
 class SeparationResult:
     """Result of a stem separation run."""
@@ -32,10 +58,12 @@ class VocalSeparator:
     VALID_STEMS = {"vocals", "all"}
     VALID_BITRATES = {64, 96, 128, 160, 192, 224, 256, 320}
 
-    def __init__(self, model: str = "htdemucs", device: str = "auto", verbose: bool = True):
+    def __init__(self, model: str = "htdemucs", device: str = "auto",
+                 verbose: bool = True, cpu_threads: int = 0):
         self.model = model
         self.device = device
         self.verbose = verbose
+        self.cpu_threads = cpu_threads
         self._available: bool | None = None
         self._demucs_exec: list[str] | None = None
 
@@ -146,6 +174,9 @@ class VocalSeparator:
         venv_bin = str(Path(sys.executable).resolve().parent)
         env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
 
+        # Inject thread limits to prevent CPU exhaustion
+        env.update(_demucs_thread_env(self.cpu_threads))
+
         try:
             from src.utils.media_executor import run_media_subprocess
             r = run_media_subprocess(
@@ -189,9 +220,10 @@ class VocalSeparator:
 # ── Pipeline interface ────────────────────────────────────────────────────────
 
 def isolate_vocals(input_path: Path, output_dir: Path | None = None,
-                   model: str = "htdemucs", device: str = "cpu") -> Path | None:
+                   model: str = "htdemucs", device: str = "cpu",
+                   cpu_threads: int = 0) -> Path | None:
     """Simple vocal isolation for the transcription pipeline. Returns vocals path or None."""
-    sep = VocalSeparator(model=model, device=device)
+    sep = VocalSeparator(model=model, device=device, cpu_threads=cpu_threads)
     if not sep.is_available():
         warn("Demucs not installed — skipping vocal isolation")
         warn("Install with: pip install demucs torch")

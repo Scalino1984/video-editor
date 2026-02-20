@@ -260,7 +260,11 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
             if req.vocal_isolation:
                 update_job(job_id, progress=0.07, stage="Vocal isolation")
                 info(f"[{job_id}] Vocal isolation...")
-                vocals = isolate_vocals(current, output_dir=tmp_dir / "sep", device=req.vocal_device)
+                vocals = isolate_vocals(
+                    current, output_dir=tmp_dir / "sep",
+                    device=req.vocal_device,
+                    cpu_threads=_get_vocal_cpu_threads(),
+                )
                 if vocals:
                     current = vocals
 
@@ -765,6 +769,15 @@ def _generate_waveform_data(audio_path: Path, output_path: Path, num_points: int
 
 
 # ── Backend factory ───────────────────────────────────────────────────────────
+
+def _get_vocal_cpu_threads() -> int:
+    """Load vocal isolation cpu_threads from config."""
+    try:
+        from src.utils.config import load_config
+        return load_config().preprocess.vocal_isolation.cpu_threads
+    except Exception:
+        return 0
+
 
 def _get_backend(name: str, model: str = "", diarize: bool = True, req: TranscribeRequest | None = None):
     if name == "voxtral":

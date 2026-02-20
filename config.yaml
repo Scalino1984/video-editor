@@ -14,6 +14,7 @@ preprocess:
     enabled: false
     model: htdemucs
     device: cpu                # cpu | cuda
+    cpu_threads: 0             # 0 = auto (half of cores, max 6). Env: DEMUCS_THREADS
 
 transcription:
   backend: voxtral             # voxtral | openai_whisper | local_whisper | whisperx
@@ -74,3 +75,9 @@ confidence:
   low_threshold: 0.6
   mark_in_ass: true
   report_format: json          # json | csv
+
+rendering:
+  ffmpeg_threads: 0            # 0 = auto (half of cores, min 2). Env override: FFMPEG_THREADS
+  x264_threads: 0              # 0 = same as ffmpeg_threads. Limits libx264 encoder threads
+  nice: 10                     # Process priority 0-19 (Linux only). Env: MEDIA_NICE
+  max_concurrent: 1            # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS

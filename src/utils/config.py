@@ -26,6 +26,7 @@ class VocalIsolationConfig(BaseModel):
     enabled: bool = False
     model: str = "htdemucs"
     device: str = "cpu"
+    cpu_threads: int = 0  # 0 = auto (half of CPU cores, max 6). Limits torch/OMP in demucs subprocess
 
 
 class PreprocessConfig(BaseModel):
@@ -109,6 +110,13 @@ class CacheConfig(BaseModel):
     id_method: str = "hash"
 
 
+class RenderingConfig(BaseModel):
+    ffmpeg_threads: int = 0  # 0 = auto (half of CPU cores, min 2). Env: FFMPEG_THREADS
+    x264_threads: int = 0    # 0 = same as ffmpeg_threads. Limits libx264 encoder threads
+    nice: int = 10           # Process priority (Linux, 0-19). Env: MEDIA_NICE
+    max_concurrent: int = 1  # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS
+
+
 class ConfidenceConfig(BaseModel):
     low_threshold: float = 0.6
     mark_in_ass: bool = True
@@ -127,6 +135,7 @@ class AppConfig(BaseModel):
     preview: PreviewConfig = PreviewConfig()
     cache: CacheConfig = CacheConfig()
     confidence: ConfidenceConfig = ConfidenceConfig()
+    rendering: RenderingConfig = RenderingConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
@@ -174,6 +183,7 @@ preprocess:
     enabled: false
     model: htdemucs
     device: cpu
+    cpu_threads: 0           # 0 = auto (half of cores, max 6). Env: DEMUCS_THREADS
 
 transcription:
   backend: voxtral          # voxtral | openai_whisper | local_whisper | whisperx
@@ -232,4 +242,10 @@ confidence:
   low_threshold: 0.6
   mark_in_ass: true
   report_format: json        # json | csv
+
+rendering:
+  ffmpeg_threads: 0          # 0 = auto (half of cores, min 2). Env override: FFMPEG_THREADS
+  x264_threads: 0            # 0 = same as ffmpeg_threads. Limits libx264 encoder threads
+  nice: 10                   # Process priority 0-19 (Linux only). Env: MEDIA_NICE
+  max_concurrent: 1          # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS
 """

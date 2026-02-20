@@ -47,6 +47,20 @@ async def lifespan(application: FastAPI):
     deps = check_all()
     print_dep_status(deps)
 
+    # Configure media executor (ffmpeg thread limits, nice, concurrency) from config.yaml
+    try:
+        from src.utils.config import load_config
+        from src.utils.media_executor import configure_media_executor
+        cfg = load_config()
+        configure_media_executor(
+            ffmpeg_threads=cfg.rendering.ffmpeg_threads,
+            x264_threads=cfg.rendering.x264_threads,
+            nice=cfg.rendering.nice,
+            max_concurrent=cfg.rendering.max_concurrent,
+        )
+    except Exception as e:
+        info(f"Media executor config: using defaults ({e})")
+
     backends = check_all_backends()
     available = [k for k, v in backends.items() if v]
     info(f"Available backends: {', '.join(available) or 'none'}")

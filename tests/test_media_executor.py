@@ -294,3 +294,205 @@ class TestSourceCodeAudit:
         assert "run_media_subprocess" in src
         assert "run_media_popen" in src
         assert "release_media_popen" in src
+
+
+# ── configure_media_executor ──────────────────────────────────────────────────
+
+class TestConfigureMediaExecutor:
+    """Verify configure_media_executor applies settings correctly."""
+
+    def test_explicit_values(self):
+        from src.utils import media_executor as me
+        old_t = me.FFMPEG_THREADS
+        old_n = me.MEDIA_NICE
+        try:
+            result = me.configure_media_executor(
+                ffmpeg_threads=3, x264_threads=2, nice=5, max_concurrent=2,
+            )
+            assert me.FFMPEG_THREADS == 3
+            assert me.X264_THREADS == 2
+            assert me.MEDIA_NICE == 5
+            assert me.MAX_MEDIA_JOBS == 2
+            assert result["ffmpeg_threads"] == 3
+            assert result["x264_threads"] == 2
+        finally:
+            # Restore defaults
+            me.configure_media_executor(ffmpeg_threads=old_t, nice=old_n, max_concurrent=1)
+
+    def test_auto_threads(self):
+        import os
+        from src.utils import media_executor as me
+        old_t = me.FFMPEG_THREADS
+        # Remove env overrides
+        env_backup = {k: os.environ.pop(k, None) for k in ("FFMPEG_THREADS", "X264_THREADS")}
+        try:
+            result = me.configure_media_executor(ffmpeg_threads=0, x264_threads=0)
+            cores = os.cpu_count() or 4
+            expected = max(2, min(cores // 2, 8))
+            assert result["ffmpeg_threads"] == expected
+            assert result["x264_threads"] == expected  # x264 defaults to ffmpeg_threads
+        finally:
+            for k, v in env_backup.items():
+                if v is not None:
+                    os.environ[k] = v
+            me.configure_media_executor(ffmpeg_threads=old_t, max_concurrent=1)
+
+    def test_env_override_takes_precedence(self):
+        import os
+        from src.utils import media_executor as me
+        old_t = me.FFMPEG_THREADS
+        os.environ["FFMPEG_THREADS"] = "5"
+        try:
+            result = me.configure_media_executor(ffmpeg_threads=3)
+            assert result["ffmpeg_threads"] == 5  # env wins over config
+        finally:
+            os.environ.pop("FFMPEG_THREADS", None)
+            me.configure_media_executor(ffmpeg_threads=old_t, max_concurrent=1)
+
+
+class TestX264ThreadInjection:
+    """Verify x264 thread limits are injected into ffmpeg commands."""
+
+    def test_x264_threads_injected(self):
+        from src.utils import media_executor as me
+        old_x = me.X264_THREADS
+        try:
+            me.X264_THREADS = 4
+            cmd = ["ffmpeg", "-y", "-i", "in.mp4", "-c:v", "libx264", "-crf", "18", "out.mp4"]
+            result = me.inject_ffmpeg_thread_flags(cmd)
+            assert "-x264opts" in result
+            idx = result.index("-x264opts")
+            assert f"threads=4" in result[idx + 1]
+        finally:
+            me.X264_THREADS = old_x
+
+    def test_x264_threads_not_injected_for_other_codecs(self):
+        from src.utils import media_executor as me
+        old_x = me.X264_THREADS
+        try:
+            me.X264_THREADS = 4
+            cmd = ["ffmpeg", "-y", "-i", "in.mp4", "-c:v", "libx265", "-crf", "18", "out.mp4"]
+            result = me.inject_ffmpeg_thread_flags(cmd)
+            assert "-x264opts" not in result
+        finally:
+            me.X264_THREADS = old_x
+
+    def test_x264_threads_appended_to_existing_opts(self):
+        from src.utils import media_executor as me
+        old_x = me.X264_THREADS
+        try:
+            me.X264_THREADS = 3
+            cmd = ["ffmpeg", "-y", "-i", "in.mp4", "-c:v", "libx264",
+                   "-x264opts", "keyint=60", "-crf", "18", "out.mp4"]
+            result = me.inject_ffmpeg_thread_flags(cmd)
+            idx = result.index("-x264opts")
+            assert "threads=3" in result[idx + 1]
+            assert "keyint=60" in result[idx + 1]
+        finally:
+            me.X264_THREADS = old_x
+
+    def test_no_x264_injection_when_zero(self):
+        from src.utils import media_executor as me
+        old_x = me.X264_THREADS
+        try:
+            me.X264_THREADS = 0
+            cmd = ["ffmpeg", "-y", "-i", "in.mp4", "-c:v", "libx264", "-crf", "18", "out.mp4"]
+            result = me.inject_ffmpeg_thread_flags(cmd)
+            assert "-x264opts" not in result
+        finally:
+            me.X264_THREADS = old_x
+
+
+class TestRenderingConfig:
+    """Verify RenderingConfig in AppConfig."""
+
+    def test_default_config_has_rendering(self):
+        from src.utils.config import AppConfig
+        cfg = AppConfig()
+        assert cfg.rendering.ffmpeg_threads == 0
+        assert cfg.rendering.x264_threads == 0
+        assert cfg.rendering.nice == 10
+        assert cfg.rendering.max_concurrent == 1
+
+    def test_config_yaml_loads_rendering(self):
+        import yaml
+        from src.utils.config import AppConfig
+        data = yaml.safe_load("""
+rendering:
+  ffmpeg_threads: 4
+  x264_threads: 3
+  nice: 15
+  max_concurrent: 2
+""")
+        cfg = AppConfig(**data)
+        assert cfg.rendering.ffmpeg_threads == 4
+        assert cfg.rendering.x264_threads == 3
+        assert cfg.rendering.nice == 15
+        assert cfg.rendering.max_concurrent == 2
+
+
+# ── Demucs thread env ────────────────────────────────────────────────────────
+
+class TestDemucsThreadEnv:
+    """Verify _demucs_thread_env builds correct subprocess env vars."""
+
+    def test_explicit_threads(self):
+        from src.preprocess.vocals import _demucs_thread_env
+        env = _demucs_thread_env(cpu_threads=4)
+        assert env["OMP_NUM_THREADS"] == "4"
+        assert env["MKL_NUM_THREADS"] == "4"
+        assert env["OPENBLAS_NUM_THREADS"] == "4"
+        assert env["TORCH_NUM_THREADS"] == "4"
+
+    def test_auto_threads(self):
+        import os
+        from src.preprocess.vocals import _demucs_thread_env
+        env_backup = os.environ.pop("DEMUCS_THREADS", None)
+        try:
+            env = _demucs_thread_env(cpu_threads=0)
+            cores = os.cpu_count() or 4
+            expected = str(max(2, min(cores // 2, 6)))
+            assert env["OMP_NUM_THREADS"] == expected
+        finally:
+            if env_backup is not None:
+                os.environ["DEMUCS_THREADS"] = env_backup
+
+    def test_env_override(self):
+        import os
+        from src.preprocess.vocals import _demucs_thread_env
+        os.environ["DEMUCS_THREADS"] = "3"
+        try:
+            env = _demucs_thread_env(cpu_threads=6)
+            assert env["OMP_NUM_THREADS"] == "3"  # env wins
+        finally:
+            os.environ.pop("DEMUCS_THREADS", None)
+
+    def test_all_env_vars_present(self):
+        from src.preprocess.vocals import _demucs_thread_env
+        env = _demucs_thread_env(cpu_threads=2)
+        expected_keys = {"OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                         "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS"}
+        assert expected_keys.issubset(set(env.keys()))
+
+
+class TestDemucsConfig:
+    """Verify cpu_threads in VocalIsolationConfig."""
+
+    def test_default_config_has_demucs_threads(self):
+        from src.utils.config import AppConfig
+        cfg = AppConfig()
+        assert cfg.preprocess.vocal_isolation.cpu_threads == 0
+
+    def test_config_yaml_loads_demucs_threads(self):
+        import yaml
+        from src.utils.config import AppConfig
+        data = yaml.safe_load("""
+preprocess:
+  vocal_isolation:
+    enabled: true
+    model: htdemucs
+    device: cpu
+    cpu_threads: 4
+""")
+        cfg = AppConfig(**data)
+        assert cfg.preprocess.vocal_isolation.cpu_threads == 4

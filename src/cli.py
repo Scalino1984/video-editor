@@ -132,6 +132,7 @@ def _preprocess_audio(audio_path: Path, cfg: AppConfig, tmp_dir: Path):
             output_dir=tmp_dir / "separated",
             model=cfg.preprocess.vocal_isolation.model,
             device=cfg.preprocess.vocal_isolation.device,
+            cpu_threads=cfg.preprocess.vocal_isolation.cpu_threads,
         )
         if vocals:
             current = vocals
@@ -432,6 +433,15 @@ def transcribe(
     deps = check_all(cfg.transcription.backend, cfg.preprocess.vocal_isolation.enabled)
     if not print_dep_status(deps):
         warn("Some dependencies missing — continuing with available features")
+
+    # Apply rendering/media thread limits from config
+    from src.utils.media_executor import configure_media_executor
+    configure_media_executor(
+        ffmpeg_threads=cfg.rendering.ffmpeg_threads,
+        x264_threads=cfg.rendering.x264_threads,
+        nice=cfg.rendering.nice,
+        max_concurrent=cfg.rendering.max_concurrent,
+    )
 
     files = _resolve_inputs(input, recursive)
     out_dir = output or input.parent if input.is_file() else output or input
