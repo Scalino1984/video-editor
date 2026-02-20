@@ -48,12 +48,13 @@ def approximate_word_timestamps(segment: TranscriptSegment) -> list[WordInfo]:
 def ensure_word_timestamps(segments: list[TranscriptSegment],
                            mode: str = "auto") -> list[TranscriptSegment]:
     """Ensure all segments have word-level timestamps.
-    mode: 'on' = require (error if missing), 'auto' = approximate if missing, 'off' = skip.
+    mode: 'on'/'auto' = approximate if missing, 'force' = always re-approximate, 'off' = skip.
     """
     approx_count = 0
     for seg in segments:
         if seg.has_word_timestamps and seg.words:
-            continue
+            if mode != "force":
+                continue
         if mode == "off":
             continue
         seg.words = approximate_word_timestamps(seg)

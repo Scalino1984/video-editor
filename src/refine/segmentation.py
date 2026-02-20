@@ -79,12 +79,12 @@ def split_segment(segment: TranscriptSegment) -> list[TranscriptSegment]:
     seg1 = TranscriptSegment(
         start=segment.start, end=split_time, text=text1,
         words=words1, confidence=segment.confidence,
-        has_word_timestamps=segment.has_word_timestamps,
+        has_word_timestamps=bool(words1),
     )
     seg2 = TranscriptSegment(
         start=split_time, end=segment.end, text=text2,
         words=words2, confidence=segment.confidence,
-        has_word_timestamps=segment.has_word_timestamps,
+        has_word_timestamps=bool(words2),
     )
     return [seg1, seg2]
 

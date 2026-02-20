@@ -209,15 +209,20 @@ def remap_timestamps(segments: list[dict], time_mapping: list[tuple[int, int, in
                     for w in new_seg["words"]:
                         w_start_ms = int(w["start"] * 1000)
                         w_end_ms = int(w["end"] * 1000)
-                        w_offset = offset  # default
+                        w_offset = offset  # default: same chunk as segment start
                         for vs, ve, os in time_mapping:
                             if vs <= w_start_ms < ve:
                                 w_offset = os - vs
                                 break
+                        w_end_offset = w_offset  # default: same chunk as word start
+                        for vs, ve, os in time_mapping:
+                            if vs <= w_end_ms < ve:
+                                w_end_offset = os - vs
+                                break
                         remapped_words.append({
                             **w,
                             "start": (w_start_ms + w_offset) / 1000,
-                            "end": (w_end_ms + w_offset) / 1000,
+                            "end": (w_end_ms + w_end_offset) / 1000,
                         })
                     new_seg["words"] = remapped_words
 

@@ -249,3 +249,163 @@ class TestBulkReplace:
         segs = client.get(f"/api/jobs/{job_id}/segments").json()
         assert segs[0]["speaker"] == "Alice"
         assert segs[0]["pinned"] is True
+
+
+# ── Regression: split_segment sets has_word_timestamps correctly ──────────────
+
+class TestSplitSegmentWordTimestamps:
+    """Bug: split_segment inherited has_word_timestamps from parent, so a child
+    with no words would have has_word_timestamps=True but words=[].
+
+    Fix: each child gets has_word_timestamps=bool(words).
+    """
+
+    def test_split_without_words_clears_flag(self):
+        from src.transcription.base import TranscriptSegment
+        from src.refine.segmentation import split_segment
+
+        # Segment with no word timestamps — all words fall in the first half
+        seg = TranscriptSegment(
+            start=0.0, end=10.0, text="Hello World",
+            has_word_timestamps=True,
+            words=[],
+        )
+        parts = split_segment(seg)
+        # Every child must have a consistent flag
+        for part in parts:
+            assert part.has_word_timestamps == bool(part.words)
+
+    def test_split_distributes_words_and_flags(self):
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.refine.segmentation import split_segment
+
+        seg = TranscriptSegment(
+            start=0.0, end=4.0,
+            text="Hello beautiful world",
+            has_word_timestamps=True,
+            words=[
+                WordInfo(start=0.0, end=1.0, word="Hello"),
+                WordInfo(start=1.1, end=2.5, word="beautiful"),
+                WordInfo(start=2.6, end=4.0, word="world"),
+            ],
+        )
+        parts = split_segment(seg)
+        assert len(parts) == 2
+        for part in parts:
+            # flag must always reflect whether words list is populated
+            assert part.has_word_timestamps == bool(part.words)
+
+
+# ── Regression: VAD remap uses correct offset for word end timestamps ─────────
+
+class TestVADWordEndRemap:
+    """Bug: remap_timestamps applied the word-start chunk's offset to word-end too.
+    If a word spans a VAD chunk boundary its end timestamp was incorrectly remapped.
+
+    Fix: find the chunk containing w_end_ms separately and use its offset.
+    """
+
+    def test_word_end_remapped_with_correct_offset(self):
+        from src.preprocess.vad import remap_timestamps
+
+        # Two VAD chunks:
+        # chunk 0: vad [0, 2000ms] → original [1000, 3000ms]  (offset +1000ms)
+        # chunk 1: vad [2000, 4000ms] → original [5000, 7000ms] (offset +3000ms)
+        time_mapping = [
+            (0, 2000, 1000),
+            (2000, 4000, 5000),
+        ]
+
+        # A word that starts in chunk 0 (vad 1500ms → orig 2500ms)
+        # and ends in chunk 1  (vad 2100ms → orig 5100ms)
+        seg = {
+            "start": 1.5,
+            "end": 2.1,
+            "text": "spanning",
+            "words": [
+                {"start": 1.5, "end": 2.1, "word": "spanning", "confidence": 0.9}
+            ],
+        }
+
+        result = remap_timestamps([seg], time_mapping)
+        assert len(result) == 1
+        word = result[0]["words"][0]
+
+        # start: 1500ms + 1000ms offset = 2500ms = 2.5s
+        assert abs(word["start"] - 2.5) < 0.01
+        # end: 2100ms + 3000ms offset = 5100ms = 5.1s  (NOT 2100+1000=3100ms)
+        assert abs(word["end"] - 5.1) < 0.01
+
+    def test_word_within_single_chunk_unchanged(self):
+        from src.preprocess.vad import remap_timestamps
+
+        time_mapping = [(0, 5000, 10000)]  # chunk: [0-5000ms] → original starts at 10000ms
+
+        seg = {
+            "start": 1.0,
+            "end": 2.0,
+            "text": "test",
+            "words": [
+                {"start": 1.0, "end": 2.0, "word": "test", "confidence": 0.9},
+            ],
+        }
+        result = remap_timestamps([seg], time_mapping)
+        word = result[0]["words"][0]
+        # Both start and end shifted by same offset (10s)
+        assert abs(word["start"] - 11.0) < 0.01
+        assert abs(word["end"] - 12.0) < 0.01
+
+
+# ── Regression: ensure_word_timestamps "force" mode re-approximates ───────────
+
+class TestEnsureWordTimestampsForce:
+    """Bug: ensure_word_timestamps skipped segments with existing word timestamps
+    even when called with mode="force". This left stale word timestamps in place
+    after segment boundaries changed (e.g., after lyrics alignment).
+
+    Fix: mode="force" always re-approximates word timestamps.
+    """
+
+    def test_force_mode_re_approximates_existing_words(self):
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.refine.alignment import ensure_word_timestamps
+
+        # Segment with existing (stale) word timestamps
+        seg = TranscriptSegment(
+            start=0.0, end=10.0, text="Hello world",
+            has_word_timestamps=True,
+            words=[
+                WordInfo(start=99.0, end=100.0, word="Hello"),  # stale: outside segment
+                WordInfo(start=100.0, end=101.0, word="world"),
+            ],
+        )
+        result = ensure_word_timestamps([seg], mode="force")
+        # Words must now fit within [0.0, 10.0]
+        assert result[0].words[0].start >= 0.0
+        assert result[0].words[-1].end <= 10.0 + 0.001
+
+    def test_auto_mode_preserves_existing_words(self):
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.refine.alignment import ensure_word_timestamps
+
+        original_start = 5.0
+        seg = TranscriptSegment(
+            start=0.0, end=2.0, text="Hi there",
+            has_word_timestamps=True,
+            words=[
+                WordInfo(start=original_start, end=original_start + 1.0, word="Hi"),
+                WordInfo(start=original_start + 1.0, end=original_start + 2.0, word="there"),
+            ],
+        )
+        result = ensure_word_timestamps([seg], mode="auto")
+        # Words should be untouched in auto mode
+        assert result[0].words[0].start == original_start
+
+    def test_off_mode_does_not_approximate(self):
+        from src.transcription.base import TranscriptSegment
+        from src.refine.alignment import ensure_word_timestamps
+
+        seg = TranscriptSegment(start=0.0, end=2.0, text="No words", has_word_timestamps=False)
+        result = ensure_word_timestamps([seg], mode="off")
+        assert result[0].words == []
+        assert result[0].has_word_timestamps is False
