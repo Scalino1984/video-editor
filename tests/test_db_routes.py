@@ -13,7 +13,7 @@ import pytest
 
 @pytest.fixture
 def lib_client(db, _patch_dirs):
-    """TestClient with library DB initialized."""
+    """TestClient with library DB and patched output dirs initialized."""
     from main import app
     from starlette.testclient import TestClient
     with TestClient(app, raise_server_exceptions=False) as c:
@@ -21,18 +21,33 @@ def lib_client(db, _patch_dirs):
 
 
 @pytest.fixture
-def lib_record(db):
-    """Seed a library record and return its rec_id."""
-    from src.db.library import save_transcription
-    rec_id = save_transcription(
-        source_filename="test_song.mp3",
-        backend="voxtral",
-        language="de",
-        segments_count=3,
-        duration_sec=10.5,
-        srt_text="1\n00:00:00,000 --> 00:00:02,500\nHello\n",
+def lib_record(_patch_dirs, storage_root):
+    """Seed a project directory with project.json and return its job_id."""
+    from src.api.karaoke_project import KaraokeProject, ProcessingSettings, Artifact, save_project
+    job_id = "test-lib-0001"
+    job_dir = storage_root / "output" / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "segments.json").write_text(
+        json.dumps([{"start": 0, "end": 2.5, "text": "Hello", "confidence": 0.95,
+                      "has_word_timestamps": False, "words": []}]),
+        encoding="utf-8",
     )
-    return rec_id
+    srt_text = "1\n00:00:00,000 --> 00:00:02,500\nHello\n"
+    (job_dir / "test_song.srt").write_text(srt_text, encoding="utf-8")
+    proj = KaraokeProject(
+        id=job_id,
+        name="test_song",
+        source_filename="test_song.mp3",
+        backend_used="voxtral",
+        language_detected="de",
+        segments_count=1,
+        duration_sec=10.5,
+        avg_confidence=0.95,
+        settings=ProcessingSettings(backend="voxtral", language="de"),
+        artifacts=[Artifact(filename="test_song.srt", format="srt", size=len(srt_text))],
+    )
+    save_project(proj)
+    return job_id
 
 
 class TestLibraryCRUD:
@@ -78,7 +93,8 @@ class TestLibraryCRUD:
 class TestLibrarySRT:
     def test_download_srt(self, lib_client, lib_record):
         r = lib_client.get(f"/api/library/{lib_record}/srt")
-        assert r.status_code in (200, 404)  # 404 if SRT not stored
+        assert r.status_code == 200
+        assert "Hello" in r.text
 
 
 class TestMediaRegistry:

@@ -530,29 +530,40 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
         update_job(job_id, status=JobStatus.completed, progress=1.0, stage="Done",
                    completed_at=datetime.now(timezone.utc), result=result)
 
-        # ── Save to Library ───────────────────────────────────────────────
+        # ── project.json (unified project metadata) ──────────────────────
         try:
-            from src.db.library import save_transcription
-            srt_text = srt_path.read_text(encoding="utf-8") if srt_path.exists() else None
-            ass_text = ass_path.read_text(encoding="utf-8") if ass_path and ass_path.exists() else None
-            seg_json = (job_output / "segments.json").read_text(encoding="utf-8")
-            save_transcription(
+            from src.api.karaoke_project import KaraokeProject, save_project as _save_kproject
+            artifact_files: dict[str, str] = {"srt": srt_path.name}
+            if ass_path:
+                artifact_files["ass"] = ass_path.name
+            if vtt_path:
+                artifact_files["vtt"] = vtt_path.name
+            if lrc_path:
+                artifact_files["lrc"] = lrc_path.name
+            if txt_path:
+                artifact_files["txt"] = txt_path.name
+            if preview_path:
+                artifact_files["preview"] = preview_path.name
+            artifact_files["report"] = report_path.name
+            artifact_files["waveform"] = "waveform.json"
+            artifact_files["audio"] = audio_copy.name
+            kproject = KaraokeProject.from_pipeline(
+                job_id=job_id,
                 source_filename=audio_path.name,
-                backend=transcript.backend,
-                language=transcript.language,
+                req=req,
+                backend_used=transcript.backend,
+                language_detected=transcript.language,
                 duration_sec=duration,
-                bpm=bpm_value,
                 segments_count=len(segments),
                 has_word_timestamps=has_words,
-                needs_review=file_report.segments_needing_review,
+                bpm=bpm_value,
                 avg_confidence=file_report.avg_confidence,
-                srt_text=srt_text,
-                ass_text=ass_text,
-                segments_json=seg_json,
-                job_id=job_id,
+                needs_review=file_report.segments_needing_review,
+                artifact_files=artifact_files,
             )
-        except Exception as lib_err:
-            warn(f"[{job_id}] Library save failed (non-critical): {lib_err}")
+            _save_kproject(kproject)
+        except Exception as proj_err:
+            warn(f"[{job_id}] project.json save failed (non-critical): {proj_err}")
 
         _emit_sse({"type": "job_completed", "job_id": job_id, "filename": _jobs[job_id].filename})
         info(f"[{job_id}] ✅ Completed: {len(segments)} segments")

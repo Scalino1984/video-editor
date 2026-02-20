@@ -136,8 +136,12 @@ Du kannst folgende Aktionen mit deinen Tools ausfuehren:
 3. Struktur erkennen — Verse, Hook, Bridge, Outro taggen (set_speaker_labels)
 4. Uebersetzen — Lyrics in andere Sprache, Reimschema beachtend
 5. Lyrics generieren — Fehlende/unverstaendliche Texte basierend auf Kontext erstellen
+6. Zeiten anpassen — Start-/End-Zeiten von Segmenten aendern (update_segment_times / update_multiple_segment_times)
+7. BPM-Grid snappen — alle Segmente am Beat-Raster ausrichten (snap_to_bpm_grid)
 
 Wenn du Segmente aenderst, nutze IMMER die passenden Tools. Beschreibe dem User was du tust.
+Fuer Timing-Korrekturen: analysiere die Zeiten, schlage konkrete Aenderungen vor, wende sie an.
+Fuer BPM-Snap: Frage den User nach BPM falls unbekannt, erklaere Grid-Aufloesung und Ergebnis.
 Antworte auf Deutsch wenn der User Deutsch spricht.
 Sei praezise und musikaffin — du kennst Reimschemata, Flow, Bars und Songstrukturen.\
 """
@@ -334,5 +338,148 @@ def create_agent() -> Agent[ChatDeps, str]:
         if added:
             return f"{len(added)} Eintraege: " + ", ".join(added)
         return "Keine neuen Eintraege."
+
+    # ── Timing tools ──────────────────────────────────────────────────────
+
+    @agent.tool
+    async def update_segment_times(
+        ctx: RunContext[ChatDeps], index: int, start: float, end: float
+    ) -> str:
+        """Aendert Start- und End-Zeit eines Segments (1-basierter Index).
+        Zeiten in Sekunden. Beispiel: update_segment_times(3, 1.25, 3.80)
+        """
+        i = index - 1
+        if i < 0 or i >= len(ctx.deps.segments):
+            return f"Segment {index} nicht gefunden (1-{len(ctx.deps.segments)})."
+        if start < 0:
+            return "Start darf nicht negativ sein."
+        if end <= start:
+            return "End muss groesser als Start sein."
+        seg = ctx.deps.segments[i]
+        old_start, old_end = seg.get("start", 0), seg.get("end", 0)
+        seg["start"] = round(start, 3)
+        seg["end"] = round(end, 3)
+        # Proportionally rescale word timestamps if present
+        if seg.get("words") and old_end > old_start:
+            old_dur = old_end - old_start
+            new_dur = end - start
+            scale = new_dur / old_dur
+            for w in seg["words"]:
+                w["start"] = round(start + (w["start"] - old_start) * scale, 3)
+                w["end"] = round(start + (w["end"] - old_start) * scale, 3)
+        ctx.deps.save_segments()
+        return (
+            f"Segment {index}: Zeit {old_start:.3f}s–{old_end:.3f}s"
+            f" -> {start:.3f}s–{end:.3f}s"
+        )
+
+    @agent.tool
+    async def update_multiple_segment_times(
+        ctx: RunContext[ChatDeps], changes: str
+    ) -> str:
+        """Aendert Start-/End-Zeiten mehrerer Segmente.
+        Format: Eine Aenderung pro Zeile als 'NUMMER: START END'
+        Zeiten in Sekunden. Beispiel: '3: 1.25 3.80\\n7: 5.00 8.50'
+        """
+        updated = []
+        errors = []
+        for line in changes.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            match = re.match(r"(\d+)\s*:\s*([\d.]+)\s+([\d.]+)", line)
+            if not match:
+                errors.append(f"Format ungueltig: '{line}'")
+                continue
+            idx = int(match.group(1)) - 1
+            new_start = float(match.group(2))
+            new_end = float(match.group(3))
+            if idx < 0 or idx >= len(ctx.deps.segments):
+                errors.append(f"Segment {idx+1} nicht gefunden")
+                continue
+            if new_end <= new_start:
+                errors.append(f"Segment {idx+1}: End ({new_end}) <= Start ({new_start})")
+                continue
+            seg = ctx.deps.segments[idx]
+            old_start, old_end = seg.get("start", 0), seg.get("end", 0)
+            old_dur = old_end - old_start
+            seg["start"] = round(new_start, 3)
+            seg["end"] = round(new_end, 3)
+            # Rescale words proportionally
+            if seg.get("words") and old_dur > 0:
+                new_dur = new_end - new_start
+                scale = new_dur / old_dur
+                for w in seg["words"]:
+                    w["start"] = round(new_start + (w["start"] - old_start) * scale, 3)
+                    w["end"] = round(new_start + (w["end"] - old_start) * scale, 3)
+            updated.append(
+                f"  [{idx+1}] {old_start:.3f}–{old_end:.3f} -> {new_start:.3f}–{new_end:.3f}"
+            )
+        if updated:
+            ctx.deps.save_segments()
+        result = f"{len(updated)} Segmente geaendert:\n" + "\n".join(updated)
+        if errors:
+            result += f"\n{len(errors)} Fehler:\n" + "\n".join(errors)
+        return result
+
+    @agent.tool
+    async def snap_to_bpm_grid(
+        ctx: RunContext[ChatDeps],
+        bpm: float,
+        beat_offset_sec: float = 0.0,
+        snap_tolerance_ms: float = 80.0,
+        snap_strength: float = 0.5,
+    ) -> str:
+        """Snapt alle Segment-Zeiten auf ein BPM-Grid.
+        - bpm: Tempo in Beats per Minute
+        - beat_offset_sec: Zeitpunkt von Beat 1 (Downbeat) in Sekunden (default 0)
+        - snap_tolerance_ms: Maximaler Abstand zum Beat fuer Snap in ms (default 80)
+        - snap_strength: Blend 0.0=kein Snap, 1.0=exakter Beat (default 0.5)
+        """
+        if bpm <= 0:
+            return "BPM muss positiv sein."
+        from src.refine.beatgrid import snap_to_nearest_beat, generate_beat_grid
+        from src.transcription.base import TranscriptSegment as TS
+
+        # Determine duration from last segment
+        if not ctx.deps.segments:
+            return "Keine Segmente vorhanden."
+        duration = max(s.get("end", 0) for s in ctx.deps.segments) + 1.0
+
+        beat_offset_ms = beat_offset_sec * 1000.0
+        beats = generate_beat_grid(bpm, duration, "4/4", beat_offset_ms)
+        if not beats:
+            return "Kein Beat-Grid erzeugt (Dauer zu kurz?)."
+
+        snapped = 0
+        for seg in ctx.deps.segments:
+            old_start = seg.get("start", 0)
+            old_end = seg.get("end", 0)
+            new_start = snap_to_nearest_beat(old_start, beats, snap_tolerance_ms, snap_strength)
+            new_end = snap_to_nearest_beat(old_end, beats, snap_tolerance_ms, snap_strength)
+            if new_end <= new_start:
+                new_end = new_start + 0.1
+            if abs(new_start - old_start) > 0.001 or abs(new_end - old_end) > 0.001:
+                # Rescale words proportionally
+                old_dur = old_end - old_start
+                if seg.get("words") and old_dur > 0:
+                    new_dur = new_end - new_start
+                    scale = new_dur / old_dur
+                    for w in seg["words"]:
+                        w["start"] = round(new_start + (w["start"] - old_start) * scale, 3)
+                        w["end"] = round(new_start + (w["end"] - old_start) * scale, 3)
+                seg["start"] = round(new_start, 3)
+                seg["end"] = round(new_end, 3)
+                snapped += 1
+
+        if snapped:
+            ctx.deps.save_segments()
+
+        beat_sec = 60.0 / bpm
+        return (
+            f"BPM-Grid: {bpm:.1f} BPM, Beat={beat_sec:.3f}s, Offset={beat_offset_sec:.3f}s\n"
+            f"Toleranz={snap_tolerance_ms:.0f}ms, Staerke={snap_strength:.0%}\n"
+            f"{snapped}/{len(ctx.deps.segments)} Segmente an Beats ausgerichtet."
+        )
 
     return agent

@@ -138,9 +138,14 @@ def _detect_bpm_essentia(audio_path) -> float | None:
         bpm, beats, beats_confidence, _, beat_intervals = rhythm(audio)
 
         bpm = float(bpm)
-        avg_confidence = float(beats_confidence.mean()) if len(beats_confidence) > 0 else 0
+        try:
+            import numpy as np
+            avg_confidence = float(np.mean(beats_confidence)) if np.size(beats_confidence) > 0 else 0
+        except Exception:
+            avg_confidence = float(beats_confidence) if isinstance(beats_confidence, (int, float)) else 0
 
-        info(f"Essentia BPM: {bpm:.1f} (confidence: {avg_confidence:.2f}, {len(beats)} beats)")
+        num_beats = int(np.size(beats)) if 'np' in dir() else 0
+        info(f"Essentia BPM: {bpm:.1f} (confidence: {avg_confidence:.2f}, {num_beats} beats)")
         if bpm > 0:
             return bpm
         return None

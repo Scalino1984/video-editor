@@ -137,11 +137,56 @@ show_summary() {
     echo ""
 }
 
+# ── Größenberechnung ──────────────────────────────────────────────────────────
+
+calc_total_bytes() {
+    local total=0
+    for dir in "${CLEAR_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            local s
+            s=$(du -sb "$dir" 2>/dev/null | cut -f1)
+            total=$((total + ${s:-0}))
+        fi
+    done
+    for f in "${DB_FILES[@]}"; do
+        if [[ -f "$f" ]]; then
+            local s
+            s=$(stat --format='%s' "$f" 2>/dev/null || echo 0)
+            total=$((total + s))
+        fi
+    done
+    for d in "${CACHE_DIRS[@]}"; do
+        if [[ -d "$d" ]]; then
+            local s
+            s=$(du -sb "$d" 2>/dev/null | cut -f1)
+            total=$((total + ${s:-0}))
+        fi
+    done
+    echo "$total"
+}
+
+format_bytes() {
+    local bytes=$1
+    if [[ $bytes -ge 1073741824 ]]; then
+        echo "$(awk "BEGIN {printf \"%.2f\", $bytes/1073741824}") GB"
+    elif [[ $bytes -ge 1048576 ]]; then
+        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1048576}") MB"
+    elif [[ $bytes -ge 1024 ]]; then
+        echo "$(awk "BEGIN {printf \"%.0f\", $bytes/1024}") KB"
+    else
+        echo "${bytes} B"
+    fi
+}
+
 # ── Löschlogik ────────────────────────────────────────────────────────────────
 
 do_reset() {
     local action_label="Lösche"
     [[ "$DRY_RUN" == true ]] && action_label="Würde löschen"
+
+    # Größe vor dem Löschen messen
+    local bytes_before
+    bytes_before=$(calc_total_bytes)
 
     # Verzeichnis-Inhalte löschen
     for dir in "${CLEAR_DIRS[@]}"; do
@@ -186,9 +231,17 @@ do_reset() {
 
     echo ""
     if [[ "$DRY_RUN" == true ]]; then
+        local freed
+        freed=$(format_bytes "$bytes_before")
         echo -e "${CYAN}Dry-Run — nichts wurde gelöscht.${NC}"
+        echo -e "  Würde ${GREEN}${freed}${NC} freigeben."
     else
-        echo -e "${GREEN}✓ Reset abgeschlossen. Alle Daten gelöscht.${NC}"
+        local bytes_after
+        bytes_after=$(calc_total_bytes)
+        local freed_bytes=$((bytes_before - bytes_after))
+        local freed
+        freed=$(format_bytes "$freed_bytes")
+        echo -e "${GREEN}✓ Reset abgeschlossen. ${freed} freigegeben.${NC}"
         echo -e "  Server neu starten: ${CYAN}./server.sh restart${NC}"
     fi
 }

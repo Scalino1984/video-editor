@@ -28,7 +28,8 @@ router = APIRouter(tags=["library", "video"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  LIBRARY — Transcriptions CRUD
+#  LIBRARY — Filesystem-based project listing (replaces SQLite transcriptions)
+#  Source of truth: data/output/*/project.json
 # ══════════════════════════════════════════════════════════════════════════════
 
 class LibraryItem(BaseModel):
@@ -47,12 +48,6 @@ class LibraryItem(BaseModel):
     avg_confidence: float
     job_id: str | None
     tags: list[str]
-
-
-class LibraryDetail(LibraryItem):
-    srt_text: str | None
-    ass_text: str | None
-    segments_json: str | None
 
 
 class LibraryListResponse(BaseModel):
@@ -74,76 +69,74 @@ async def list_library(
     offset: int = Query(0, ge=0),
     q: str = Query("", description="Search title/filename/backend"),
 ) -> LibraryListResponse:
-    """List transcriptions with pagination + search."""
-    from src.db.library import list_transcriptions
-    records, total = list_transcriptions(limit=limit, offset=offset, q=q)
+    """List projects from filesystem (data/output/*/project.json)."""
+    from src.api.karaoke_project import list_projects
+    items, total = list_projects(q=q, limit=limit, offset=offset)
     return LibraryListResponse(
-        items=[LibraryItem(**r.to_dict()) for r in records],
+        items=[LibraryItem(**it) for it in items],
         total=total, limit=limit, offset=offset,
     )
 
 
 @router.get("/api/library/{rec_id}")
-async def get_library_item(rec_id: str) -> LibraryDetail:
-    """Get full transcription record including SRT/ASS text."""
-    from src.db.library import get_transcription
-    rec = get_transcription(rec_id)
-    if not rec:
+async def get_library_item(rec_id: str) -> dict:
+    """Get full project detail including SRT/ASS text from filesystem."""
+    from src.api.karaoke_project import ensure_project, _project_to_library_detail
+    proj = ensure_project(rec_id)
+    if not proj:
         raise HTTPException(404, "Not found")
-    return LibraryDetail(**rec.to_dict(include_text=True))
+    return _project_to_library_detail(proj)
 
 
 @router.patch("/api/library/{rec_id}")
 async def update_library_item(rec_id: str, req: LibraryUpdateRequest):
-    """Update title, tags, or BPM of a library entry."""
-    from src.db.library import update_transcription
-    kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
-    if not kwargs:
+    """Update project metadata (title, tags, BPM)."""
+    from src.api.karaoke_project import load_project, save_project as _save_kp
+    proj = load_project(rec_id)
+    if not proj:
+        raise HTTPException(404, "Not found")
+    changed = False
+    if req.title is not None:
+        proj.name = req.title
+        changed = True
+    if req.tags is not None:
+        proj.tags = req.tags
+        changed = True
+    if req.bpm is not None:
+        proj.bpm = req.bpm
+        changed = True
+    if not changed:
         raise HTTPException(400, "No fields to update")
-    ok = update_transcription(rec_id, **kwargs)
-    if not ok:
-        raise HTTPException(404, "Not found or invalid fields")
+    proj.updated_at = datetime.now(timezone.utc).isoformat()
+    _save_kp(proj)
     return {"ok": True}
 
 
 @router.delete("/api/library/{rec_id}")
 async def delete_library_item(rec_id: str, hard: bool = Query(False)):
-    """Delete transcription (soft by default, hard=true for permanent).
-
-    Cascades: removes file registry references for the associated job.
-    """
-    from src.db.library import delete_transcription, get_transcription, remove_file_references
-    rec = get_transcription(rec_id)
-    if not rec:
-        raise HTTPException(404, "Not found")
-
-    # Remove file references for this transcription
-    try:
-        remove_file_references("transcription", rec_id)
-        if rec.job_id:
-            remove_file_references("job", rec.job_id)
-    except Exception:
-        pass  # non-critical
-
-    ok = delete_transcription(rec_id, hard=hard)
+    """Delete project (removes entire job output directory)."""
+    from src.api.karaoke_project import delete_project
+    ok = delete_project(rec_id)
     if not ok:
         raise HTTPException(404, "Not found")
-    return {"ok": True, "hard": hard}
+    return {"ok": True, "hard": True}
 
 
 @router.get("/api/library/{rec_id}/srt")
 async def get_library_srt(rec_id: str):
-    """Download SRT text as file."""
-    from src.db.library import get_transcription
-    rec = get_transcription(rec_id)
-    if not rec or not rec.srt_text:
-        raise HTTPException(404, "SRT not found")
-    from fastapi.responses import PlainTextResponse
-    filename = f"{rec.title or rec.source_filename}.srt"
-    return PlainTextResponse(
-        rec.srt_text, media_type="text/plain",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    """Download SRT text as file from job output directory."""
+    from src.api.karaoke_project import ensure_project, OUTPUT_DIR
+    proj = ensure_project(rec_id)
+    if not proj:
+        raise HTTPException(404, "Not found")
+    job_dir = OUTPUT_DIR / rec_id
+    for f in job_dir.glob("*.srt"):
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(
+            f.read_text(encoding="utf-8"), media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{f.name}"'},
+        )
+    raise HTTPException(404, "SRT not found")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

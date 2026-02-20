@@ -88,8 +88,12 @@ class _ContextFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         prefix = _ctx_prefix()
-        record.msg = f"{prefix}{record.msg}"
-        return super().format(record)
+        # Use a shallow copy so we don't mutate the shared record
+        # (multiple handlers would otherwise accumulate the prefix)
+        import copy
+        rec = copy.copy(record)
+        rec.msg = f"{prefix}{rec.msg}"
+        return super().format(rec)
 
 
 def _setup_file_handler(
@@ -149,12 +153,15 @@ def setup_logging(verbosity: Verbosity = Verbosity.NORMAL) -> None:
     _file_logger = logging.getLogger("karaoke.app")
     _file_logger.setLevel(logging.DEBUG)
     _file_logger.propagate = False
+    # Guard against handler duplication on repeated setup_logging() calls
+    _file_logger.handlers.clear()
     _setup_file_handler(_file_logger, LOG_DIR / "app.log")
 
     # Render log — render-specific messages
     _render_logger = logging.getLogger("karaoke.render")
     _render_logger.setLevel(logging.DEBUG)
     _render_logger.propagate = False
+    _render_logger.handlers.clear()
     _setup_file_handler(_render_logger, LOG_DIR / "render.log")
 
 

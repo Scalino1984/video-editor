@@ -369,6 +369,13 @@ def _save_segs(p: Path, data: list[dict], job_id: str):
     _validate_words(data)
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     _sync_srt(job_id, data)
+    # Update project.json metadata (non-blocking)
+    try:
+        from src.api.karaoke_project import update_project_metadata
+        has_words = any(s.get("has_word_timestamps") for s in data)
+        update_project_metadata(job_id, segments_count=len(data), has_word_timestamps=has_words)
+    except Exception:
+        pass  # non-critical
 
 
 def _validate_words(data: list[dict]) -> None:
@@ -729,6 +736,38 @@ async def import_project(job_id: str, file: UploadFile = File(...)):
     return {"imported": True, "segments": len(project.get("segments", []))}
 
 
+# ── KaraokeProject (unified project metadata) ────────────────────────────────
+
+@router.get("/jobs/{job_id}/karaoke-project")
+async def get_karaoke_project(job_id: str):
+    """Get or lazily generate the unified project.json for a karaoke job."""
+    from src.api.karaoke_project import ensure_project
+    proj = ensure_project(job_id)
+    if not proj:
+        raise HTTPException(404, "Job not found or no segments available")
+    return proj.to_dict()
+
+
+@router.patch("/jobs/{job_id}/karaoke-project")
+async def update_karaoke_project(job_id: str, updates: dict):
+    """Update project metadata fields (name, settings, etc.)."""
+    from src.api.karaoke_project import load_project, save_project as _save_kp
+    proj = load_project(job_id)
+    if not proj:
+        raise HTTPException(404, "project.json not found")
+    allowed = {"name"}
+    changed = False
+    for k, v in updates.items():
+        if k in allowed and hasattr(proj, k):
+            setattr(proj, k, v)
+            changed = True
+    if not changed:
+        raise HTTPException(400, "No valid fields to update")
+    proj.updated_at = datetime.now(timezone.utc).isoformat()
+    _save_kp(proj)
+    return {"ok": True}
+
+
 # ── Undo / Redo ───────────────────────────────────────────────────────────────
 
 @router.post("/jobs/{job_id}/undo")
@@ -880,6 +919,62 @@ async def detect_bpm_for_job(job_id: str):
         "bpm": round(bpm, 1),
         "srt": srt_params.to_dict(),
         "ass": ass_params.to_dict(),
+    }
+
+
+@router.post("/jobs/{job_id}/snap-to-bpm")
+async def snap_segments_to_bpm(
+    job_id: str,
+    bpm: float = Query(0, description="BPM (0 = auto-detect from audio)"),
+    beat_offset_ms: float = Query(0, description="Downbeat offset in ms"),
+    snap_tolerance_ms: float = Query(80, description="Max distance to beat for snap"),
+    snap_strength: float = Query(0.5, ge=0, le=1, description="Blend: 0=no snap, 1=exact beat"),
+):
+    """Snap all segment timestamps to a BPM grid. Auto-detects BPM if 0."""
+    p, data = _load_segs(job_id)
+    if not data:
+        raise HTTPException(400, "No segments")
+
+    # Auto-detect BPM if not provided
+    if bpm <= 0:
+        audio_path = None
+        job_dir = tasks.OUTPUT_DIR / job_id
+        for ext in (".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".wma", ".mp4", ".webm"):
+            for f in job_dir.glob(f"*{ext}"):
+                audio_path = f
+                break
+            if audio_path:
+                break
+        if not audio_path:
+            raise HTTPException(404, "No audio file found — provide BPM manually")
+        from src.refine.beatgrid import detect_bpm
+        bpm = detect_bpm(audio_path)
+        if not bpm or bpm <= 0:
+            raise HTTPException(422, "Could not detect BPM — provide BPM manually")
+
+    from src.transcription.base import TranscriptSegment
+    from src.refine.beatgrid import snap_segments_to_grid
+
+    segs = [TranscriptSegment.from_dict(s) for s in data]
+    duration = max(s.end for s in segs) + 1.0 if segs else 0
+
+    tasks.push_undo(job_id)
+    snapped = snap_segments_to_grid(
+        segs, bpm, duration,
+        beat_offset_ms=beat_offset_ms,
+        snap_tolerance_ms=snap_tolerance_ms,
+        snap_strength=snap_strength,
+    )
+    result = [s.to_dict() for s in snapped]
+    _save_segs(p, result, job_id)
+
+    moved = sum(1 for o, n in zip(data, result) if abs(o["start"] - n["start"]) > 0.001 or abs(o["end"] - n["end"]) > 0.001)
+    return {
+        "ok": True,
+        "bpm": round(bpm, 1),
+        "segments_snapped": moved,
+        "segments_total": len(result),
+        "beat_sec": round(60.0 / bpm, 4),
     }
 
 

@@ -620,6 +620,11 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
               <span class="qa-label">Auto CPS Fix</span>
               <span class="qa-desc">Schnelle Segmente splitten</span>
             </button>
+            <button class="qa-btn" onclick="doBpmSnap()" title="Segment-Zeiten am BPM-Beat-Grid ausrichten — Auto-Detect oder manuelle BPM-Eingabe">
+              <span class="qa-icon">🥁</span>
+              <span class="qa-label">BPM Snap</span>
+              <span class="qa-desc">Zeiten am Beat ausrichten</span>
+            </button>
             <button class="qa-btn" onclick="doKaraokeHtml('dark')" title="Standalone HTML-Datei mit eingebautem Karaoke-Player (dunkles Theme)">
               <span class="qa-icon">🎤</span>
               <span class="qa-label">Karaoke HTML</span>
@@ -1879,6 +1884,30 @@ loadSegs(aJobId);
 toast(`CPS Fix: ${r.segments_split} gesplittet, max CPS ${r.max_cps_before}→${r.max_cps_after}`)
 }catch(e){toast('CPS Fix: '+e.message,'err')}}
 
+// ── BPM Snap ──
+async function doBpmSnap(){
+if(!aJobId)return;
+// Prompt for BPM (0=auto-detect)
+const bpmInput=prompt('BPM eingeben (0 oder leer = Auto-Detect aus Audio):','0');
+if(bpmInput===null)return;
+const bpm=parseFloat(bpmInput)||0;
+// Prompt for beat offset
+const offsetInput=prompt('Beat-Offset in Sekunden (Zeitpunkt von Beat 1, z.B. 0.43):','0');
+if(offsetInput===null)return;
+const offset=parseFloat(offsetInput)||0;
+// Prompt for snap strength
+const strengthInput=prompt('Snap-Stärke (0.0=kein Snap, 0.5=sanft, 1.0=exakt):','0.5');
+if(strengthInput===null)return;
+const strength=Math.max(0,Math.min(1,parseFloat(strengthInput)||0.5));
+try{
+toast('BPM Snap läuft...');
+const params=new URLSearchParams({bpm,beat_offset_ms:offset*1000,snap_tolerance_ms:80,snap_strength:strength});
+const r=await(await fetch(B+'/api/jobs/'+aJobId+'/snap-to-bpm?'+params,{method:'POST'})).json();
+if(r.error)throw new Error(r.detail||r.error);
+loadSegs(aJobId);
+toast(`BPM Snap: ${r.bpm} BPM, ${r.segments_snapped}/${r.segments_total} Segmente an Beats ausgerichtet (Beat=${r.beat_sec}s)`)
+}catch(e){toast('BPM Snap: '+e.message,'err')}}
+
 // ── Karaoke HTML Export ──
 async function doKaraokeHtml(theme){
 if(!aJobId)return;
@@ -2079,13 +2108,14 @@ div.onclick=()=>openLib(it);el.appendChild(div)}
 
 async function openLib(item){
 toggleLibrary();
+const jid=item.job_id||item.id;
 // Strategy 1: If job still in active session, use native selJob
-if(item.job_id){
-  try{const j=await(await fetch(B+'/api/jobs/'+item.job_id)).json();
-  if(j.status==='completed'){selJob(item.job_id);toast(`"${item.title}" geladen`);return}}catch(e){}}
-// Strategy 2: Reconstruct UI from library record
-try{const r=await(await fetch(B+'/api/library/'+item.id)).json();
-_persistSession({lib_id:item.id,job_id:r.job_id||null});
+if(jid){
+  try{const j=await(await fetch(B+'/api/jobs/'+jid)).json();
+  if(j.status==='completed'){selJob(jid);toast(`"${item.title}" geladen`);return}}catch(e){}}
+// Strategy 2: Reconstruct UI from project record
+try{const r=await(await fetch(B+'/api/library/'+jid)).json();
+_persistSession({job_id:jid});
 await loadFromLibrary(r)}catch(e){toast('Fehler: '+e.message,'err')}}
 
 async function loadFromLibrary(r){
@@ -2141,7 +2171,7 @@ if(r.job_id){
 // Editor section
 document.getElementById('edSec').style.display='block';
 
-// Report tab — show metadata + confidence summary
+// Report tab — show metadata + confidence summary + project settings
 const repEl=document.getElementById('repC');
 if(repEl){
   let repText=`📚 Library: ${r.title}\n`;
@@ -2154,6 +2184,32 @@ if(repEl){
   repText+=`Word Timestamps: ${r.has_word_timestamps?'✓':'✗'}\n`;
   repText+=`Created: ${new Date(r.created_at).toLocaleString('de-DE')}\n`;
   if(r.tags&&r.tags.length)repText+=`Tags: ${r.tags.join(', ')}\n`;
+  // Show processing settings from project.json if available
+  if(r.project&&r.project.settings){
+    const s=r.project.settings;
+    repText+=`\n${'─'.repeat(50)}\n`;
+    repText+=`⚙ Verarbeitungseinstellungen (project.json)\n`;
+    repText+=`${'─'.repeat(50)}\n`;
+    repText+=`VAD: ${s.vad?'✓':'✗'}`;if(s.vad)repText+=` (Stufe ${s.vad_aggressiveness})`;repText+='\n';
+    repText+=`Normalisierung: ${s.normalize?'✓':'✗'}`;if(s.normalize)repText+=` (${s.target_lufs} LUFS)`;repText+='\n';
+    repText+=`Vocal Isolation: ${s.vocal_isolation?'✓':'✗'}\n`;
+    repText+=`Karaoke: ${s.karaoke_mode} · Preset: ${s.preset}\n`;
+    repText+=`CPS: ${s.cps} · Min: ${s.min_duration}s · Max: ${s.max_duration}s\n`;
+    repText+=`Zeichen/Zeile: ${s.max_chars_per_line} · Max Zeilen: ${s.max_lines}\n`;
+    if(s.snap_to_beat)repText+=`Beat-Snap: ✓ (BPM: ${s.bpm||'detect'})\n`;
+    if(s.ai_correct)repText+=`AI-Korrektur: ✓\n`;
+    if(s.lyrics_file)repText+=`Lyrics: ${s.lyrics_file} (${s.lyrics_template_mode})\n`;
+    repText+=`Word-TS Modus: ${s.word_timestamps}\n`;
+  }
+  // Show artifacts from project.json if available
+  if(r.project&&r.project.artifacts&&r.project.artifacts.length){
+    repText+=`\n${'─'.repeat(50)}\n`;
+    repText+=`📦 Artefakte\n`;
+    repText+=`${'─'.repeat(50)}\n`;
+    for(const a of r.project.artifacts){
+      const sz=a.size>1048576?(a.size/1048576).toFixed(1)+' MB':a.size>1024?(a.size/1024).toFixed(0)+' KB':a.size+' B';
+      repText+=`${a.format.padEnd(10)} ${a.filename} (${sz})\n`}
+  }
   repEl.textContent=repText}
 
 // Stats tab — basic info from library data
@@ -2231,22 +2287,13 @@ function clearAll(){
   toast('Seite zurückgesetzt')}
 async function _restoreSession(){
   let s;try{s=JSON.parse(localStorage.getItem('kst-session'))}catch(e){return}
-  if(!s)return;
+  if(!s||!s.job_id)return;
   // Try restoring from active job first
-  if(s.job_id){
-    try{const j=await(await fetch(B+'/api/jobs/'+s.job_id)).json();
-    if(j.status==='completed'){selJob(s.job_id);return}}catch(e){}}
-  // Try restoring from library
-  if(s.lib_id){
-    try{const r=await(await fetch(B+'/api/library/'+s.lib_id)).json();
-    await loadFromLibrary(r);return}catch(e){}}
-  // If job_id exists but not in active jobs, try library search by job_id
-  if(s.job_id){
-    try{const r=await(await fetch(B+'/api/library?q=&limit=100')).json();
-    const match=r.items.find(it=>it.job_id===s.job_id);
-    if(match){const full=await(await fetch(B+'/api/library/'+match.id)).json();
-      _persistSession({lib_id:match.id,job_id:s.job_id});
-      await loadFromLibrary(full);return}}catch(e){}}
+  try{const j=await(await fetch(B+'/api/jobs/'+s.job_id)).json();
+  if(j.status==='completed'){selJob(s.job_id);return}}catch(e){}
+  // Try restoring from project (filesystem)
+  try{const r=await(await fetch(B+'/api/library/'+s.job_id)).json();
+  await loadFromLibrary(r);return}catch(e){}
   _clearSession()}
 
 // ── Demucs Separation Modal ──
