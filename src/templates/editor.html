@@ -116,6 +116,9 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 .sub-overlay.sub-hidden{opacity:0;transition:opacity .06s ease}
 .sub-overlay.sub-visible{opacity:1;transition:none}
 .sub-overlay span{display:inline;padding:3px 10px;border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.sub-overlay .sub-karaoke{display:inline}
+.sub-overlay .sub-kw{display:inline;padding:0;transition:none}
+.sub-overlay .sub-kf-fill{-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .player-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg3);border-top:1px solid var(--border)}
 .player-bar button{padding:4px 8px;font-size:.75rem}
 .time-display{font-family:var(--mono);font-size:.72rem;color:var(--dim);min-width:100px;text-align:center}
@@ -1622,9 +1625,24 @@ function parseASS(text){
     if(parts.length<10)continue;
     const parseT=s=>{const p=s.trim().split(':');return+p[0]*3600+p[1]*60+parseFloat(p[2])};
     const start=parseT(parts[1]);const end=parseT(parts[2]);
-    const text=parts.slice(9).join(',').replace(/\{[^}]*\}/g,'').replace(/\\[Nn]/g,'\n').trim();
-    if(text)cues.push({start,end,text})}
+    const rawText=parts.slice(9).join(',');
+    // Extract karaoke word timing from \k/\kf/\ko tags
+    const kWords=_parseKaraokeTags(rawText,start);
+    const kMode=kWords.length>0?kWords[0]._mode:null;
+    const plainText=rawText.replace(/\{[^}]*\}/g,'').replace(/\\[Nn]/g,'\n').trim();
+    if(plainText)cues.push({start,end,text:plainText,words:kWords.length?kWords:null,kMode})}
   return cues}
+
+function _parseKaraokeTags(raw,lineStart){
+  // Match ASS karaoke blocks: {\kf<dur>}word or {\k<dur>}word or {\ko<dur>}word (dur in centiseconds)
+  const re=/\{[^}]*\\(kf|ko|k)(\d+)[^}]*\}([^{]*)/g;
+  const words=[];let t=lineStart;let m;
+  while((m=re.exec(raw))!==null){
+    const mode=m[1],durCs=parseInt(m[2]),w=m[3].replace(/\\[Nn]/g,' ').trim();
+    if(!w){t+=durCs/100;continue}
+    words.push({start:t,end:t+durCs/100,word:w,_mode:mode});
+    t+=durCs/100}
+  return words}
 
 // Binary search: find cue index where cue.start <= t, rightmost
 function _bsearchCue(t){
@@ -1695,17 +1713,26 @@ function _prebuildCueHtml(){
   const nlBr=s=>esc(s).replace(/\n/g,'<br>');
   for(let i=0;i<_subtitleCues.length;i++){
     const cue=_subtitleCues[i];
+    let mainHtml;
+    if(cue.words&&cue.words.length){
+      // Build per-word spans for karaoke fill
+      mainHtml='<span class="sub-current sub-karaoke">'+
+        cue.words.map((w,wi)=>'<span class="sub-kw" data-wi="'+wi+'">'+esc(w.word)+' </span>').join('')+
+        '</span>';
+    }else{
+      mainHtml='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+    }
     let html='';
     if(nLines===1){
-      html='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+      html=mainHtml;
     } else if(nLines===2){
-      html='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+      html=mainHtml;
       if(i+1<_subtitleCues.length)
         html+='<br><span class="sub-context">'+nlBr(_subtitleCues[i+1].text)+'</span>';
     } else if(nLines>=3){
       if(i>0)
         html+='<span class="sub-context">'+nlBr(_subtitleCues[i-1].text)+'</span><br>';
-      html+='<span class="sub-current">'+nlBr(cue.text)+'</span>';
+      html+=mainHtml;
       if(i+1<_subtitleCues.length)
         html+='<br><span class="sub-context">'+nlBr(_subtitleCues[i+1].text)+'</span>';
     }
@@ -1746,16 +1773,42 @@ function updateSubtitleOverlay(time){
     return}
 
   // Active cue found — show it
+  const cue=_subtitleCues[idx];
   if(idx!==_lastSubIdx){
     // If already pre-loaded, just flip to visible — zero DOM work
     if(idx===_preloadedIdx){
       el.className='sub-overlay sub-visible';
     } else {
-      el.innerHTML=_subtitleCues[idx]._html||'';
+      el.innerHTML=cue._html||'';
       el.className='sub-overlay sub-visible';
     }
     _lastSubIdx=idx;
     _preloadedIdx=-1;
+  }
+
+  // Karaoke fill — update word highlighting every frame
+  if(cue.words&&cue.words.length&&PROJ){
+    const hlColor=assToHex(PROJ.sub_highlight_color||'&H0000FFFF');
+    const baseColor=assToHex(PROJ.sub_color||'&H00FFFFFF');
+    const isKf=cue.kMode==='kf';
+    const wordSpans=el.querySelectorAll('.sub-kw');
+    for(let wi=0;wi<cue.words.length&&wi<wordSpans.length;wi++){
+      const w=cue.words[wi];const span=wordSpans[wi];
+      if(t>=w.end){
+        span.style.cssText='color:'+hlColor;span.classList.remove('sub-kf-fill');
+      }else if(t>=w.start){
+        if(isKf){
+          const dur=w.end-w.start;
+          const pct=dur>0?Math.min(100,Math.round((t-w.start)/dur*100)):100;
+          span.style.cssText='background-image:linear-gradient(90deg,'+hlColor+' '+pct+'%,'+baseColor+' '+pct+'%)';
+          span.classList.add('sub-kf-fill');
+        }else{
+          span.style.cssText='color:'+hlColor;span.classList.remove('sub-kf-fill');
+        }
+      }else{
+        span.style.cssText='color:'+baseColor;span.classList.remove('sub-kf-fill');
+      }
+    }
   }
 }
 
@@ -1792,6 +1845,9 @@ function updateSubtitleStyle(){
   style.id='subOverlayStyle';
   style.textContent=`
 .sub-overlay span.sub-current{font-family:'${font}',sans-serif!important;font-size:${sizePx}px!important;color:${color}!important;font-weight:700!important;text-shadow:${shadow}!important;${bg}!important}
+.sub-overlay span.sub-karaoke{font-family:'${font}',sans-serif!important;font-size:${sizePx}px!important;color:${color}!important;font-weight:700!important;text-shadow:${shadow}!important;${bg}!important}
+.sub-overlay span.sub-kw{font-family:inherit!important;font-size:inherit!important;font-weight:inherit!important;text-shadow:inherit!important}
+.sub-overlay span.sub-kf-fill{text-shadow:none!important}
 .sub-overlay span.sub-context{font-family:'${font}',sans-serif!important;font-size:${ctxSizePx}px!important;color:${color}!important;opacity:.55!important;font-weight:400!important;text-shadow:${ctxShadow}!important;${bg}!important}`;
   if(!style.parentNode)document.head.appendChild(style);
 
