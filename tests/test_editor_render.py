@@ -295,8 +295,7 @@ class TestKaraokeTagParsing:
     @staticmethod
     def _parse_karaoke_tags_py(raw: str, line_start: float) -> list:
         """Python equivalent of editor.html's _parseKaraokeTags JS function."""
-        import re as _re
-        pattern = _re.compile(r"\{[^}]*\\(kf|ko|k)(\d+)[^}]*\}([^{]*)")
+        pattern = re.compile(r"\{[^}]*\\(kf|ko|k)(\d+)[^}]*\}([^{]*)")
         words = []
         t = line_start
         for m in pattern.finditer(raw):
