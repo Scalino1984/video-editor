@@ -114,8 +114,6 @@ class TestEditorImportJob:
 
     def test_import_job_sets_source_job_id(self, editor_client, project_id, _patch_dirs, storage_root):
         """Import-job should set source_job_id on the project."""
-        from src.video.editor import get_project
-
         job_id = "testjob123"
         # Create job output dir where the route expects it (data/output/)
         job_dir = Path("data/output") / job_id
@@ -146,8 +144,6 @@ class TestProjectSourceJobId:
     def test_source_job_id_survives_save_load(self, editor_client, project_id, _patch_dirs, storage_root):
         """source_job_id should persist through save/load cycle."""
         from src.video.editor import get_project
-
-        # Manually set source_job_id on the project
         p = get_project(project_id)
         p.source_job_id = "myjob456"
         # Save
