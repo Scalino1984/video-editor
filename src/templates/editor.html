@@ -225,6 +225,20 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 .tl-playhead::before{content:'';position:absolute;top:-2px;left:-5px;width:12px;height:12px;background:var(--danger);clip-path:polygon(0 0,100% 0,50% 100%)}
 .snap-line{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);opacity:.4;pointer-events:none;z-index:8}
 
+/* ── Track management (v2) ── */
+.tl-label .tl-track-btns{display:none;position:absolute;right:2px;top:50%;transform:translateY(-50%);gap:1px;align-items:center}
+.tl-label:hover .tl-track-btns{display:flex}
+.tl-track-btn{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.55rem;background:var(--bg4);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--dim);line-height:1;padding:0;transition:all .1s}
+.tl-track-btn:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+.tl-track-btn.on{color:var(--accent);border-color:var(--accent)40}
+.tl-track-btn.danger:hover{background:var(--danger);border-color:var(--danger)}
+.tl-label .tl-lock-ico{font-size:.55rem;color:var(--warn);margin-left:auto}
+.tl-label .tl-mute-ico{font-size:.55rem;color:var(--danger);margin-left:2px}
+.tl-label.disabled{opacity:.4}
+.tl-track.disabled{opacity:.25;pointer-events:none}
+.tl-add-track-row{display:flex;align-items:center;gap:4px;padding:2px 8px;height:24px;border-bottom:1px solid var(--border)}
+.tl-add-track-row button{font-size:.55rem;padding:1px 6px;line-height:1.3}
+
 /* ── Toast ── */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:8px;font-size:.78rem;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}
@@ -266,7 +280,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <span style="font-size:.85rem">♪</span>
     <span style="font-size:.7rem;color:var(--dim)">KST</span>
   </a>
-  <h1>🎬 Video Editor</h1><span class="v">v1.0</span>
+  <h1>🎬 Video Editor</h1><span class="v">v2.0</span>
   <div class="hdr-sep"></div>
   <div class="hdr-group">
     <button class="btn-s btn-sm" onclick="edUndo()" title="Undo (Ctrl+Z)">↩ Undo</button>
@@ -538,10 +552,10 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <!-- AI Chat -->
     <div id="propAI" style="display:none" class="chat-section">
       <div class="chat-msgs" id="aiMsgs">
-        <div class="chat-msg ai">👋 Hallo! Ich bin dein KI-Video-Editor-Assistent. Sag mir was du machen möchtest — ich kann Clips bearbeiten, Effekte anwenden, Timing ändern und mehr.</div>
+        <div class="chat-msg ai">👋 Hallo! Ich bin dein KI-Video-Editor-Assistent. Sag mir was du machen möchtest — ich kann Clips bearbeiten, Effekte anwenden, Timing ändern, <b>Spuren hinzufügen/entfernen</b> und mehr.<br><br>💡 Schnellbefehle: <code>+ video</code>, <code>+ audio</code>, <code>- ebene 2</code>, <code>undo</code></div>
       </div>
       <div class="chat-input-row">
-        <input type="text" id="aiInput" placeholder="z.B. 'Füge einen Fade-In zum ersten Clip hinzu'" onkeydown="if(event.key==='Enter')sendAI()" title="AI-Anweisung eingeben">
+        <input type="text" id="aiInput" placeholder="z.B. '+ video', 'Füge Fade-In hinzu', '- ebene 2'" onkeydown="if(event.key==='Enter')sendAI()" title="AI-Anweisung oder Spur-Befehl eingeben">
         <button class="btn btn-sm" onclick="sendAI()" title="AI-Nachricht senden (Enter)">↑</button>
       </div>
     </div>
@@ -557,6 +571,10 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <button class="btn-s btn-sm" onclick="splitAtPlayhead()" title="An Playhead-Position teilen">✂️ Split</button>
     <button class="btn-s btn-sm" onclick="deleteSelectedClip()" title="Ausgewählten Clip löschen (Entf)">🗑️</button>
     <button class="btn-s btn-sm" onclick="toggleSnap()" id="snapBtn" title="Snap an/aus">🧲 Snap</button>
+    <div class="hdr-sep" style="height:16px"></div>
+    <button class="btn-s btn-sm" onclick="addTrackUI('video')" title="Video-Spur hinzufügen">+ 🎬</button>
+    <button class="btn-s btn-sm" onclick="addTrackUI('audio')" title="Audio-Spur hinzufügen">+ 🎵</button>
+    <button class="btn-s btn-sm" onclick="addTrackUI('subtitle')" title="Untertitel-Spur hinzufügen">+ 💬</button>
     <div style="flex:1"></div>
     <div class="zoom-ctrl">
       <span class="zoom-label">🔍</span>
@@ -567,18 +585,12 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
   <div class="tl-body">
     <div class="tl-labels" id="tlLabels">
       <div class="tl-label" style="height:var(--ruler-h);font-size:.55rem;color:var(--dim)">⏱</div>
-      <div class="tl-label" data-lbl="video"><span class="tl-icon">🎬</span> Video</div>
-      <div class="tl-label" data-lbl="audio"><span class="tl-icon">🎵</span> Audio</div>
-      <div class="tl-label" data-lbl="subtitle"><span class="tl-icon">💬</span> Subs</div>
-      <div class="tl-label" data-lbl="overlay"><span class="tl-icon">🔲</span> Overlay</div>
+      <!-- dynamic track labels rendered by buildTrackRows() -->
     </div>
     <div class="tl-scroll" id="tlScroll">
       <div class="tl-ruler" id="tlRuler" onclick="seekRuler(event)"><canvas id="rulerCv"></canvas></div>
       <div class="tl-tracks" id="tlTracks">
-        <div class="tl-track" data-track="video"></div>
-        <div class="tl-track" data-track="audio"></div>
-        <div class="tl-track" data-track="subtitle"></div>
-        <div class="tl-track" data-track="overlay"></div>
+        <!-- dynamic track rows rendered by buildTrackRows() -->
       </div>
       <div class="tl-playhead" id="tlPlayhead" style="left:0"></div>
     </div>
@@ -620,7 +632,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
-// Video Editor Frontend — v1.0
+// Video Editor Frontend — v2.0 (Timeline v2 with dynamic tracks)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const B = window.location.origin;
@@ -691,8 +703,15 @@ function clearEditor(){
 function _resetEditorUI(){
   // Clear assets list
   const al=document.getElementById('assetList');if(al)al.innerHTML='';
-  // Clear timeline tracks
-  document.querySelectorAll('.tl-track').forEach(el=>el.innerHTML='');
+  // Clear timeline tracks (dynamic)
+  const tracksEl=document.getElementById('tlTracks');
+  if(tracksEl)tracksEl.innerHTML='';
+  // Reset labels to just the ruler
+  const labelsEl=document.getElementById('tlLabels');
+  if(labelsEl){
+    const ruler=labelsEl.firstElementChild;
+    labelsEl.innerHTML='';
+    if(ruler)labelsEl.appendChild(ruler)}
   // Clear preview media
   const vid=document.getElementById('previewVid');if(vid){vid.pause();vid.removeAttribute('src');vid.load()}
   const aud=document.getElementById('previewAu');if(aud){aud.pause();aud.removeAttribute('src');aud.load()}
@@ -971,28 +990,145 @@ async function loadSavedProject(filename){
   }catch(e){toast('Laden: '+e.message,'err')}}
 
 // ══════════════════════════════════════════════════════════════════════════════
+// TIMELINE v2 — DYNAMIC TRACKS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const TRACK_ICONS={video:'🎬',audio:'🎵',subtitle:'💬',overlay:'🔲'};
+
+function _getTrackList(){
+  // Returns tracks from project or fallback defaults for v1 compat
+  if(PROJ&&PROJ.tracks&&PROJ.tracks.length>0){
+    return PROJ.tracks.slice().sort((a,b)=>a.index-b.index)}
+  // Fallback: derive from hardcoded track types (v1 compat)
+  return [
+    {id:'_v1',type:'video',name:'V1',index:0,enabled:true,locked:false,mute:false,solo:false},
+    {id:'_a1',type:'audio',name:'A1',index:1,enabled:true,locked:false,mute:false,solo:false},
+    {id:'_s1',type:'subtitle',name:'S1',index:2,enabled:true,locked:false,mute:false,solo:false},
+    {id:'_o1',type:'overlay',name:'Overlay',index:3,enabled:true,locked:false,mute:false,solo:false}
+  ]}
+
+function buildTrackRows(){
+  const trackList=_getTrackList();
+  const labelsEl=document.getElementById('tlLabels');
+  const tracksEl=document.getElementById('tlTracks');
+  // Keep the ruler label (first child)
+  const rulerLabel=labelsEl.querySelector('.tl-label[style*="ruler-h"]')||labelsEl.firstElementChild;
+  labelsEl.innerHTML='';
+  if(rulerLabel)labelsEl.appendChild(rulerLabel);
+  tracksEl.querySelectorAll('.tl-track').forEach(e=>e.remove());
+  trackList.forEach(t=>{
+    const ico=TRACK_ICONS[t.type]||'📄';
+    // Label
+    const lbl=document.createElement('div');
+    lbl.className='tl-label'+(t.enabled===false?' disabled':'');
+    lbl.setAttribute('data-lbl',t.type);
+    lbl.setAttribute('data-track-id',t.id);
+    // Left color strip handled by CSS data-lbl
+    const safeId=escAttr(t.id);
+    let nameTxt=t.name||t.type;
+    let flagsHtml='';
+    if(t.locked)flagsHtml+='<span class="tl-lock-ico" title="Gesperrt">🔒</span>';
+    if(t.mute)flagsHtml+='<span class="tl-mute-ico" title="Stumm">🔇</span>';
+    lbl.innerHTML=`<span class="tl-icon">${ico}</span> <span class="tl-track-name" title="Doppelklick zum Umbenennen">${esc(nameTxt)}</span>${flagsHtml}`
+      +`<div class="tl-track-btns">`
+      +(t.type==='audio'?`<button class="tl-track-btn${t.mute?' on':''}" onclick="event.stopPropagation();toggleTrackProp('${safeId}','mute',${!t.mute})" title="Stumm">M</button>`
+        +`<button class="tl-track-btn${t.solo?' on':''}" onclick="event.stopPropagation();toggleTrackProp('${safeId}','solo',${!t.solo})" title="Solo">S</button>`:'')
+      +`<button class="tl-track-btn${t.locked?' on':''}" onclick="event.stopPropagation();toggleTrackProp('${safeId}','locked',${!t.locked})" title="Sperren">🔒</button>`
+      +`<button class="tl-track-btn${t.enabled===false?' on':''}" onclick="event.stopPropagation();toggleTrackProp('${safeId}','enabled',${t.enabled===false})" title="Sichtbarkeit">👁</button>`
+      +`<button class="tl-track-btn danger" onclick="event.stopPropagation();removeTrackUI('${safeId}')" title="Spur entfernen">✕</button>`
+      +`</div>`;
+    // Double-click to rename
+    lbl.addEventListener('dblclick',()=>{
+      const newName=prompt('Track umbenennen:',t.name);
+      if(newName&&newName!==t.name)renameTrackUI(t.id,newName)});
+    labelsEl.appendChild(lbl);
+    // Track row
+    const trk=document.createElement('div');
+    trk.className='tl-track'+(t.enabled===false?' disabled':'');
+    trk.setAttribute('data-track',t.type);
+    trk.setAttribute('data-track-id',t.id);
+    tracksEl.appendChild(trk)})}
+
+// ── Track management API calls ──
+
+async function addTrackUI(type){
+  if(!PID){toast('Erst Projekt erstellen','err');return}
+  try{
+    const r=await(await fetch(B+'/api/editor/projects/'+PID+'/tracks',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type})})).json();
+    await loadProjectData();
+    toast('Spur hinzugefügt: '+r.name)
+  }catch(e){toast('Track: '+e.message,'err')}}
+
+async function removeTrackUI(trackId){
+  if(!PID)return;
+  // Check if track has clips
+  const trackList=_getTrackList();
+  const track=trackList.find(t=>t.id===trackId);
+  if(!track)return;
+  const hasClips=(PROJ.clips||[]).some(c=>c.track===track.type);
+  const sameTypeCount=trackList.filter(t=>t.type===track.type).length;
+  let force=false;
+  if(hasClips&&sameTypeCount<=1){
+    if(!confirm('Spur "'+track.name+'" enthält Clips. Wirklich löschen?'))return;
+    force=true}
+  try{
+    const params=new URLSearchParams();
+    if(force)params.set('force','true');
+    await fetch(B+'/api/editor/projects/'+PID+'/tracks/'+trackId+'?'+params.toString(),{method:'DELETE'});
+    await loadProjectData();
+    toast('Spur entfernt: '+track.name)
+  }catch(e){toast('Track löschen: '+e.message,'err')}}
+
+async function toggleTrackProp(trackId,prop,value){
+  if(!PID)return;
+  try{
+    await fetch(B+'/api/editor/projects/'+PID+'/tracks/'+trackId,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({[prop]:value})});
+    await loadProjectData()
+  }catch(e){toast('Track: '+e.message,'err')}}
+
+async function renameTrackUI(trackId,newName){
+  if(!PID)return;
+  try{
+    await fetch(B+'/api/editor/projects/'+PID+'/tracks/'+trackId,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:newName})});
+    await loadProjectData();
+    toast('Spur umbenannt: '+newName)
+  }catch(e){toast('Umbenennen: '+e.message,'err')}}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // TIMELINE RENDERING
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderTimeline(){
   if(!PROJ)return;
+  buildTrackRows();
   drawRuler();
-  const tracks=document.getElementById('tlTracks');
+  const tracksEl=document.getElementById('tlTracks');
   // Clear clips from tracks
-  tracks.querySelectorAll('.tl-clip').forEach(e=>e.remove());
-  tracks.querySelectorAll('.snap-line').forEach(e=>e.remove());
+  tracksEl.querySelectorAll('.tl-clip').forEach(e=>e.remove());
+  tracksEl.querySelectorAll('.snap-line').forEach(e=>e.remove());
 
-  const clipsByTrack={video:[],audio:[],subtitle:[],overlay:[]};
+  // Group clips by track type
+  const clipsByType={};
   (PROJ.clips||[]).forEach(c=>{
     const t=c.track||'video';
-    if(clipsByTrack[t])clipsByTrack[t].push(c)});
+    if(!clipsByType[t])clipsByType[t]=[];
+    clipsByType[t].push(c)});
 
-  const trackEls=tracks.querySelectorAll('.tl-track');
-  const trackOrder=['video','audio','subtitle','overlay'];
+  // Get track list and render clips into matching track rows
+  const trackList=_getTrackList();
+  const trackEls=tracksEl.querySelectorAll('.tl-track');
 
-  trackOrder.forEach((tn,ti)=>{
+  trackList.forEach((track,ti)=>{
+    const tn=track.type;
     const trackEl=trackEls[ti];if(!trackEl)return;
-    clipsByTrack[tn].forEach(c=>{
+    const clips=clipsByType[tn]||[];
+    clips.forEach(c=>{
       const asset=PROJ.assets[c.asset_id];
       const name=asset?asset.filename:'?';
       const left=c.start*ZOOM;
@@ -1008,7 +1144,7 @@ function renderTimeline(){
       const lbl=document.createElement('span');
       lbl.className='tl-clip-label';
       const fxCount=c.effects?c.effects.length:0;
-      const typeIco={'video':'🎬','audio':'🎵','subtitle':'💬','overlay':'🎨'}[tn]||'📄';
+      const typeIco=TRACK_ICONS[tn]||'📄';
       let lblText=typeIco+' '+name.slice(0,20)+(fxCount>0?' ✨'+fxCount:'')+(c.loop?' 🔁':'');
       // For subtitle clips, show first few words of srt content
       if(tn==='subtitle'){lblText='💬 '+name.replace(/\.(srt|ass|vtt)$/i,'')}
@@ -1053,8 +1189,8 @@ function renderTimeline(){
 
   // Set timeline width
   const totalDur=PROJ.duration||10;
-  const totalW=Math.max(totalDur*ZOOM+200,tracks.parentElement.clientWidth);
-  tracks.style.width=totalW+'px';
+  const totalW=Math.max(totalDur*ZOOM+200,tracksEl.parentElement.clientWidth);
+  tracksEl.style.width=totalW+'px';
   document.getElementById('tlRuler').style.width=totalW+'px';
   updatePlayhead()}
 
@@ -1198,11 +1334,11 @@ document.getElementById('tlTracks').addEventListener('dragover',ev=>{ev.preventD
 document.getElementById('tlTracks').addEventListener('drop',async ev=>{
   ev.preventDefault();
   const assetId=ev.dataTransfer.getData('asset_id');if(!assetId||!PID)return;
-  // Determine track from drop position
+  // Determine track type from drop position (using dynamic track list)
   const trackEls=document.querySelectorAll('.tl-track');
-  const trackOrder=['video','audio','subtitle','overlay'];
+  const trackList=_getTrackList();
   let track='video';
-  trackEls.forEach((t,i)=>{const r=t.getBoundingClientRect();if(ev.clientY>=r.top&&ev.clientY<=r.bottom)track=trackOrder[i]});
+  trackEls.forEach((t,i)=>{const r=t.getBoundingClientRect();if(ev.clientY>=r.top&&ev.clientY<=r.bottom&&trackList[i])track=trackList[i].type});
   // Determine start time from X position
   const scrollEl=document.getElementById('tlScroll');
   const rect=scrollEl.getBoundingClientRect();
