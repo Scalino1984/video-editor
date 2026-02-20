@@ -2403,7 +2403,7 @@ async function _initProjectMode(){
         if(m){try{const j=await(await fetch(B+'/api/jobs/'+m[1])).json();if(j&&j.job_id){selJob(j.job_id);return true}}catch(e){}}
       }
     }
-    toast('Projekt geladen (kein verknüpfter Job)');
+    toast('Projekt geladen — kein verknüpfter Karaoke-Job gefunden');
     return true;
   }catch(e){toast('Projekt nicht gefunden','err');return false}
 }

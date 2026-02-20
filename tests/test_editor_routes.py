@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -129,7 +130,6 @@ class TestEditorImportJob:
             assert proj.status_code == 200
             assert proj.json()["source_job_id"] == job_id
         finally:
-            import shutil
             shutil.rmtree(job_dir, ignore_errors=True)
 
 
