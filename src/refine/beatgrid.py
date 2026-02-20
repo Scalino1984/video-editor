@@ -209,7 +209,16 @@ def snap_segments_to_grid(segments: list[TranscriptSegment], bpm: float,
                           beat_offset_ms: float = 0.0,
                           snap_tolerance_ms: float = 80.0,
                           snap_strength: float = 0.5) -> list[TranscriptSegment]:
-    """Snap segment and word boundaries to BPM grid."""
+    """Snap segment and word boundaries to BPM grid.
+
+    Guardrails:
+    - First segment always starts at 0.0 (intro is never lost)
+    - Last segment extends to *duration* (tail is never lost)
+    - Segments stay sorted by start time and gap-free
+    """
+    if not segments:
+        return segments
+
     beats = generate_beat_grid(bpm, duration, time_signature, beat_offset_ms)
     if not beats:
         return segments
@@ -231,5 +240,29 @@ def snap_segments_to_grid(segments: list[TranscriptSegment], bpm: float,
                 w.end = w.start + 0.05
 
         result.append(new_seg)
+
+    # ── Guardrails ────────────────────────────────────────────────────────
+    result.sort(key=lambda s: s.start)
+
+    # C1: First segment must start at 0.0 — never lose the intro
+    if result[0].start > 0.0:
+        debug(f"BPM snap: clamping first segment start {result[0].start:.3f}s -> 0.0s")
+        result[0].start = 0.0
+        if result[0].words:
+            result[0].words[0].start = 0.0
+
+    # C2: Last segment must reach audio duration
+    if duration > 0 and result[-1].end < duration:
+        debug(f"BPM snap: extending last segment end {result[-1].end:.3f}s -> {duration:.3f}s")
+        result[-1].end = duration
+        if result[-1].words:
+            result[-1].words[-1].end = duration
+
+    # C3: Ensure segments are gap-free (close gaps introduced by snapping)
+    for i in range(1, len(result)):
+        if result[i].start > result[i - 1].end:
+            result[i - 1].end = result[i].start
+        elif result[i].start < result[i - 1].end:
+            result[i].start = result[i - 1].end
 
     return result
