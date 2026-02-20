@@ -6,6 +6,11 @@ built-in VAD (silero) and optional speaker diarization.
 
 Install: pip install whisperx torch
 GPU recommended for reasonable speed.
+
+CPU thread limiting (prevents system freeze on CPU-only machines):
+    Config:  whisperx.cpu_threads  (0 = auto = half of cores)
+    Env:     WHISPERX_THREADS      (overrides config)
+    Affects: torch, OMP_NUM_THREADS, MKL_NUM_THREADS, OPENBLAS_NUM_THREADS
 """
 
 from __future__ import annotations
@@ -24,19 +29,55 @@ from src.transcription.base import (
 from src.utils.logging import info, debug, warn, error
 
 
+def _apply_thread_limits(cpu_threads: int = 0) -> int:
+    """Set thread limits for torch/OMP/MKL BEFORE loading any models.
+
+    Must be called before the first torch import or model load.
+    Returns the effective thread count.
+    """
+    # Resolve thread count: env override > config > auto
+    env_threads = os.environ.get("WHISPERX_THREADS", "")
+    if env_threads.isdigit() and int(env_threads) > 0:
+        threads = int(env_threads)
+    elif cpu_threads > 0:
+        threads = cpu_threads
+    else:
+        # Auto: half of cores, minimum 2, maximum 6
+        cores = os.cpu_count() or 4
+        threads = max(2, min(cores // 2, 6))
+
+    # Set env vars BEFORE torch import (affects OpenMP, MKL, BLAS)
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[var] = str(threads)
+
+    # Set torch thread limits (if already imported)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+        torch.set_num_interop_threads(max(1, threads // 2))
+    except (ImportError, RuntimeError):
+        pass  # torch not loaded yet or already initialized — env vars will apply
+
+    info(f"WhisperX CPU thread limit: {threads} (cores={os.cpu_count()})")
+    return threads
+
+
 class WhisperXBackend(TranscriptionBackend):
     name = "whisperx"
 
     def __init__(self, model_size: str = "large-v3", device: str = "auto",
                  compute_type: str = "float16", batch_size: int = 16,
-                 hf_token: str = ""):
+                 hf_token: str = "", cpu_threads: int = 0):
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
         self.batch_size = batch_size
         self.hf_token = hf_token or os.environ.get("HF_TOKEN", "")
+        self.cpu_threads = cpu_threads
         self._model = None
         self._align_models: dict[str, Any] = {}
+        self._threads_applied = False
 
     def check_available(self) -> tuple[bool, str]:
         try:
@@ -54,11 +95,26 @@ class WhisperXBackend(TranscriptionBackend):
         except ImportError:
             return "cpu"
 
+    def _ensure_thread_limits(self) -> None:
+        """Apply CPU thread limits once before first model load."""
+        if not self._threads_applied:
+            device = self._resolve_device()
+            if device == "cpu":
+                _apply_thread_limits(self.cpu_threads)
+            self._threads_applied = True
+
     def _get_model(self):
         if self._model is None:
+            self._ensure_thread_limits()
             import whisperx
             device = self._resolve_device()
             compute = self.compute_type if device == "cuda" else "int8"
+            # Reduce batch size on CPU to limit memory + thread pressure
+            effective_batch = self.batch_size
+            if device == "cpu" and self.batch_size > 4:
+                effective_batch = 4
+                info(f"WhisperX: batch_size reduced to {effective_batch} for CPU mode")
+            self._effective_batch_size = effective_batch
             info(f"Loading WhisperX model: {self.model_size} on {device} ({compute})")
             self._model = whisperx.load_model(
                 self.model_size,
@@ -100,7 +156,8 @@ class WhisperXBackend(TranscriptionBackend):
 
         # step 1: transcribe with whisper
         model = self._get_model()
-        transcribe_opts: dict[str, Any] = {"batch_size": self.batch_size}
+        effective_batch = getattr(self, '_effective_batch_size', self.batch_size)
+        transcribe_opts: dict[str, Any] = {"batch_size": effective_batch}
         if language != "auto":
             transcribe_opts["language"] = language
 

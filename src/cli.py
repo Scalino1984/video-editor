@@ -87,7 +87,12 @@ def _get_backend(name: str, model: str = "", diarize: bool = True):
         return LocalWhisperBackend()
     elif name == "whisperx":
         from src.transcription.whisperx_backend import WhisperXBackend
-        return WhisperXBackend(model_size=model or "large-v3")
+        from src.utils.config import load_config
+        wxcfg = load_config().whisperx
+        return WhisperXBackend(
+            model_size=model or wxcfg.model_size,
+            cpu_threads=wxcfg.cpu_threads,
+        )
     else:
         raise typer.BadParameter(f"Unknown backend: {name}")
 

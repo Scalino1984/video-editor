@@ -782,5 +782,9 @@ def _get_backend(name: str, model: str = "", diarize: bool = True, req: Transcri
         if req:
             kw = {"model_size": req.whisperx_model_size, "compute_type": req.whisperx_compute_type,
                   "batch_size": req.whisperx_batch_size}
+        # Thread limit from config or env
+        from src.utils.config import load_config
+        wxcfg = load_config().whisperx
+        kw.setdefault("cpu_threads", wxcfg.cpu_threads)
         return WhisperXBackend(**kw)
     raise ValueError(f"Unknown backend: {name}")

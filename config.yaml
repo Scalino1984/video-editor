@@ -25,8 +25,9 @@ transcription:
 whisperx:
   model_size: "large-v3"       # tiny | base | small | medium | large-v3
   compute_type: "float16"      # float16 | int8 | float32
-  batch_size: 16               # batch size for transcription
+  batch_size: 16               # batch size for transcription (auto-reduced to 4 on CPU)
   device: "auto"               # auto | cpu | cuda
+  cpu_threads: 0               # 0 = auto (half of cores, max 6). Env: WHISPERX_THREADS
 
 refinement:
   cps: 18.0                    # max characters per second

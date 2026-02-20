@@ -47,6 +47,7 @@ class WhisperXConfig(BaseModel):
     compute_type: str = "float16"
     batch_size: int = 16
     device: str = "auto"
+    cpu_threads: int = 0  # 0 = auto (half of CPU cores), limits torch/OMP/MKL threads
 
 
 class RefinementConfig(BaseModel):
@@ -186,6 +187,7 @@ whisperx:
   compute_type: "float16"    # float16 | int8 | float32
   batch_size: 16
   device: "auto"             # auto | cpu | cuda
+  cpu_threads: 0             # 0 = auto (half of cores, max 6). Env: WHISPERX_THREADS
 
 refinement:
   cps: 18.0
