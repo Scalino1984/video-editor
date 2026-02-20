@@ -421,18 +421,29 @@ class TestDictionary:
 
     def test_update_and_apply_dictionary(self, client, seed_job):
         job_id = seed_job[0]
-        # Update dictionary
-        r = client.put("/api/dictionary",
-                       json=[{"wrong": "world", "correct": "earth"}])
-        assert r.status_code == 200
+        # Save original dictionary
+        dict_path = Path("custom_words.txt")
+        original = dict_path.read_text(encoding="utf-8") if dict_path.exists() else None
 
-        # Apply to segments
-        r = client.post(f"/api/jobs/{job_id}/apply-dictionary")
-        assert r.status_code == 200
-        assert r.json()["applied"] >= 1
+        try:
+            # Update dictionary
+            r = client.put("/api/dictionary",
+                           json=[{"wrong": "world", "correct": "earth"}])
+            assert r.status_code == 200
 
-        segs = client.get(f"/api/jobs/{job_id}/segments").json()
-        assert "earth" in segs[0]["text"]
+            # Apply to segments
+            r = client.post(f"/api/jobs/{job_id}/apply-dictionary")
+            assert r.status_code == 200
+            assert r.json()["applied"] >= 1
+
+            segs = client.get(f"/api/jobs/{job_id}/segments").json()
+            assert "earth" in segs[0]["text"]
+        finally:
+            # Restore original dictionary
+            if original is not None:
+                dict_path.write_text(original, encoding="utf-8")
+            elif dict_path.exists():
+                dict_path.unlink()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

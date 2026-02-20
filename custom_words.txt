@@ -1,2 +1,1 @@
 # Custom word replacements: wrong=correct
-world=earth
