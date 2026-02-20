@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Explorer — Karaoke Sub Tool</title>
+<link rel="icon" type="image/x-icon" href="/static/favicon/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/favicon-180x180.png">
+<link rel="manifest" href="/static/favicon/site.webmanifest">
+<meta name="theme-color" content="#00ffb4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0e14;--bg2:#13161f;--bg3:#191d29;--bg4:#1e2333;--border:#262b3d;
+  --text:#e2e4ea;--dim:#7a7f94;--accent:#00e5a0;--accent2:#00b8ff;
+  --fg:#e2e4ea;--surface:#191d29;
+  --danger:#ff4466;--warn:#ffaa22;--purple:#a855f7;--r:10px;
+  --font:'Outfit',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+}
+[data-theme="neon"]{--bg:#0a0015;--bg2:#120025;--bg3:#1a0035;--bg4:#220045;--border:#3a1a6a;--text:#f0e0ff;--dim:#9070b8;--accent:#ff00ff;--accent2:#00ffff;--danger:#ff2050;--warn:#ff8800;--purple:#b040ff}
+[data-theme="light"]{--bg:#f5f6fa;--bg2:#ecedf2;--bg3:#e3e4ec;--bg4:#d8dae4;--border:#c0c4d6;--text:#1a1d2e;--dim:#6b7094;--accent:#00b87a;--accent2:#0088cc;--danger:#e03050;--warn:#d48a00;--purple:#7c3aed}
+[data-theme="warm"]{--bg:#1a1410;--bg2:#221a14;--bg3:#2a201a;--bg4:#332820;--border:#4a3a2a;--text:#f0e6d8;--dim:#a0907a;--accent:#ff9f43;--accent2:#ee5a24;--danger:#ff4466;--warn:#ffc048;--purple:#c56cf0}
+
+html{font-size:14px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.4}
+
+/* Header */
+.hdr{display:flex;align-items:center;gap:10px;padding:6px 16px;background:var(--bg2);border-bottom:1px solid var(--border);height:42px;position:sticky;top:0;z-index:100}
+.hdr h1{font-size:.85rem;font-weight:600;white-space:nowrap}
+.hdr .v{font-size:.55rem;color:var(--dim);margin-left:2px}
+.hdr-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.btn-s{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:.72rem;font-family:var(--font);transition:all .15s}
+.btn-s:hover{background:var(--bg4);border-color:var(--accent)}
+.btn-s.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.theme-sw{display:flex;gap:3px}
+.theme-sw button{width:16px;height:16px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;transition:all .2s}
+.theme-sw button:hover{transform:scale(1.3)}
+.theme-sw button.on{border-color:var(--text);box-shadow:0 0 6px var(--accent)}
+.tsw-dark{background:linear-gradient(135deg,#0c0e14,#191d29)}
+.tsw-neon{background:linear-gradient(135deg,#0a0015,#ff00ff)}
+.tsw-light{background:linear-gradient(135deg,#f5f6fa,#00b87a)}
+.tsw-warm{background:linear-gradient(135deg,#1a1410,#ff9f43)}
+
+/* Main layout */
+.main{max-width:1100px;margin:0 auto;padding:24px 20px}
+.section-title{font-size:1.1rem;font-weight:600;margin:20px 0 12px;display:flex;align-items:center;gap:8px}
+.section-title .badge{font-size:.65rem;background:var(--accent);color:#000;padding:1px 7px;border-radius:8px;font-weight:600}
+
+/* Project grid */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.proj-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .18s;position:relative}
+.proj-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.proj-card .name{font-weight:600;font-size:.88rem;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:60px}
+.proj-card .meta{font-size:.68rem;color:var(--dim);display:flex;gap:10px;flex-wrap:wrap}
+.proj-card .actions{position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.proj-card:hover .actions{opacity:1}
+.proj-card .actions button{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:5px;cursor:pointer;font-size:.65rem;font-family:var(--font);transition:all .12s}
+.proj-card .actions button:hover{border-color:var(--accent);background:var(--bg4)}
+.proj-card .actions button.del:hover{border-color:var(--danger);color:var(--danger)}
+.proj-card .tag{display:inline-block;font-size:.6rem;padding:1px 6px;border-radius:4px;font-weight:500}
+.proj-card .tag.saved{background:rgba(0,229,160,.15);color:var(--accent)}
+.proj-card .tag.active{background:rgba(0,184,255,.15);color:var(--accent2)}
+
+/* Empty state */
+.empty{text-align:center;padding:60px 20px;color:var(--dim)}
+.empty .ic{font-size:2.5rem;margin-bottom:12px}
+.empty p{font-size:.82rem;max-width:360px;margin:0 auto}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:8px;font-size:.78rem;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.err{border-color:var(--danger);color:var(--danger)}
+
+/* Rename input */
+.rename-input{background:var(--bg3);border:1px solid var(--accent);color:var(--text);padding:2px 6px;border-radius:4px;font-size:.82rem;font-family:var(--font);width:100%;outline:none}
+
+/* Loading spinner */
+.loader{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <h1>📁 File Explorer</h1><span class="v">v1.0</span>
+  <div class="hdr-sep"></div>
+  <button class="btn-s" onclick="loadAll()" title="Liste aktualisieren">🔄 Refresh</button>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    <div class="theme-sw">
+      <button class="tsw-dark on" onclick="setTheme('dark')" title="Dark"></button>
+      <button class="tsw-neon" onclick="setTheme('neon')" title="Neon"></button>
+      <button class="tsw-light" onclick="setTheme('light')" title="Light"></button>
+      <button class="tsw-warm" onclick="setTheme('warm')" title="Warm"></button>
+    </div>
+    <div class="hdr-sep"></div>
+    <a href="/" class="btn-s" style="text-decoration:none">🎤 Karaoke</a>
+    <a href="/editor" class="btn-s" style="text-decoration:none">🎬 Editor</a>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Active projects -->
+  <div class="section-title">🟢 Aktive Projekte <span class="badge" id="activeCnt">0</span></div>
+  <div class="proj-grid" id="activeGrid"></div>
+  <div class="empty" id="activeEmpty" style="display:none"><div class="ic">🎬</div><p>Keine aktiven Projekte. Erstelle ein neues Projekt im <a href="/editor" style="color:var(--accent)">Video Editor</a>.</p></div>
+
+  <!-- Saved projects -->
+  <div class="section-title">💾 Gespeicherte Projekte <span class="badge" id="savedCnt">0</span></div>
+  <div class="proj-grid" id="savedGrid"></div>
+  <div class="empty" id="savedEmpty" style="display:none"><div class="ic">📂</div><p>Keine gespeicherten Projekte vorhanden.</p></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const B = location.origin;
+
+/* ── Theme ────────────────────────────────────────────────────────────── */
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme', t==='dark'?'':t);
+  document.querySelectorAll('.theme-sw button').forEach(b=>b.classList.toggle('on',b.classList.contains('tsw-'+t)));
+  try{localStorage.setItem('kst-theme',t)}catch(e){}
+}
+(function(){try{const t=localStorage.getItem('kst-theme');if(t)setTheme(t)}catch(e){}})();
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+function toast(msg, isErr){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.classList.toggle('err',!!isErr);
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+/* ── Data ──────────────────────────────────────────────────────────────── */
+let _active=[], _saved=[];
+
+async function loadAll(){
+  await Promise.all([loadActive(), loadSaved()]);
+}
+
+async function loadActive(){
+  try{
+    const r=await fetch(B+'/api/editor/projects');
+    if(!r.ok) throw new Error(r.statusText);
+    _active=await r.json();
+    renderActive();
+  }catch(e){console.warn('loadActive:',e);_active=[];renderActive()}
+}
+
+async function loadSaved(){
+  try{
+    const r=await fetch(B+'/api/editor/saved-projects');
+    if(!r.ok) throw new Error(r.statusText);
+    _saved=await r.json();
+    renderSaved();
+  }catch(e){console.warn('loadSaved:',e);_saved=[];renderSaved()}
+}
+
+/* ── Render ─────────────────────────────────────────────────────────────── */
+function renderActive(){
+  const grid=document.getElementById('activeGrid');
+  const empty=document.getElementById('activeEmpty');
+  document.getElementById('activeCnt').textContent=_active.length;
+  if(!_active.length){grid.innerHTML='';empty.style.display='';return}
+  empty.style.display='none';
+  grid.innerHTML=_active.map(p=>`
+    <div class="proj-card" ondblclick="openActive('${esc(p.id)}')" onclick="void 0">
+      <div class="actions">
+        <button onclick="event.stopPropagation();openActive('${esc(p.id)}')" title="Im Editor öffnen">🎬 Öffnen</button>
+        <button onclick="event.stopPropagation();saveActive('${esc(p.id)}')" title="Auf Disk speichern">💾</button>
+        <button onclick="event.stopPropagation();renameActive('${esc(p.id)}',this)" title="Umbenennen">✏️</button>
+      </div>
+      <div class="name" id="name-${esc(p.id)}">${he(p.name||p.id)}</div>
+      <div class="meta">
+        <span class="tag active">aktiv</span>
+        <span>${p.width||'?'}×${p.height||'?'}</span>
+        <span>${p.clips?.length||0} Clips</span>
+        <span>${p.duration?fmtDur(p.duration):'–'}</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderSaved(){
+  const grid=document.getElementById('savedGrid');
+  const empty=document.getElementById('savedEmpty');
+  document.getElementById('savedCnt').textContent=_saved.length;
+  if(!_saved.length){grid.innerHTML='';empty.style.display='';return}
+  empty.style.display='none';
+  grid.innerHTML=_saved.map(p=>`
+    <div class="proj-card" ondblclick="loadSavedProject('${esc(p.filename)}')" onclick="void 0">
+      <div class="actions">
+        <button onclick="event.stopPropagation();loadSavedProject('${esc(p.filename)}')" title="Laden und im Editor öffnen">📂 Laden</button>
+        <button onclick="event.stopPropagation();renameSaved('${esc(p.filename)}','${esc(p.id)}',this)" title="Umbenennen">✏️</button>
+        <button class="del" onclick="event.stopPropagation();deleteSaved('${esc(p.filename)}')" title="Löschen">🗑️</button>
+      </div>
+      <div class="name" id="sname-${esc(p.filename)}">${he(p.name||p.filename)}</div>
+      <div class="meta">
+        <span class="tag saved">gespeichert</span>
+        <span>${p.size_kb} KB</span>
+        <span>${p.date||'–'}</span>
+      </div>
+    </div>`).join('');
+}
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+function openActive(pid){
+  window.location.href='/editor?pid='+encodeURIComponent(pid);
+}
+
+async function saveActive(pid){
+  try{
+    const r=await fetch(B+'/api/editor/projects/'+pid+'/save',{method:'POST'});
+    if(!r.ok) throw new Error(r.statusText);
+    toast('Projekt gespeichert ✓');
+    await loadSaved();
+  }catch(e){toast('Fehler beim Speichern: '+e.message, true)}
+}
+
+async function loadSavedProject(filename){
+  try{
+    const r=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(filename),{method:'POST'});
+    if(!r.ok) throw new Error(r.statusText);
+    const data=await r.json();
+    const pid=data.id;
+    if(pid) window.location.href='/editor?pid='+encodeURIComponent(pid);
+    else toast('Projekt geladen, aber keine ID erhalten', true);
+  }catch(e){toast('Fehler beim Laden: '+e.message, true)}
+}
+
+async function renameActive(pid, btn){
+  const card=btn.closest('.proj-card');
+  const nameEl=card.querySelector('.name');
+  const old=nameEl.textContent;
+  nameEl.innerHTML='<input class="rename-input" value="'+he(old)+'" />';
+  const inp=nameEl.querySelector('input');
+  inp.focus();inp.select();
+  async function commit(){
+    const nv=inp.value.trim();
+    if(!nv||nv===old){nameEl.textContent=old;return}
+    try{
+      const r=await fetch(B+'/api/editor/projects/'+pid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
+      if(!r.ok) throw new Error(r.statusText);
+      nameEl.textContent=nv;
+      toast('Umbenannt ✓');
+      // Update local state
+      const proj=_active.find(p=>p.id===pid);
+      if(proj) proj.name=nv;
+    }catch(e){nameEl.textContent=old;toast('Fehler: '+e.message,true)}
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
+}
+
+async function renameSaved(filename, pid, btn){
+  // Load the saved project, rename, and re-save
+  const card=btn.closest('.proj-card');
+  const nameEl=card.querySelector('.name');
+  const old=nameEl.textContent;
+  nameEl.innerHTML='<input class="rename-input" value="'+he(old)+'" />';
+  const inp=nameEl.querySelector('input');
+  inp.focus();inp.select();
+  async function commit(){
+    const nv=inp.value.trim();
+    if(!nv||nv===old){nameEl.textContent=old;return}
+    try{
+      // Load, rename in editor state, save back
+      const lr=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(filename),{method:'POST'});
+      if(!lr.ok) throw new Error(lr.statusText);
+      const data=await lr.json();
+      const loadedPid=data.id;
+      await fetch(B+'/api/editor/projects/'+loadedPid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
+      await fetch(B+'/api/editor/projects/'+loadedPid+'/save',{method:'POST'});
+      nameEl.textContent=nv;
+      toast('Umbenannt ✓');
+      await loadSaved();
+    }catch(e){nameEl.textContent=old;toast('Fehler: '+e.message,true)}
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
+}
+
+async function deleteSaved(filename){
+  if(!confirm('Projekt "'+filename+'" wirklich löschen?')) return;
+  try{
+    const r=await fetch(B+'/api/editor/delete-project/'+encodeURIComponent(filename),{method:'DELETE'});
+    if(!r.ok) throw new Error(r.statusText);
+    toast('Gelöscht ✓');
+    await loadSaved();
+  }catch(e){toast('Fehler: '+e.message, true)}
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+function esc(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+function he(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function fmtDur(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return m+':'+String(sec).padStart(2,'0')}
+
+/* ── Init ──────────────────────────────────────────────────────────────── */
+loadAll();
+</script>
+</body>
+</html>

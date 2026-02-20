@@ -871,16 +871,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # ── Generate karaoke-tagged text if word timestamps available ──
         words = cue.get("words")
         if words and len(words) > 0:
-            # Use \kf (progressive fill) for karaoke
+            # Use \kf (progressive fill) for karaoke.
+            # ASS \kf fills from SecondaryColour → PrimaryColour, so we override
+            # \1c = highlight (sung/filled) and \2c = base (not yet sung) on every word
+            # to ensure the fill direction matches the HTML preview.
+            hl = p.sub_highlight_color or "&H0000FFFF"
+            base = p.sub_color or "&H00FFFFFF"
             parts = []
             for wi, word in enumerate(words):
                 dur_cs = max(1, round((word["end"] - word["start"]) * 100))
-                if wi == 0:
-                    # First word includes highlight color override
-                    hl = p.sub_highlight_color or "&H0000FFFF"
-                    parts.append(f"{{\\kf{dur_cs}\\1c{hl}}}{word['word']}")
-                else:
-                    parts.append(f"{{\\kf{dur_cs}}}{word['word']}")
+                parts.append(f"{{\\kf{dur_cs}\\1c{hl}\\2c{base}}}{word['word']}")
                 if wi < len(words) - 1:
                     parts.append(" ")
             current_text = "".join(parts)

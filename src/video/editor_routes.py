@@ -201,8 +201,14 @@ async def api_update_project(pid: str, data: dict):
         "sub_lines", "sub_bg_enabled", "sub_bg_color", "sub_highlight_color", "video_fit",
     }
     changed = []
+    _INT_FIELDS = {"width", "height", "fps", "crf", "sub_size", "sub_outline_width", "sub_margin_v", "sub_y_percent", "sub_lines"}
     for k, v in data.items():
         if k in allowed:
+            if k in _INT_FIELDS:
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    continue
             setattr(p, k, v)
             changed.append(k)
     if not changed:
@@ -250,6 +256,20 @@ async def api_load_project(filename: str):
     if not proj:
         raise HTTPException(500, "Failed to load project")
     return proj.to_dict()
+
+
+@router.delete("/delete-project/{filename}")
+async def api_delete_saved_project(filename: str):
+    """Delete a saved project JSON file from disk (safe: path-traversal protected)."""
+    path = (EDITOR_DIR / "projects" / filename).resolve()
+    if not path.is_relative_to((EDITOR_DIR / "projects").resolve()):
+        raise HTTPException(400, "Invalid filename")
+    if not path.exists():
+        raise HTTPException(404, "Project file not found")
+    if path.suffix.lower() != ".json":
+        raise HTTPException(400, "Only JSON project files can be deleted")
+    path.unlink()
+    return {"deleted": filename}
 
 
 @router.post("/projects/{pid}/undo")
@@ -588,10 +608,16 @@ async def api_update_sub_settings(pid: str, data: dict | None = None):
     allowed = {
         "sub_font", "sub_size", "sub_color", "sub_outline_color",
         "sub_outline_width", "sub_position", "sub_margin_v", "sub_lines",
-        "sub_highlight_color",
+        "sub_highlight_color", "sub_y_percent", "sub_bg_enabled", "sub_bg_color",
     }
+    _INT_FIELDS = {"sub_size", "sub_outline_width", "sub_margin_v", "sub_y_percent", "sub_lines"}
     for k, v in data.items():
         if k in allowed:
+            if k in _INT_FIELDS:
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    continue
             setattr(p, k, v)
     return {"ok": True, **{k: getattr(p, k) for k in allowed}}
 
