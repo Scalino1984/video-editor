@@ -454,7 +454,7 @@ async def api_add_clip(
     return clip.to_dict()
 
 
-_CLIP_ALLOWED = {"start", "duration", "in_point", "out_point", "volume", "speed", "loop", "z_index", "sub_style", "sub_position", "track"}
+_CLIP_ALLOWED = {"start", "duration", "in_point", "out_point", "volume", "speed", "loop", "z_index", "sub_style", "sub_position", "track", "opacity", "blend_mode"}
 
 
 @router.put("/projects/{pid}/clips/{clip_id}")

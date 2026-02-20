@@ -85,6 +85,9 @@ class Clip:
     loop: bool = False  # auto-loop to fill duration
     effects: list[Effect] = field(default_factory=list)
     z_index: int = 0  # layer order for overlays
+    # Overlay-specific
+    opacity: float = 1.0  # 0.0–1.0, used for overlay track
+    blend_mode: str = "normal"  # normal | screen | addition | multiply
     # Subtitle-specific
     sub_style: str = ""  # ASS style override
     sub_position: str = "bottom"  # top | middle | bottom
@@ -509,6 +512,9 @@ def remove_effect(pid: str, clip_id: str, effect_index: int) -> bool:
 
 # ── Render ────────────────────────────────────────────────────────────────────
 
+# Supported blend modes for overlay clips (ffmpeg blend filter mode names)
+_OVERLAY_BLEND_MODES = frozenset({"normal", "screen", "addition", "multiply"})
+
 
 def _parse_srt_cues(text: str) -> list[dict]:
     """Parse SRT file into [{start, end, text}]."""
@@ -773,7 +779,15 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
 
         # Scale + effects filter chain
         from src.video.render import _scale_filter
+        is_overlay = clip.track == "overlay"
         vf_parts = _scale_filter(w, h, p.video_fit)
+
+        # Overlay-specific: ensure rgba format and apply opacity
+        if is_overlay:
+            vf_parts.append("format=rgba")
+            if clip.opacity < 1.0:
+                vf_parts.append(f"colorchannelmixer=aa={clip.opacity:.3f}")
+
         if clip.speed != 1.0:
             vf_parts.append(f"setpts=PTS/{clip.speed}")
 
@@ -785,12 +799,20 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
         prep_label = f"vp{ci}"
         filter_parts.append(f"[{clip_idx}:v]{','.join(vf_parts)}[{prep_label}]")
 
-        # Overlay onto video chain
+        # Composite onto video chain
         ov_label = f"vo{ci}"
         enable = f"between(t,{clip.start:.3f},{clip.end:.3f})"
-        filter_parts.append(
-            f"[{video_chain}][{prep_label}]overlay=0:0:enable='{enable}'[{ov_label}]"
-        )
+
+        if is_overlay and clip.blend_mode != "normal" and clip.blend_mode in _OVERLAY_BLEND_MODES:
+            # Use blend filter for non-normal blend modes
+            filter_parts.append(
+                f"[{video_chain}][{prep_label}]blend=all_mode={clip.blend_mode}:enable='{enable}'[{ov_label}]"
+            )
+        else:
+            # Standard overlay (alpha compositing)
+            filter_parts.append(
+                f"[{video_chain}][{prep_label}]overlay=0:0:enable='{enable}'[{ov_label}]"
+            )
         video_chain = ov_label
 
     # ── Audio clips → delay + mix ──

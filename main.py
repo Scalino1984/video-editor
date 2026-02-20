@@ -103,10 +103,12 @@ from src.api.routes import router as api_router  # noqa: E402
 from src.ai.routes import router as ai_router  # noqa: E402
 from src.db.routes import router as lib_router  # noqa: E402
 from src.video.editor_routes import router as editor_router  # noqa: E402
+from src.video.overlay_routes import router as overlay_router  # noqa: E402
 app.include_router(api_router)
 app.include_router(ai_router)
 app.include_router(lib_router)
 app.include_router(editor_router)
+app.include_router(overlay_router)
 
 # ── Static / WebUI ────────────────────────────────────────────────────────────
 
@@ -141,6 +143,7 @@ EDITOR_DATA.mkdir(exist_ok=True)
 (EDITOR_DATA / "assets").mkdir(exist_ok=True)
 (EDITOR_DATA / "projects").mkdir(exist_ok=True)
 (EDITOR_DATA / "renders").mkdir(exist_ok=True)
+(EDITOR_DATA / "overlays").mkdir(exist_ok=True)
 app.mount("/data/editor", StaticFiles(directory=str(EDITOR_DATA)), name="editor_files")
 
 
