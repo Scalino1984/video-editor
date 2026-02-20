@@ -53,12 +53,24 @@ class VoxtralBackend(TranscriptionBackend):
         direct_segments = _safe_get(transcription, "segments")
         if direct_segments:
             for s in direct_segments:
-                segments.append({
+                seg = {
                     "start": float(_safe_get(s, "start", 0.0) or 0.0),
                     "end": float(_safe_get(s, "end", 0.0) or 0.0),
                     "text": (_safe_get(s, "text", "") or "").strip(),
                     "speaker": _safe_get(s, "speaker", None),
-                })
+                }
+                # Extract word-level timestamps if available
+                words_raw = _safe_get(s, "words")
+                if words_raw:
+                    seg["words"] = [
+                        {
+                            "start": float(_safe_get(w, "start", 0.0) or 0.0),
+                            "end": float(_safe_get(w, "end", 0.0) or 0.0),
+                            "word": (_safe_get(w, "text", "") or _safe_get(w, "word", "") or "").strip(),
+                        }
+                        for w in words_raw
+                    ]
+                segments.append(seg)
             return segments
 
         # try .data.segments (alternative response structure)
@@ -66,12 +78,23 @@ class VoxtralBackend(TranscriptionBackend):
         data_segments = _safe_get(data, "segments") if data else None
         if data_segments:
             for s in data_segments:
-                segments.append({
+                seg = {
                     "start": float(_safe_get(s, "start", 0.0) or 0.0),
                     "end": float(_safe_get(s, "end", 0.0) or 0.0),
                     "text": (_safe_get(s, "text", "") or "").strip(),
                     "speaker": _safe_get(s, "speaker", None),
-                })
+                }
+                words_raw = _safe_get(s, "words")
+                if words_raw:
+                    seg["words"] = [
+                        {
+                            "start": float(_safe_get(w, "start", 0.0) or 0.0),
+                            "end": float(_safe_get(w, "end", 0.0) or 0.0),
+                            "word": (_safe_get(w, "text", "") or _safe_get(w, "word", "") or "").strip(),
+                        }
+                        for w in words_raw
+                    ]
+                segments.append(seg)
             return segments
 
         return segments
@@ -104,6 +127,9 @@ class VoxtralBackend(TranscriptionBackend):
                 file_data = f.read()
 
             info(f"  Sending to Mistral API...")
+            # Mistral API accepts a single granularity value, not a list.
+            # "word" returns both word-level AND segment-level timestamps.
+            granularity = "word" if word_timestamps else "segment"
             transcription = client.audio.transcriptions.complete(
                 model=self.model,
                 file={
@@ -111,7 +137,7 @@ class VoxtralBackend(TranscriptionBackend):
                     "file_name": audio_path.name,
                 },
                 diarize=self.diarize,
-                timestamp_granularities=["segment"],
+                timestamp_granularities=[granularity],
             )
         except Exception as e:
             error(f"Voxtral transcription failed: {e}")
@@ -147,19 +173,30 @@ class VoxtralBackend(TranscriptionBackend):
             seg_end = raw["end"]
             speaker = raw.get("speaker")
 
-            # Voxtral liefert segment-level timestamps, keine word-level
-            # → Words werden spaeter im Alignment-Schritt approximiert
             # Speaker-Info in Text einbauen wenn vorhanden
             if speaker:
                 text = f"[{speaker}] {text}"
+
+            # Word-level timestamps from Voxtral (if granularity includes "word")
+            words: list[WordInfo] = []
+            if raw.get("words"):
+                for w in raw["words"]:
+                    word_text = w.get("word", "").strip()
+                    if word_text:
+                        words.append(WordInfo(
+                            start=w["start"],
+                            end=w["end"],
+                            word=word_text,
+                            confidence=0.9,
+                        ))
 
             segments.append(TranscriptSegment(
                 start=seg_start,
                 end=seg_end,
                 text=text,
-                words=[],
+                words=words,
                 confidence=0.9,  # Voxtral liefert keine Confidence-Werte
-                has_word_timestamps=False,
+                has_word_timestamps=bool(words),
             ))
 
         detected_language = language
@@ -167,7 +204,13 @@ class VoxtralBackend(TranscriptionBackend):
         if lang_attr and isinstance(lang_attr, str):
             detected_language = lang_attr
 
-        info(f"Voxtral: {len(segments)} Segmente, Sprache: {detected_language}")
+        # Diagnostic: log time range for coverage analysis
+        if segments:
+            info(f"Voxtral: {len(segments)} Segmente, Sprache: {detected_language}, "
+                 f"range: {segments[0].start:.1f}s – {segments[-1].end:.1f}s"
+                 + (f", word_timestamps: {segments[0].has_word_timestamps}" if segments else ""))
+        else:
+            info(f"Voxtral: 0 Segmente, Sprache: {detected_language}")
 
         return TranscriptResult(
             segments=segments,

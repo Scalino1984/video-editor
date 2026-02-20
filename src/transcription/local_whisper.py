@@ -15,14 +15,30 @@ from src.transcription.base import (
 from src.utils.logging import info, debug, warn, error
 
 
+def _auto_compute_type(device: str) -> str:
+    """Pick compute_type that works on the target device."""
+    if device == "cpu":
+        return "int8"
+    if device == "auto":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "float16"
+        except ImportError:
+            pass
+        return "int8"
+    # cuda / cuda:N
+    return "float16"
+
+
 class LocalWhisperBackend(TranscriptionBackend):
     name = "local_whisper"
 
     def __init__(self, model_size: str = "large-v3", device: str = "auto",
-                 compute_type: str = "float16"):
+                 compute_type: str = "auto"):
         self.model_size = model_size
         self.device = device
-        self.compute_type = compute_type
+        self.compute_type = compute_type if compute_type != "auto" else _auto_compute_type(device)
         self._model = None
 
     def check_available(self) -> tuple[bool, str]:

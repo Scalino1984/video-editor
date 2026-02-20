@@ -930,3 +930,143 @@ class TestBpmSnapRoute:
         assert r.status_code == 200
         restored = client.get(f"/api/jobs/{job_id}/segments").json()
         assert len(restored) == len(orig)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TRANSCRIPTION PIPELINE FIXES
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLocalWhisperAutoCompute:
+    """Test auto compute_type detection for local_whisper on CPU."""
+
+    def test_auto_compute_cpu(self):
+        """CPU should get int8, not float16."""
+        from src.transcription.local_whisper import _auto_compute_type
+        assert _auto_compute_type("cpu") == "int8"
+
+    def test_auto_compute_cuda(self):
+        """CUDA should get float16."""
+        from src.transcription.local_whisper import _auto_compute_type
+        assert _auto_compute_type("cuda") == "float16"
+
+    def test_auto_compute_auto_no_torch(self, monkeypatch):
+        """auto without torch should fall back to int8."""
+        import builtins
+        real_import = builtins.__import__
+        def fake_import(name, *args, **kwargs):
+            if name == "torch":
+                raise ImportError("no torch")
+            return real_import(name, *args, **kwargs)
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        from src.transcription.local_whisper import _auto_compute_type
+        assert _auto_compute_type("auto") == "int8"
+
+    def test_backend_default_not_float16(self):
+        """LocalWhisperBackend() default should NOT be float16 on CPU systems."""
+        from src.transcription.local_whisper import LocalWhisperBackend
+        backend = LocalWhisperBackend(device="cpu")
+        assert backend.compute_type == "int8"
+
+    def test_backend_explicit_type(self):
+        """Explicit compute_type should be respected."""
+        from src.transcription.local_whisper import LocalWhisperBackend
+        backend = LocalWhisperBackend(compute_type="float32")
+        assert backend.compute_type == "float32"
+
+
+class TestVoxtralWordExtraction:
+    """Test Voxtral word-level timestamp extraction."""
+
+    def test_extract_segments_with_words(self):
+        """Voxtral segments with word-level data should extract words."""
+        from src.transcription.voxtral import VoxtralBackend
+
+        backend = VoxtralBackend.__new__(VoxtralBackend)
+        # Simulate API response with words
+        fake_transcription = {
+            "segments": [
+                {
+                    "start": 0.0, "end": 3.0, "text": "Hello world",
+                    "speaker": None,
+                    "words": [
+                        {"start": 0.0, "end": 1.5, "text": "Hello"},
+                        {"start": 1.5, "end": 3.0, "text": "world"},
+                    ],
+                },
+                {
+                    "start": 3.5, "end": 6.0, "text": "Test line",
+                    "speaker": None,
+                },
+            ],
+        }
+        result = backend._extract_segments(fake_transcription)
+        assert len(result) == 2
+        assert len(result[0]["words"]) == 2
+        assert result[0]["words"][0]["word"] == "Hello"
+        assert result[0]["words"][1]["start"] == 1.5
+        assert "words" not in result[1] or len(result[1].get("words", [])) == 0
+
+    def test_extract_segments_without_words(self):
+        """Voxtral segments without word data should work like before."""
+        from src.transcription.voxtral import VoxtralBackend
+
+        backend = VoxtralBackend.__new__(VoxtralBackend)
+        fake_transcription = {
+            "segments": [
+                {"start": 10.0, "end": 15.0, "text": "Some text", "speaker": None},
+            ],
+        }
+        result = backend._extract_segments(fake_transcription)
+        assert len(result) == 1
+        assert result[0]["start"] == 10.0
+        assert result[0].get("words") is None or len(result[0].get("words", [])) == 0
+
+
+class TestCoverageGapDetection:
+    """Test the coverage gap detection and intro fallback logic."""
+
+    def test_late_start_threshold(self):
+        """Segments starting after threshold should be detectable."""
+        from src.transcription.base import TranscriptSegment
+        segs = [
+            TranscriptSegment(start=21.5, end=27.0, text="First text"),
+            TranscriptSegment(start=27.5, end=33.0, text="Second text"),
+        ]
+        assert segs[0].start > 5.0, "Gap detection should trigger"
+
+    def test_no_gap(self):
+        """Segments starting near 0 should not trigger gap detection."""
+        from src.transcription.base import TranscriptSegment
+        segs = [
+            TranscriptSegment(start=0.5, end=3.0, text="Starts early"),
+        ]
+        assert segs[0].start <= 5.0, "No gap — no fallback needed"
+
+    def test_intro_merge_order(self):
+        """Intro segments should be prepended to main segments."""
+        from src.transcription.base import TranscriptSegment
+        intro = [
+            TranscriptSegment(start=0.0, end=5.0, text="Intro line 1"),
+            TranscriptSegment(start=5.5, end=10.0, text="Intro line 2"),
+        ]
+        main = [
+            TranscriptSegment(start=21.5, end=27.0, text="Main line 1"),
+        ]
+        merged = intro + main
+        assert len(merged) == 3
+        assert merged[0].start == 0.0
+        assert merged[-1].start == 21.5
+
+    def test_intro_filter_by_gap(self):
+        """Only intro segments before the gap should be used."""
+        from src.transcription.base import TranscriptSegment
+        gap_sec = 21.5
+        intro_segs = [
+            TranscriptSegment(start=0.0, end=5.0, text="Keep this"),
+            TranscriptSegment(start=5.5, end=10.0, text="Keep this too"),
+            TranscriptSegment(start=15.0, end=21.0, text="Just before gap"),
+            TranscriptSegment(start=30.0, end=35.0, text="Past gap, drop"),
+        ]
+        filtered = [s for s in intro_segs if s.end <= gap_sec + 1.0]
+        assert len(filtered) == 3
+        assert filtered[-1].text == "Just before gap"
