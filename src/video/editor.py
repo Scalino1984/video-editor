@@ -35,6 +35,9 @@ EDITOR_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_UNDO = 80
 
+# Valid track types
+TRACK_TYPES = frozenset({"video", "audio", "subtitle"})
+
 
 # ── Timeline data model ──────────────────────────────────────────────────────
 
@@ -68,6 +71,28 @@ class Effect:
 
     def to_dict(self) -> dict:
         return {"type": self.type, "params": self.params}
+
+
+# ── Timeline v2: Track model ─────────────────────────────────────────────────
+
+@dataclass
+class Track:
+    """A track (layer) on the v2 timeline."""
+    id: str
+    type: str  # video | audio | subtitle
+    name: str = ""
+    index: int = 0
+    enabled: bool = True
+    locked: bool = False
+    # Audio-specific
+    mute: bool = False
+    solo: bool = False
+    # Video track-level
+    opacity: float = 1.0
+    gain_db: float = 0.0
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -114,6 +139,9 @@ class Project:
     duration: float = 0  # auto-computed from clips
     assets: dict[str, Asset] = field(default_factory=dict)
     clips: list[Clip] = field(default_factory=list)
+    # Timeline v2
+    timeline_version: int = 2
+    tracks: list[Track] = field(default_factory=list)
     # Render settings
     preset: str = "youtube"
     crf: int = 20
@@ -143,10 +171,12 @@ class Project:
         return {
             "id": self.id,
             "name": self.name,
+            "timeline_version": self.timeline_version,
             "width": self.width,
             "height": self.height,
             "fps": self.fps,
             "duration": self.computed_duration,
+            "tracks": [t.to_dict() for t in self.tracks],
             "preset": self.preset,
             "crf": self.crf,
             "audio_bitrate": self.audio_bitrate,
@@ -178,11 +208,15 @@ class Project:
             cd.pop("end", None)
             efx = [Effect(**e) if isinstance(e, dict) else e for e in cd.pop("effects", [])]
             clips.append(Clip(**cd, effects=efx))
-        return cls(
+        tracks = []
+        for td in d.get("tracks", []):
+            tracks.append(Track(**td))
+        proj = cls(
             id=d["id"], name=d["name"],
             width=d.get("width", 1920), height=d.get("height", 1080),
             fps=d.get("fps", 30), preset=d.get("preset", "youtube"),
             crf=d.get("crf", 20), audio_bitrate=d.get("audio_bitrate", "192k"),
+            timeline_version=d.get("timeline_version", 2),
             sub_font=d.get("sub_font", "Arial"),
             sub_size=d.get("sub_size", 48),
             sub_color=d.get("sub_color", "&H00FFFFFF"),
@@ -196,8 +230,67 @@ class Project:
             sub_bg_color=d.get("sub_bg_color", "&H80000000"),
             sub_highlight_color=d.get("sub_highlight_color", "&H0000FFFF"),
             video_fit=d.get("video_fit", "cover"),
-            assets=assets, clips=clips,
+            assets=assets, clips=clips, tracks=tracks,
         )
+        # Upgrade legacy v1 projects: ensure default tracks exist
+        if not proj.tracks:
+            proj.tracks = _default_tracks()
+        return proj
+
+
+# ── Default tracks for new projects ──────────────────────────────────────────
+
+def _default_tracks() -> list[Track]:
+    """Create default V1+A1+S1 tracks for a new project."""
+    return [
+        Track(id=_uid(), type="video", name="V1", index=0),
+        Track(id=_uid(), type="audio", name="A1", index=1),
+        Track(id=_uid(), type="subtitle", name="S1", index=2),
+    ]
+
+
+def legacy_project_to_v2(data: dict) -> dict:
+    """Convert a v1 project dict to v2 format (upgrade-on-read).
+
+    Creates default tracks and sets timeline_version=2.
+    Idempotent: v2 dicts pass through unchanged.
+    """
+    if data.get("timeline_version", 0) >= 2:
+        return data
+
+    data = copy.deepcopy(data)
+    data["timeline_version"] = 2
+
+    # Build tracks from existing clip track types
+    used_types: set[str] = set()
+    for clip in data.get("clips", []):
+        t = clip.get("track", "video")
+        # Map overlay -> video for track purposes
+        if t == "overlay":
+            used_types.add("video")
+        elif t in TRACK_TYPES:
+            used_types.add(t)
+
+    tracks = []
+    idx = 0
+    for ttype in ("video", "audio", "subtitle"):
+        if ttype in used_types or ttype in ("video", "audio"):
+            tracks.append({
+                "id": uuid.uuid4().hex[:10],
+                "type": ttype,
+                "name": f"{ttype[0].upper()}1",
+                "index": idx,
+                "enabled": True,
+                "locked": False,
+                "mute": False,
+                "solo": False,
+                "opacity": 1.0,
+                "gain_db": 0.0,
+            })
+            idx += 1
+
+    data["tracks"] = tracks
+    return data
 
 
 # ── In-memory project store with undo/redo ────────────────────────────────────
@@ -215,7 +308,8 @@ def _uid() -> str:
 def create_project(name: str = "Untitled", width: int = 1920,
                    height: int = 1080, fps: float = 30) -> Project:
     pid = _uid()
-    proj = Project(id=pid, name=name, width=width, height=height, fps=fps)
+    proj = Project(id=pid, name=name, width=width, height=height, fps=fps,
+                   tracks=_default_tracks())
     _projects[pid] = proj
     _undo_stacks[pid] = deque(maxlen=MAX_UNDO)
     _redo_stacks[pid] = deque(maxlen=MAX_UNDO)
@@ -508,6 +602,121 @@ def remove_effect(pid: str, clip_id: str, effect_index: int) -> bool:
             c.effects.pop(effect_index)
             return True
     return False
+
+
+# ── Track management (v2) ─────────────────────────────────────────────────────
+
+def add_track(pid: str, track_type: str, name: str = "",
+              index: int | None = None) -> Track | None:
+    """Add a new track to the project. Returns the created Track or None."""
+    p = _projects.get(pid)
+    if not p:
+        return None
+    if track_type not in TRACK_TYPES:
+        warn(f"[editor] Invalid track type: {track_type}")
+        return None
+
+    _push_undo(pid)
+
+    # Auto-name
+    if not name:
+        prefix = track_type[0].upper()
+        existing = [t for t in p.tracks if t.type == track_type]
+        name = f"{prefix}{len(existing) + 1}"
+
+    # Auto-index
+    if index is None:
+        index = max((t.index for t in p.tracks), default=-1) + 1
+
+    track = Track(id=_uid(), type=track_type, name=name, index=index)
+    p.tracks.append(track)
+    p.tracks.sort(key=lambda t: t.index)
+    info(f"[editor] Track added: {track.id} ({track.type}/{track.name}) at index {index}")
+    return track
+
+
+def remove_track(pid: str, track_id: str, force: bool = False,
+                 migrate_to_track_id: str | None = None) -> bool:
+    """Remove a track. Clips on it are deleted (with undo) unless migrated.
+
+    Rules:
+    - Empty tracks can always be removed.
+    - Non-empty tracks require force=True or migrate_to_track_id.
+    - When migrate_to_track_id is set, clips move to that track.
+    - If the removed track is the last of its type, clips of that type are deleted.
+    """
+    p = _projects.get(pid)
+    if not p:
+        return False
+
+    track = next((t for t in p.tracks if t.id == track_id), None)
+    if not track:
+        return False
+
+    # Identify clips belonging to this track's type
+    track_clips = [c for c in p.clips if c.track == track.type]
+
+    if track_clips and not force and not migrate_to_track_id:
+        remaining_same_type = [t for t in p.tracks if t.type == track.type and t.id != track_id]
+        if not remaining_same_type:
+            warn(f"[editor] Cannot remove non-empty track {track_id} without force or migration")
+            return False
+
+    _push_undo(pid)
+
+    if track_clips and migrate_to_track_id:
+        target = next((t for t in p.tracks if t.id == migrate_to_track_id), None)
+        if target and target.type == track.type:
+            info(f"[editor] Migrating {len(track_clips)} clips to track {target.id}")
+            # Clips stay as-is since they use track type string
+        else:
+            # Cannot migrate to different type; delete clips if last of this type
+            remaining_same_type = [t for t in p.tracks if t.type == track.type and t.id != track_id]
+            if not remaining_same_type:
+                p.clips = [c for c in p.clips if c.track != track.type]
+    elif track_clips and force:
+        # Delete clips if this is the last track of its type
+        remaining_same_type = [t for t in p.tracks if t.type == track.type and t.id != track_id]
+        if not remaining_same_type:
+            p.clips = [c for c in p.clips if c.track != track.type]
+
+    p.tracks = [t for t in p.tracks if t.id != track_id]
+    info(f"[editor] Track removed: {track_id}")
+    return True
+
+
+def update_track(pid: str, track_id: str, **kwargs) -> Track | None:
+    """Update track properties (name, index, enabled, locked, mute, solo, opacity, gain_db)."""
+    p = _projects.get(pid)
+    if not p:
+        return None
+
+    _ALLOWED = {"name", "index", "enabled", "locked", "mute", "solo", "opacity", "gain_db"}
+    for t in p.tracks:
+        if t.id == track_id:
+            _push_undo(pid)
+            for k, v in kwargs.items():
+                if k in _ALLOWED and hasattr(t, k):
+                    setattr(t, k, v)
+            return t
+    return None
+
+
+def reorder_tracks(pid: str, track_ids: list[str]) -> bool:
+    """Reorder tracks by assigning new indices based on list order."""
+    p = _projects.get(pid)
+    if not p:
+        return False
+
+    track_map = {t.id: t for t in p.tracks}
+    if not all(tid in track_map for tid in track_ids):
+        return False
+
+    _push_undo(pid)
+    for i, tid in enumerate(track_ids):
+        track_map[tid].index = i
+    p.tracks.sort(key=lambda t: t.index)
+    return True
 
 
 # ── Render ────────────────────────────────────────────────────────────────────
@@ -1286,14 +1495,27 @@ def get_timeline_summary(pid: str) -> str:
         return "No project loaded."
 
     lines = [
-        f"Project: {p.name} ({p.width}x{p.height} @ {p.fps}fps)",
+        f"Project: {p.name} ({p.width}x{p.height} @ {p.fps}fps, timeline_version={p.timeline_version})",
         f"Duration: {p.computed_duration:.1f}s",
-        f"Assets: {len(p.assets)}, Clips: {len(p.clips)}",
+        f"Assets: {len(p.assets)}, Clips: {len(p.clips)}, Tracks: {len(p.tracks)}",
         "",
     ]
 
+    if p.tracks:
+        lines.append("=== Tracks ===")
+        for t in sorted(p.tracks, key=lambda t: t.index):
+            flags = []
+            if not t.enabled:
+                flags.append("disabled")
+            if t.locked:
+                flags.append("locked")
+            if t.mute:
+                flags.append("mute")
+            flag_str = f" [{', '.join(flags)}]" if flags else ""
+            lines.append(f"  [{t.id}] {t.name} ({t.type}, idx={t.index}){flag_str}")
+
     if p.assets:
-        lines.append("=== Assets ===")
+        lines.append("\n=== Assets ===")
         for a in p.assets.values():
             lines.append(f"  [{a.id}] {a.filename} ({a.type}, {a.duration:.1f}s)")
 

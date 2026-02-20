@@ -1,13 +1,14 @@
 """AI Chat agent for Video Editor — full timeline manipulation via conversation.
 
 Tools: read timeline, add/remove/modify clips, apply effects, adjust timing,
-configure render, trigger render, create loops.
+configure render, trigger render, manage tracks/layers.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re as _re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncGenerator
@@ -19,7 +20,25 @@ from src.video.editor import (
     split_clip, add_effect, remove_effect,
     undo, redo, get_timeline_summary,
     render_project, _push_undo,
+    add_track, remove_track, update_track, reorder_tracks,
+    TRACK_TYPES,
 )
+
+
+# ── Action allowlist ──────────────────────────────────────────────────────────
+
+ACTION_ALLOWLIST = frozenset({
+    # Existing actions
+    "add_clip", "remove_clip", "update_clip", "split_clip",
+    "add_effect", "remove_effect", "update_project",
+    "undo", "redo", "render",
+    # Track/layer actions (v2)
+    "add_track", "remove_track", "rename_track",
+    "set_track_props", "reorder_tracks",
+})
+
+# Input length limit for chat messages
+MAX_CHAT_MESSAGE_LENGTH = 4000
 
 
 # ── Deps ──────────────────────────────────────────────────────────────────────
@@ -34,6 +53,7 @@ class EditorChatDeps:
 
 EDITOR_SYSTEM = """Du bist ein KI-Video-Editor-Assistent mit Vollzugriff auf die Timeline.
 Du kannst Clips hinzufügen, entfernen, bearbeiten, Effekte anwenden, Timing ändern und Renders starten.
+Du kannst auch Spuren/Ebenen verwalten (hinzufügen, entfernen, umbenennen, umsortieren).
 
 VERFÜGBARE AKTIONEN (nutze diese als JSON-Blöcke in deiner Antwort):
 ```action
@@ -44,6 +64,11 @@ VERFÜGBARE AKTIONEN (nutze diese als JSON-Blöcke in deiner Antwort):
 {"action": "add_effect", "clip_id": "...", "type": "fade_in|fade_out|blur|grayscale|sepia|brightness|contrast|saturation|vignette|sharpen|rotate|flip_h|flip_v|zoom|overlay_text", "params": {...}}
 {"action": "remove_effect", "clip_id": "...", "index": 0}
 {"action": "update_project", "name": "...", "width": 1920, "height": 1080, "fps": 30, "crf": 20}
+{"action": "add_track", "type": "video|audio|subtitle", "name": "V2"}
+{"action": "remove_track", "track_id": "...", "force": false}
+{"action": "rename_track", "track_id": "...", "name": "Neuer Name"}
+{"action": "set_track_props", "track_id": "...", "enabled": true, "locked": false, "mute": false}
+{"action": "reorder_tracks", "track_ids": ["id1", "id2", "id3"]}
 {"action": "undo"}
 {"action": "redo"}
 {"action": "render"}
@@ -55,6 +80,7 @@ REGELN:
 - Du kannst mehrere Aktionen in einer Antwort ausführen
 - Nutze die Timeline-Zusammenfassung um den aktuellen Stand zu verstehen
 - Bei Unsicherheit frage nach
+- Track-Typen: video, audio, subtitle
 
 EFFEKT-PARAMETER:
 - fade_in/fade_out: {"duration": 1.0}
@@ -68,6 +94,71 @@ EFFEKT-PARAMETER:
 """
 
 
+# ── Rule-based chat parser (deterministic, before AI) ─────────────────────────
+
+def parse_chat_command(message: str, pid: str) -> list[dict] | None:
+    """Try to parse a direct command from the chat message.
+
+    Returns a list of action dicts if recognized, or None to fall through to AI.
+    Supports German and English layer/track commands.
+    """
+    msg = message.strip().lower()
+
+    # Track add patterns: "+ video", "füge eine video-ebene hinzu", "neue spur audio"
+    add_patterns = [
+        _re.compile(r"^\+\s*(video|audio|subtitle)$"),
+        _re.compile(r"(?:füge|erstelle|add)\s+(?:eine?\s+)?(?:neue?\s+)?(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+hinzu)?"),
+        _re.compile(r"(?:neue?|new)\s+(?:spur|ebene|track|layer)\s+(video|audio|subtitle)"),
+        _re.compile(r"(?:neue?|new)\s+(video|audio|subtitle)\s+(?:spur|ebene|track|layer)"),
+    ]
+    for pat in add_patterns:
+        m = pat.search(msg)
+        if m:
+            return [{"action": "add_track", "type": m.group(1)}]
+
+    # Track remove patterns: "- ebene 2", "entferne spur 3", "- subtitle"
+    remove_idx_patterns = [
+        _re.compile(r"^-\s*(?:ebene|spur|track|layer)\s*(\d+)(?:\s+force)?$"),
+        _re.compile(r"(?:entferne|lösche|remove|delete)\s+(?:ebene|spur|track|layer)\s*(\d+)(?:\s+force)?"),
+    ]
+    for pat in remove_idx_patterns:
+        m = pat.search(msg)
+        if m:
+            idx = int(m.group(1)) - 1  # 1-based to 0-based
+            force = "force" in msg
+            p = get_project(pid)
+            if p and 0 <= idx < len(p.tracks):
+                track = sorted(p.tracks, key=lambda t: t.index)[idx]
+                return [{"action": "remove_track", "track_id": track.id, "force": force}]
+
+    # Remove by type: "- subtitle", "entferne video spur"
+    remove_type_patterns = [
+        _re.compile(r"^-\s*(video|audio|subtitle)$"),
+        _re.compile(r"(?:entferne|lösche|remove|delete)\s+(?:die\s+)?(video|audio|subtitle)[\s-]*(?:spur|ebene|track|layer)?(?:\s+force)?"),
+    ]
+    for pat in remove_type_patterns:
+        m = pat.search(msg)
+        if m:
+            track_type = m.group(1)
+            force = "force" in msg
+            p = get_project(pid)
+            if p:
+                tracks_of_type = sorted(
+                    [t for t in p.tracks if t.type == track_type],
+                    key=lambda t: t.index, reverse=True,
+                )
+                if tracks_of_type:
+                    return [{"action": "remove_track", "track_id": tracks_of_type[0].id, "force": force}]
+
+    # Undo/redo
+    if msg in ("undo", "rückgängig", "zurück"):
+        return [{"action": "undo"}]
+    if msg in ("redo", "wiederholen", "vorwärts"):
+        return [{"action": "redo"}]
+
+    return None
+
+
 # ── Chat execution ────────────────────────────────────────────────────────────
 
 async def run_editor_chat(
@@ -75,8 +166,37 @@ async def run_editor_chat(
 ) -> AsyncGenerator[str, None]:
     """Run an AI chat turn with editor tool execution.
 
-    Yields text chunks for streaming. Parses ```action blocks and executes them.
+    Yields text chunks for streaming. First tries rule-based parsing for
+    direct commands, then falls through to AI for complex requests.
+    Parses ```action blocks from AI responses and executes them.
     """
+    # Input validation
+    if len(message) > MAX_CHAT_MESSAGE_LENGTH:
+        yield f"⚠️ Nachricht zu lang (max {MAX_CHAT_MESSAGE_LENGTH} Zeichen)"
+        return
+
+    summary = get_timeline_summary(pid)
+
+    # Try rule-based parser first (deterministic, no AI call needed)
+    parsed = parse_chat_command(message, pid)
+    if parsed:
+        for action in parsed:
+            act_name = action.get("action", "?")
+            if act_name not in ACTION_ALLOWLIST:
+                yield f"⚠️ Aktion nicht erlaubt: {act_name}\n"
+                continue
+            try:
+                result = _execute_action(pid, action)
+                yield f"✅ `{act_name}`: {result}\n"
+            except Exception as e:
+                yield f"❌ Fehler bei Aktion: {e}\n"
+        new_summary = get_timeline_summary(pid)
+        if new_summary != summary:
+            yield f"\n---\n📋 **Timeline aktualisiert:**\n```\n{new_summary}\n```\n"
+        info(f"[editor-ai] Rule-based command executed for project {pid}: {message[:80]}")
+        return
+
+    # Fall through to AI
     from src.ai.chat import get_model_name, has_ai_key
 
     if not has_ai_key():
@@ -84,7 +204,6 @@ async def run_editor_chat(
         return
 
     model_name = get_model_name()
-    summary = get_timeline_summary(pid)
 
     # Build messages
     messages = [
@@ -119,8 +238,12 @@ async def run_editor_chat(
                     continue
                 try:
                     action = json.loads(line)
+                    act_name = action.get("action", "?")
+                    if act_name not in ACTION_ALLOWLIST:
+                        yield f"\n⚠️ Aktion nicht erlaubt: {act_name}\n"
+                        continue
                     result = _execute_action(pid, action)
-                    yield f"\n✅ `{action.get('action', '?')}`: {result}\n"
+                    yield f"\n✅ `{act_name}`: {result}\n"
                 except json.JSONDecodeError:
                     yield f"\n⚠️ Ungültige Aktion: {line}\n"
                 except Exception as e:
@@ -130,6 +253,7 @@ async def run_editor_chat(
     new_summary = get_timeline_summary(pid)
     if new_summary != summary:
         yield f"\n---\n📋 **Timeline aktualisiert:**\n```\n{new_summary}\n```\n"
+    info(f"[editor-ai] AI chat executed for project {pid}: {message[:80]}")
 
 
 def _execute_action(pid: str, action: dict) -> str:
@@ -156,9 +280,10 @@ def _execute_action(pid: str, action: dict) -> str:
         return "Clip entfernt" if ok else "Clip nicht gefunden"
 
     elif act == "update_clip":
-        cid = action.pop("clip_id")
-        action.pop("action")
-        clip = update_clip(pid, cid, **action)
+        action_copy = dict(action)
+        cid = action_copy.pop("clip_id")
+        action_copy.pop("action")
+        clip = update_clip(pid, cid, **action_copy)
         return f"Clip {cid} aktualisiert" if clip else "Clip nicht gefunden"
 
     elif act == "split_clip":
@@ -183,6 +308,35 @@ def _execute_action(pid: str, action: dict) -> str:
                 setattr(p, k, action[k])
         return f"Projekt aktualisiert: {p.name} ({p.width}x{p.height})"
 
+    # ── Track/layer actions (v2) ──
+    elif act == "add_track":
+        track_type = action.get("type", "")
+        if track_type not in TRACK_TYPES:
+            return f"Ungültiger Track-Typ: {track_type}"
+        track = add_track(pid, track_type, name=action.get("name", ""))
+        return f"Track {track.name} ({track.type}) hinzugefügt" if track else "Fehler"
+
+    elif act == "remove_track":
+        ok = remove_track(
+            pid, action["track_id"],
+            force=action.get("force", False),
+            migrate_to_track_id=action.get("migrate_to_track_id"),
+        )
+        return "Track entfernt" if ok else "Track konnte nicht entfernt werden"
+
+    elif act == "rename_track":
+        track = update_track(pid, action["track_id"], name=action["name"])
+        return f"Track umbenannt: {track.name}" if track else "Track nicht gefunden"
+
+    elif act == "set_track_props":
+        props = {k: v for k, v in action.items() if k not in ("action", "track_id")}
+        track = update_track(pid, action["track_id"], **props)
+        return f"Track aktualisiert: {track.name}" if track else "Track nicht gefunden"
+
+    elif act == "reorder_tracks":
+        ok = reorder_tracks(pid, action["track_ids"])
+        return "Tracks umsortiert" if ok else "Umsortierung fehlgeschlagen"
+
     elif act == "undo":
         ok = undo(pid)
         return "Undo erfolgreich" if ok else "Nichts zum Rückgängigmachen"
@@ -192,11 +346,11 @@ def _execute_action(pid: str, action: dict) -> str:
         return "Redo erfolgreich" if ok else "Nichts zum Wiederholen"
 
     elif act == "render":
-        output = render_project(pid)
+        output, err = render_project(pid)
         if output:
             mb = output.stat().st_size / (1024 * 1024)
             return f"Gerendert: {output.name} ({mb:.1f} MB)"
-        return "Render fehlgeschlagen"
+        return f"Render fehlgeschlagen: {err}"
 
     return f"Unbekannte Aktion: {act}"
 
