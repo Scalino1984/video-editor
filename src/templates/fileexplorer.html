@@ -97,8 +97,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
       <button class="tsw-warm" onclick="setTheme('warm')" title="Warm"></button>
     </div>
     <div class="hdr-sep"></div>
-    <a href="/" class="btn-s" style="text-decoration:none">🎤 Karaoke</a>
-    <a href="/editor" class="btn-s" style="text-decoration:none">🎬 Editor</a>
+    <a id="navKaraoke" href="/" class="btn-s" style="text-decoration:none">🎤 Karaoke</a>
+    <a id="navEditor" href="/editor" class="btn-s" style="text-decoration:none">🎬 Editor</a>
   </div>
 </header>
 
@@ -175,6 +175,7 @@ function renderActive(){
     <div class="proj-card" ondblclick="openActive('${esc(p.id)}')" onclick="void 0">
       <div class="actions">
         <button onclick="event.stopPropagation();openActive('${esc(p.id)}')" title="Im Editor öffnen">🎬 Öffnen</button>
+        <button onclick="event.stopPropagation();openInKaraoke('${esc(p.id)}')" title="Im Karaoke Tool öffnen">🎤</button>
         <button onclick="event.stopPropagation();saveActive('${esc(p.id)}')" title="Auf Disk speichern">💾</button>
         <button onclick="event.stopPropagation();renameActive('${esc(p.id)}',this)" title="Umbenennen">✏️</button>
       </div>
@@ -213,6 +214,10 @@ function renderSaved(){
 /* ── Actions ────────────────────────────────────────────────────────────── */
 function openActive(pid){
   window.location.href='/editor?pid='+encodeURIComponent(pid);
+}
+
+function openInKaraoke(pid){
+  window.location.href='/?pid='+encodeURIComponent(pid);
 }
 
 async function saveActive(pid){
@@ -304,6 +309,14 @@ function fmtDur(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return m+
 
 /* ── Init ──────────────────────────────────────────────────────────────── */
 loadAll();
+// Propagate ?pid= from URL into nav links
+(function(){
+  const pid=new URLSearchParams(location.search).get('pid');
+  if(!pid)return;
+  const q='?pid='+encodeURIComponent(pid);
+  const nk=document.getElementById('navKaraoke');if(nk)nk.href='/'+q;
+  const ne=document.getElementById('navEditor');if(ne)ne.href='/editor'+q;
+})();
 </script>
 </body>
 </html>

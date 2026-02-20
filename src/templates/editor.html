@@ -306,8 +306,8 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
       <button class="tsw-light" onclick="setTheme('light')" title="Helles Theme"></button>
       <button class="tsw-warm" onclick="setTheme('warm')" title="Warmes Theme"></button>
     </div>
-    <a href="/" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">🎤 Karaoke Tool</a>
-    <a href="/files" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">📁 Files</a>
+    <a id="navKaraoke" href="/" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">🎤 Karaoke Tool</a>
+    <a id="navFiles" href="/files" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">📁 Files</a>
     <span style="font-size:.6rem;color:var(--dim)" id="projName">Kein Projekt</span>
   </div>
 </header>
@@ -734,12 +734,21 @@ async function loadProjectData(){
   try{
     PROJ=await(await fetch(B+'/api/editor/projects/'+PID)).json();
     document.getElementById('projName').textContent=PROJ.name;
+    _updateNavLinks();
     // Auto-sync video/image clip durations to match audio track
     _syncClipDurations();
     renderAssets();renderTimeline();syncMediaSources();loadSubtitleCues();
     updateProps();updateSubtitleStyle();updatePreviewAspect();
     loadLoopVideos(PROJ.width,PROJ.height);
   }catch(e){toast('Laden: '+e.message,'err')}}
+
+function _updateNavLinks(){
+  const q=PID?'?pid='+encodeURIComponent(PID):'';
+  const karaoke=document.getElementById('navKaraoke');
+  const files=document.getElementById('navFiles');
+  if(karaoke)karaoke.href='/'+q;
+  if(files)files.href='/files'+q;
+}
 
 async function saveProject(){
   if(!PID){toast('Kein Projekt','err');return}
@@ -2249,9 +2258,16 @@ document.getElementById('previewEmpty').style.display='block';
 drawRuler();
 window.addEventListener('resize',()=>{if(PROJ)updatePreviewAspect()});
 
-// Auto-create project or load last
+// Read ?pid= from URL, else load last active project
 (async()=>{
   try{
+    const urlPid=new URLSearchParams(location.search).get('pid');
+    if(urlPid){
+      PID=urlPid;
+      await loadProjectData();updateProps();
+      toast('Projekt geladen: '+PROJ.name);
+      return;
+    }
     const projects=await(await fetch(B+'/api/editor/projects')).json();
     if(projects.length>0){
       PID=projects[projects.length-1].id;

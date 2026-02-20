@@ -452,6 +452,10 @@ async def api_import_from_job(pid: str, job_id: str):
                 imported.append(result)
             break
 
+    # Track linked karaoke job for cross-tool navigation
+    if imported:
+        p.source_job_id = job_id
+
     return {"imported": len(imported), "assets": imported}
 
 

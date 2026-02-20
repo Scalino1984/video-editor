@@ -396,14 +396,20 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <button class="btn-s btn-sm" onclick="toggleTapToTime()" title="Tap-to-Time Modus (T)">🎤 Tap</button>
     <button class="btn-s btn-sm" onclick="toggleFSKaraoke()" title="Fullscreen Karaoke (F)">🖥️</button>
     <button class="lib-btn" onclick="toggleLibrary()" title="Library">📚</button>
-    <a href="/editor" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="Video Editor">🎬 Editor</a>
-    <a href="/files" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="File Explorer">📁 Files</a>
+    <a id="navEditor" href="/editor" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="Video Editor">🎬 Editor</a>
+    <a id="navFiles" href="/files" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="File Explorer">📁 Files</a>
     <button class="chat-btn disabled" id="chatBtn" onclick="toggleChat()" title="AI Chat">🤖</button>
     <button class="help-btn" onclick="toggleHelp()" title="Hilfe (F1)">?</button>
     <span style="font-size:.68rem;color:var(--dim)" id="hTxt"></span>
     <div class="dot" id="hDot"></div>
   </div>
 </header>
+<div id="projBanner" style="display:none;padding:6px 16px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:.75rem;color:var(--dim);display:flex;align-items:center;gap:8px">
+  <span style="color:var(--accent)">📌</span>
+  <span>Projekt geöffnet: <b id="projBannerName" style="color:var(--fg)"></b></span>
+  <a id="projBannerEditor" href="/editor" class="btn-s btn-sm" style="text-decoration:none;font-size:.65rem;padding:2px 8px;margin-left:auto">🎬 Im Editor öffnen</a>
+  <button class="btn-s btn-sm" style="font-size:.65rem;padding:2px 8px;color:var(--dim)" onclick="exitProjectMode()">✕ Projektmodus verlassen</button>
+</div>
 <aside class="side">
   <div class="dz" id="dz" onclick="document.getElementById('fi').click()" title="Audio-Datei(en) hier ablegen oder klicken — unterstützt MP3, WAV, FLAC, M4A, OGG, AAC. Auch SRT/VTT/LRC zum Reimport.">
     <span class="ic">📂</span><b>Audio hochladen</b>
@@ -1124,6 +1130,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 </div>
 <script>
 const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],curFil='all',looping=false,loopSeg=null,subOffset=0;
+let _projMode=null; // {pid, name, source_job_id} when opened via ?pid=
 const au=document.getElementById('audioEl');
 function toast(m,t='ok'){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toasts').appendChild(e);setTimeout(()=>e.remove(),3500)}
 function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
@@ -2358,9 +2365,61 @@ function showDemucsResults(jobId,data){
   document.getElementById('demucsResults').style.display='block';
 }
 
+// ── Project Mode ──
+function _updateKstNavLinks(){
+  const q=_projMode?'?pid='+encodeURIComponent(_projMode.pid):'';
+  const ed=document.getElementById('navEditor');
+  const fi=document.getElementById('navFiles');
+  if(ed)ed.href='/editor'+q;
+  if(fi)fi.href='/files'+q;
+  const be=document.getElementById('projBannerEditor');
+  if(be)be.href='/editor'+q;
+}
+async function _initProjectMode(){
+  const urlPid=new URLSearchParams(location.search).get('pid');
+  if(!urlPid)return false;
+  try{
+    const proj=await(await fetch(B+'/api/editor/projects/'+encodeURIComponent(urlPid))).json();
+    if(!proj||!proj.id)return false;
+    _projMode={pid:proj.id,name:proj.name,source_job_id:proj.source_job_id||null};
+    // Show project banner
+    const banner=document.getElementById('projBanner');
+    if(banner)banner.style.display='flex';
+    const bn=document.getElementById('projBannerName');
+    if(bn)bn.textContent=proj.name;
+    _updateKstNavLinks();
+    // If project has a linked job, load its segments
+    if(proj.source_job_id){
+      try{
+        const j=await(await fetch(B+'/api/jobs/'+proj.source_job_id)).json();
+        if(j&&j.job_id){selJob(j.job_id);return true}
+      }catch(e){}
+    }
+    // Fallback: try to find job_id from subtitle asset paths
+    const assets=proj.assets?Object.values(proj.assets):[];
+    for(const a of assets){
+      if(a.type==='subtitle'&&a.path){
+        const m=a.path.match(/data\/output\/([a-f0-9]+)\//);
+        if(m){try{const j=await(await fetch(B+'/api/jobs/'+m[1])).json();if(j&&j.job_id){selJob(j.job_id);return true}}catch(e){}}
+      }
+    }
+    toast('Projekt geladen (kein verknüpfter Job)');
+    return true;
+  }catch(e){toast('Projekt nicht gefunden','err');return false}
+}
+function exitProjectMode(){
+  _projMode=null;
+  const banner=document.getElementById('projBanner');
+  if(banner)banner.style.display='none';
+  _updateKstNavLinks();
+  // Remove ?pid= from URL without reload
+  const url=new URL(location.href);url.searchParams.delete('pid');
+  history.replaceState(null,'',url.pathname+url.search);
+}
+
 // ── Init ──
 checkH();checkAI();setInterval(checkH,30000);connectSSE();startPoll();
-_restoreSession();
+(async()=>{if(!await _initProjectMode())_restoreSession()})();
 window.addEventListener('resize',()=>{if(wfPeaks)drawWF()})
 
 // ══════════════════════════════════════════════════════════════════════════════
