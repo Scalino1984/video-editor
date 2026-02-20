@@ -72,6 +72,7 @@ def _patch_dirs(storage_root):
     """Patch all module-level directory constants to use tmp_path."""
     import src.api.tasks as tasks_mod
     import src.video.editor as editor_mod
+    import src.video.editor_routes as routes_mod
 
     orig_upload = tasks_mod.UPLOAD_DIR
     orig_output = tasks_mod.OUTPUT_DIR
@@ -80,13 +81,16 @@ def _patch_dirs(storage_root):
     tasks_mod.OUTPUT_DIR = storage_root / "output"
 
     orig_editor = editor_mod.EDITOR_DIR
+    orig_routes_editor = routes_mod.EDITOR_DIR
     editor_mod.EDITOR_DIR = storage_root / "editor"
+    routes_mod.EDITOR_DIR = storage_root / "editor"
 
     yield storage_root
 
     tasks_mod.UPLOAD_DIR = orig_upload
     tasks_mod.OUTPUT_DIR = orig_output
     editor_mod.EDITOR_DIR = orig_editor
+    routes_mod.EDITOR_DIR = orig_routes_editor
 
 
 # ── Seed job helper ──────────────────────────────────────────────────────────

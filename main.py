@@ -144,6 +144,11 @@ async def serve_editor():
     return FileResponse(TEMPLATES_DIR / "editor.html")
 
 
+@app.get("/files", include_in_schema=False)
+async def serve_fileexplorer():
+    return FileResponse(TEMPLATES_DIR / "fileexplorer.html")
+
+
 # serve static assets (CSS, JS, favicons, images)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static_files")
 
