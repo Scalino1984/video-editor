@@ -251,14 +251,14 @@ def snap_segments_to_grid(segments: list[TranscriptSegment], bpm: float,
         if result[0].words:
             result[0].words[0].start = 0.0
 
-    # C1: Last segment must reach audio duration
+    # C2: Last segment must reach audio duration
     if duration > 0 and result[-1].end < duration:
         debug(f"BPM snap: extending last segment end {result[-1].end:.3f}s -> {duration:.3f}s")
         result[-1].end = duration
         if result[-1].words:
             result[-1].words[-1].end = duration
 
-    # C2: Ensure segments are gap-free (close gaps introduced by snapping)
+    # C3: Ensure segments are gap-free (close gaps introduced by snapping)
     for i in range(1, len(result)):
         if result[i].start > result[i - 1].end:
             result[i - 1].end = result[i].start
