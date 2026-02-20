@@ -99,11 +99,11 @@ class TestOverlayService:
         d = asset.to_dict()
         assert "preview_url" in d
         assert d["preview_url"] == "/api/overlays/test123/file"
-        # No absolute paths in response
+        # No absolute file system paths in response (exclude URL fields)
+        url_keys = {"preview_url"}
         for key, val in d.items():
-            if isinstance(val, str) and key != "pix_fmt":
-                assert not val.startswith("/home"), f"Absolute path leaked in {key}: {val}"
-                assert not val.startswith("/data"), f"Absolute path leaked in {key}: {val}"
+            if isinstance(val, str) and key not in ("pix_fmt", "id") and key not in url_keys:
+                assert not Path(val).is_absolute(), f"Absolute path leaked in {key}: {val}"
 
     def test_validate_blend_mode(self):
         from src.video.overlay_service import validate_blend_mode

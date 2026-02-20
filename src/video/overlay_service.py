@@ -67,7 +67,7 @@ def _generate_id(relative_path: str) -> str:
 
 def _has_alpha_channel(pix_fmt: str) -> bool:
     """Detect if a pixel format has an alpha channel."""
-    alpha_fmts = {"rgba", "yuva420p", "yuva422p", "yuva444p", "argb", "abgr", "bgra", "gbrap", "ya8", "pal8"}
+    alpha_fmts = {"rgba", "yuva420p", "yuva422p", "yuva444p", "argb", "abgr", "bgra", "gbrap"}
     return pix_fmt.lower() in alpha_fmts
 
 

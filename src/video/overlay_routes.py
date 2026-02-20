@@ -119,7 +119,11 @@ async def api_import_overlay_to_project(
 
     # Copy file to project assets
     assets_dir = EDITOR_DIR / "assets"
-    safe_name = file_path.name.replace("/", "_").replace("\\", "_")
+    safe_name = file_path.name.replace("/", "_").replace("\\", "_").replace("\x00", "")
+    # Remove control characters
+    safe_name = "".join(c for c in safe_name if c.isprintable())
+    if not safe_name:
+        safe_name = "overlay.mp4"
     dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
     shutil.copy2(file_path, dest)
 

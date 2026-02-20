@@ -785,7 +785,7 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
         # Overlay-specific: ensure rgba format and apply opacity
         if is_overlay:
             vf_parts.append("format=rgba")
-            if clip.opacity < 1.0:
+            if abs(clip.opacity - 1.0) > 1e-6:
                 vf_parts.append(f"colorchannelmixer=aa={clip.opacity:.3f}")
 
         if clip.speed != 1.0:
