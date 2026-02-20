@@ -160,6 +160,7 @@ class Project:
     sub_bg_color: str = "&H80000000"  # ASS: semi-transparent black
     sub_highlight_color: str = "&H0000FFFF"  # ASS: yellow karaoke highlight
     video_fit: str = "cover"  # cover | contain | stretch
+    source_job_id: str | None = None  # linked karaoke job (set on import-job)
 
     @property
     def computed_duration(self) -> float:
@@ -193,6 +194,7 @@ class Project:
             "sub_bg_color": self.sub_bg_color,
             "sub_highlight_color": self.sub_highlight_color,
             "video_fit": self.video_fit,
+            "source_job_id": self.source_job_id,
             "assets": {k: v.to_dict() for k, v in self.assets.items()},
             "clips": [c.to_dict() for c in self.clips],
         }
@@ -230,6 +232,7 @@ class Project:
             sub_bg_color=d.get("sub_bg_color", "&H80000000"),
             sub_highlight_color=d.get("sub_highlight_color", "&H0000FFFF"),
             video_fit=d.get("video_fit", "cover"),
+            source_job_id=d.get("source_job_id"),
             assets=assets, clips=clips, tracks=tracks,
         )
         # Upgrade legacy v1 projects: ensure default tracks exist
