@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from src.utils.logging import info, warn, error
 from src.video.editor import (
-    EDITOR_DIR,
+    EDITOR_DIR, TRACK_TYPES,
     create_project, get_project, list_projects,
     save_project, load_project,
     add_asset, add_clip, remove_clip, update_clip,
@@ -23,6 +23,8 @@ from src.video.editor import (
     undo, redo, _push_undo,
     render_project, render_project_with_progress, render_loop_video,
     get_timeline_summary,
+    add_track, remove_track, update_track, reorder_tracks,
+    legacy_project_to_v2,
 )
 
 router = APIRouter(prefix="/api/editor", tags=["editor"])
@@ -504,6 +506,72 @@ async def api_remove_effect(pid: str, clip_id: str, idx: int):
     if not ok:
         raise HTTPException(404, "Not found")
     return {"removed": idx}
+
+
+# ── Tracks (v2) ──────────────────────────────────────────────────────────────
+
+@router.post("/projects/{pid}/tracks")
+async def api_add_track(pid: str, body: dict):
+    """Add a new track (layer) to the project (+)."""
+    p = get_project(pid)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    track_type = body.get("type", "")
+    if track_type not in TRACK_TYPES:
+        raise HTTPException(400, f"Invalid track type: {track_type}. Must be one of: {', '.join(sorted(TRACK_TYPES))}")
+    track = add_track(pid, track_type, name=body.get("name", ""), index=body.get("index"))
+    if not track:
+        raise HTTPException(500, "Failed to add track")
+    return track.to_dict()
+
+
+@router.delete("/projects/{pid}/tracks/{track_id}")
+async def api_remove_track(pid: str, track_id: str, force: bool = False,
+                           migrate_to_track_id: str | None = None):
+    """Remove a track (layer) from the project (-).
+
+    Empty tracks can always be removed. Non-empty tracks require force=True
+    or migrate_to_track_id to move clips to another track.
+    """
+    p = get_project(pid)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    ok = remove_track(pid, track_id, force=force, migrate_to_track_id=migrate_to_track_id)
+    if not ok:
+        raise HTTPException(
+            400,
+            "Cannot remove track — it may contain clips. Use force=true or migrate_to_track_id.",
+        )
+    return {"removed": track_id}
+
+
+@router.put("/projects/{pid}/tracks/{track_id}")
+async def api_update_track(pid: str, track_id: str, body: dict):
+    """Update track properties (name, index, enabled, locked, mute, solo, opacity, gain_db)."""
+    p = get_project(pid)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    _ALLOWED = {"name", "index", "enabled", "locked", "mute", "solo", "opacity", "gain_db"}
+    filtered = {k: v for k, v in body.items() if k in _ALLOWED}
+    if not filtered:
+        raise HTTPException(400, "No valid fields to update")
+    track = update_track(pid, track_id, **filtered)
+    if not track:
+        raise HTTPException(404, "Track not found")
+    return track.to_dict()
+
+
+@router.post("/projects/{pid}/tracks/reorder")
+async def api_reorder_tracks(pid: str, body: dict):
+    """Reorder tracks by providing ordered list of track IDs."""
+    track_ids = body.get("track_ids", [])
+    if not track_ids or not isinstance(track_ids, list):
+        raise HTTPException(400, "Provide track_ids as a list")
+    ok = reorder_tracks(pid, track_ids)
+    if not ok:
+        raise HTTPException(400, "Invalid track IDs")
+    p = get_project(pid)
+    return {"tracks": [t.to_dict() for t in p.tracks]}
 
 
 # ── Render ────────────────────────────────────────────────────────────────────
