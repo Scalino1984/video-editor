@@ -636,7 +636,7 @@ class TestTimelineExportHelpers:
         ]
         line = generate_syllable_karaoke_line(sylls, mode="kf")
         # Should have space between "geln" and "Blei" (word boundary)
-        assert "geln " in line or "geln " in line
+        assert "geln " in line
 
 
 # ── Regression: Deterministic ────────────────────────────────────────────────

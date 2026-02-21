@@ -407,7 +407,7 @@ def build_timeline_from_segments(
     window_start = min((w.start_ms for w in all_words), default=0)
     window_end = max((w.end_ms for w in all_words), default=0)
     avg_conf = sum(w.confidence for w in all_words) / len(all_words) if all_words else 0.0
-    covered = sum(1 for w in all_words if w.confidence > 0.5)
+    covered = sum(1 for w in all_words if w.confidence > CONFIDENCE_THRESHOLD)
     coverage = covered / len(all_words) if all_words else 0.0
 
     params_str = f"{track_id}:{model_provider}:{model_version}:{window_start}:{window_end}"
@@ -810,14 +810,15 @@ def compute_metrics(timeline: WordTimeline) -> TimelineMetrics:
     total_sylls = sum(len(sl) for sl in all_s.values())
 
     words = list(all_w.values())
-    covered = sum(1 for w in words if w.confidence > 0.5)
-    avg_conf = sum(w.confidence for w in words) / len(words) if words else 0.0
-    coverage = covered / len(words) if words else 0.0
+    word_count = len(words)
+    covered = sum(1 for w in words if w.confidence > CONFIDENCE_THRESHOLD)
+    avg_conf = sum(w.confidence for w in words) / word_count if word_count else 0.0
+    coverage = covered / word_count if word_count else 0.0
 
     return TimelineMetrics(
         coverage_pct=coverage,
         avg_confidence=avg_conf,
-        word_count=len(words),
+        word_count=word_count,
         syllable_count=total_sylls,
         segment_count=len(timeline.segment_mappings),
     )
