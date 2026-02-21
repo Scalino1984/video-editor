@@ -594,6 +594,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
           <button class="btn-s btn-sm" onclick="doRedo()" title="Ctrl+Y">↪</button>
           <button class="btn-s btn-sm" onclick="tShift()" title="Alle Timestamps um X Millisekunden verschieben (positiv/negativ)">⏱ Shift</button>
           <button class="btn-s btn-sm" onclick="fixGaps()" title="Lücken zwischen Segmenten automatisch mit Mindestabstand (80ms) korrigieren">🔧 Fix Gaps</button>
+          <button class="btn-s btn-sm" onclick="rebuildTimeline()" id="btnRebuildTL" title="Word Timeline komplett aus aktuellen Segmenten neu berechnen (SSOT)">📐 Rebuild TL</button>
           <button class="btn-s btn-sm" onclick="applyDict()" title="Custom Dictionary auf alle Segmente anwenden (falsch→korrekt)">📖 Dict</button>
           <div class="merge-sel-bar" id="mergeSelBar">
             <span id="mergeSelLbl">0 ausgewählt</span>
@@ -1466,14 +1467,18 @@ function setFil(f){curFil=f;document.querySelectorAll('.fil').forEach(e=>e.class
 
 async function updSeg(i,text){if(!aJobId)return;
   const oldText=cSegs[i].text;
+  if(text===oldText)return;
   cSegs[i].text=text;
   try{
-    // Use remap-words if word timeline is available
-    if(cSegs[i].has_word_timestamps){
+    // Try remap-words if word timestamps exist or Word Timeline is enabled (backend builds on-demand)
+    const tryRemap=cSegs[i].has_word_timestamps||$c('sWT');
+    if(tryRemap){
       const remap=await fetch(B+'/api/jobs/'+aJobId+'/segments/remap-words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[String(i)]:text})});
       if(remap.ok){const rd=await remap.json();
         if(rd.action==='remap'){loadSegs(aJobId);toast('✓ #'+(i+1)+' remapped ('+rd.metrics.word_count+'w)');return}
-        else if(rd.action==='realign_needed'){toast('⚠ Neue Wörter — Timing approximiert','warn')}}}
+        else if(rd.action==='realign_needed'){
+          toast('⚠ Wortanzahl geändert — Timeline-Rebuild empfohlen','warn');
+          showRebuildHint(i)}}}
     // Fallback: simple text update
     await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
     const ta=document.querySelector(`[data-idx="${i}"]`);
@@ -1504,6 +1509,20 @@ async function tShift(){const ms=prompt('Offset in ms (±):','0');if(!ms)return;
 try{await fetch(B+'/api/jobs/'+aJobId+'/segments/time-shift',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset_ms:parseFloat(ms)})});toast('Shifted '+ms+'ms');loadSegs(aJobId)}catch(e){toast('Err','err')}}
 async function fixGaps(){if(!aJobId)return;try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/fix-gaps?strategy=split',{method:'POST'})).json();toast(r.fixed+' fixed');loadSegs(aJobId)}catch(e){toast('Err','err')}}
 async function applyDict(){if(!aJobId)return;try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/apply-dictionary',{method:'POST'})).json();toast(r.applied+' korrigiert');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function rebuildTimeline(){if(!aJobId)return;
+  const btn=document.getElementById('btnRebuildTL');if(btn)btn.disabled=true;
+  try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/word-timeline/build',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})).json();
+    toast('✓ Timeline rebuilt ('+r.metrics.total_words+'w, coverage '+Math.round(r.metrics.coverage*100)+'%)');
+    loadSegs(aJobId);hideRebuildHint();
+  }catch(e){toast('Timeline-Rebuild fehlgeschlagen','err')}finally{if(btn)btn.disabled=false}}
+function showRebuildHint(segIdx){
+  let bar=document.getElementById('rebuildHintBar');
+  if(!bar){bar=document.createElement('div');bar.id='rebuildHintBar';
+    bar.style.cssText='padding:4px 10px;background:var(--warn-bg,#5a4000);color:var(--warn-fg,#ffd866);font-size:.8rem;display:flex;align-items:center;gap:8px;border-radius:4px;margin:4px 0';
+    bar.innerHTML='<span>⚠ Wortanzahl geändert — Timeline sollte neu gebaut werden</span><button class="btn-s btn-sm" onclick="rebuildTimeline()">📐 Jetzt rebuilden</button><button class="btn-s btn-sm" onclick="hideRebuildHint()">✕</button>';
+    const toolbar=document.querySelector('.toolbar');if(toolbar)toolbar.parentNode.insertBefore(bar,toolbar.nextSibling)}
+  bar.style.display='flex'}
+function hideRebuildHint(){const bar=document.getElementById('rebuildHintBar');if(bar)bar.style.display='none'}
 async function regenFmt(){if(!aJobId)return;const s=gS();const fmts=["srt","ass"];if(s.generate_vtt)fmts.push("vtt");if(s.generate_lrc)fmts.push("lrc");if(s.generate_txt)fmts.push("txt");
 try{const r=await(await fetch(B+'/api/jobs/'+aJobId+'/regenerate-ass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({karaoke_mode:s.karaoke_mode,preset:s.preset,formats:fmts})})).json();toast('Generiert: '+r.regenerated.join(', '));refreshJobs()}catch(e){toast('Err','err')}}
 async function copyC(ext){if(!aJobId)return;try{
