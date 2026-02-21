@@ -117,6 +117,18 @@ class RenderingConfig(BaseModel):
     max_concurrent: int = 1  # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS
 
 
+class WordTimelineConfig(BaseModel):
+    enabled: bool = True
+    generate_syllables: bool = False
+    gap_min_ms: int = 20
+    gap_max_ms: int = 120
+    min_segment_duration_ms: int = 200
+    window_padding_ms: int = 1000
+    max_window_ms: int = 30000
+    coverage_threshold: float = 0.80
+    confidence_threshold: float = 0.55
+
+
 class ConfidenceConfig(BaseModel):
     low_threshold: float = 0.6
     mark_in_ass: bool = True
@@ -135,6 +147,7 @@ class AppConfig(BaseModel):
     preview: PreviewConfig = PreviewConfig()
     cache: CacheConfig = CacheConfig()
     confidence: ConfidenceConfig = ConfidenceConfig()
+    word_timeline: WordTimelineConfig = WordTimelineConfig()
     rendering: RenderingConfig = RenderingConfig()
 
 
@@ -242,6 +255,17 @@ confidence:
   low_threshold: 0.6
   mark_in_ass: true
   report_format: json        # json | csv
+
+word_timeline:
+  enabled: true              # Build word timeline SSOT after transcription
+  generate_syllables: false  # Generate syllable tokens for fine-grained karaoke
+  gap_min_ms: 20
+  gap_max_ms: 120
+  min_segment_duration_ms: 200
+  window_padding_ms: 1000
+  max_window_ms: 30000
+  coverage_threshold: 0.80
+  confidence_threshold: 0.55
 
 rendering:
   ffmpeg_threads: 0          # 0 = auto (half of cores, min 2). Env override: FFMPEG_THREADS

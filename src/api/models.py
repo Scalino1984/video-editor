@@ -132,6 +132,35 @@ class TranscribeRequest(BaseModel):
     approx_karaoke: ApproxKaraokeEnum = ApproxKaraokeEnum.auto
     whisperx_compute_type: str = "float16"
     whisperx_batch_size: int = 16
+    build_word_timeline: bool = True
+
+
+class RemapWordsRequest(BaseModel):
+    """Request body for word remap endpoint."""
+    edits: dict[str, str] = Field(..., description="segment_index→new_text")
+
+
+class RemapWordsResponse(BaseModel):
+    action: str
+    confidence: float = 0.0
+    needs_review: bool = False
+    metrics: dict[str, Any] = {}
+    details: dict[str, Any] = {}
+
+
+class TimelineMetricsSchema(BaseModel):
+    coverage_pct: float = 0.0
+    avg_confidence: float = 0.0
+    word_count: int = 0
+    syllable_count: int = 0
+    segment_count: int = 0
+    remap_only: bool = False
+    realign_needed: bool = False
+
+
+class BuildTimelineResponse(BaseModel):
+    status: str = "built"
+    metrics: TimelineMetricsSchema = TimelineMetricsSchema()
 
 
 class RefineRequest(BaseModel):

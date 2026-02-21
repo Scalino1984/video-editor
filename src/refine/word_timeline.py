@@ -630,6 +630,9 @@ def process_segment_edit(
     segments: list[dict],
     timeline: WordTimeline,
     edited_segments: dict[int, str],
+    gap_min_ms: int = DEFAULT_GAP_MIN_MS,
+    gap_max_ms: int = DEFAULT_GAP_MAX_MS,
+    min_duration_ms: int = MIN_SEGMENT_DURATION_MS,
 ) -> EditResult:
     """Process text edits on segments.
 
@@ -637,6 +640,9 @@ def process_segment_edit(
         segments: Current segment dicts (from segments.json).
         timeline: Current WordTimeline.
         edited_segments: Map of segment_id→new_text for changed segments.
+        gap_min_ms: Minimum gap between segments (ms).
+        gap_max_ms: Maximum gap before clamping (ms).
+        min_duration_ms: Minimum segment duration (ms).
 
     Returns:
         EditResult with action="remap" if only word redistribution needed,
@@ -713,7 +719,10 @@ def process_segment_edit(
             ))
 
     # Derive new segment times
-    segments = apply_derived_times(segments, timeline)
+    segments = apply_derived_times(segments, timeline,
+                                   gap_min_ms=gap_min_ms,
+                                   gap_max_ms=gap_max_ms,
+                                   min_duration_ms=min_duration_ms)
 
     return EditResult(
         action="remap",

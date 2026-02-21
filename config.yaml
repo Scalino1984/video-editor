@@ -76,6 +76,17 @@ confidence:
   mark_in_ass: true
   report_format: json          # json | csv
 
+word_timeline:
+  enabled: true                # Word Timeline SSOT automatisch nach Transkription bauen
+  generate_syllables: false    # Silben-Tokens für feingranulares Karaoke erzeugen
+  gap_min_ms: 20               # Min Gap zwischen Segmenten (ms)
+  gap_max_ms: 120              # Max Gap vor Clamping (ms)
+  min_segment_duration_ms: 200 # Minimale Segment-Dauer (ms)
+  window_padding_ms: 1000      # Padding um Alignment-Window (ms)
+  max_window_ms: 30000         # Maximale Alignment-Window Größe (ms)
+  coverage_threshold: 0.80     # Quality Gate: Minimum Coverage
+  confidence_threshold: 0.55   # Quality Gate: Minimum Confidence
+
 rendering:
   ffmpeg_threads: 0            # 0 = auto (half of cores, min 2). Env override: FFMPEG_THREADS
   x264_threads: 0              # 0 = same as ffmpeg_threads. Limits libx264 encoder threads

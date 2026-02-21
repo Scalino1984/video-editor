@@ -478,6 +478,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
       <button type="button" class="btn-s" onclick="openDemucsModal()" title="Eigenständige Stem-Separation: Vocals, Drums, Bass, Other als separate Dateien extrahieren" style="width:100%;margin-top:2px;font-size:.6rem;padding:2px 4px">🎵 Demucs Separation</button>
       <label class="tg f" title="Beat-Grid Snap — erkennt BPM und richtet Segment-/Wort-Grenzen am Beat aus. Für Rap/Songs mit klarem Rhythmus."><input type="checkbox" id="sBT"> BPM Snap</label>
       <label class="tg f" title="AI-Korrektur — nutzt ein LLM um Lyrics zu korrigieren (Rechtschreibung, fehlende Wörter, Interpunktion)."><input type="checkbox" id="sAI"> AI Correct</label>
+      <label class="tg f" title="Word Timeline SSOT — baut eine Wort-Level-Timeline als Single Source of Truth. Ermöglicht präzises Text-Remap ohne Re-Alignment."><input type="checkbox" id="sWT" checked> Word Timeline</label>
     </div>
     <button class="btn-s" onclick="document.getElementById('vrZone').classList.toggle('show')" style="width:100%;margin-top:4px;font-size:.65rem" title="Karaoke-Video mit Hintergrund und eingebrannten Untertiteln rendern">🎬 Video Render ▾</button>
     <div class="vr-zone" id="vrZone">
@@ -1095,6 +1096,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <p><b>🎨 Themes:</b> 4 Farbschemen (Dark, Neon, Light, Warm) — Theme-Buttons im Header. Wird gespeichert.</p>
 <p><b>✂️ Split bei Playhead:</b> Taste <code>S</code> splittet das aktuelle Segment an der Playhead-Position.</p>
 <p><b>🔁 A/B Loop:</b> <code>Shift+Drag</code> auf der Waveform setzt eine Loop-Region. Audio loopt automatisch zwischen A und B.</p>
+<p><b>📐 Word Timeline SSOT:</b> Baut eine Wort-Level-Timeline als Single Source of Truth. Text-Edits nutzen automatisch Remap statt Re-Alignment — Wörter behalten ihr Original-Timing.</p>
 
 <h3>🤖 AI Chat</h3>
 <p>Integrierter KI-Assistent der direkt auf die transkribierten Segmente zugreifen und sie bearbeiten kann. Konfiguriert über <code>.env</code> mit einer einzigen Variable:</p>
@@ -1212,7 +1214,7 @@ document.getElementById('sB').onchange=function(){document.getElementById('wxO')
 function gS(){const s={backend:$('sB'),language:$('sL'),vad:$c('sVAD'),normalize:$c('sN'),vocal_isolation:$c('sVO'),
 generate_ass:$c('sA'),generate_vtt:$c('sVTT'),generate_lrc:$c('sLRC'),generate_txt:$c('sTXT'),
 karaoke_mode:$('sK'),preset:$('sP'),cps:parseFloat($('sC'))||18,max_chars_per_line:parseInt($('sMC'))||42,
-snap_to_beat:$c('sBT'),bpm:$c('sBT')?'detect':null,ai_correct:$c('sAI'),
+snap_to_beat:$c('sBT'),bpm:$c('sBT')?'detect':null,ai_correct:$c('sAI'),build_word_timeline:$c('sWT'),
 whisperx_model_size:$('sWXM'),whisperx_compute_type:$('sWXC')};
 if(lyricsFile){s.use_lyrics_template=true;s.lyrics_template_mode=$('sLTM');
 s.match_mode=$('sMatch');s.preserve_empty_lines=$c('sEL')}
@@ -1463,9 +1465,17 @@ function renderSegs(){
 function setFil(f){curFil=f;document.querySelectorAll('.fil').forEach(e=>e.classList.toggle('on',e.dataset.f===f));renderSegs()}
 
 async function updSeg(i,text){if(!aJobId)return;
+  const oldText=cSegs[i].text;
   cSegs[i].text=text;
-  try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
-    // Flash save indicator
+  try{
+    // Use remap-words if word timeline is available
+    if(cSegs[i].has_word_timestamps){
+      const remap=await fetch(B+'/api/jobs/'+aJobId+'/segments/remap-words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[String(i)]:text})});
+      if(remap.ok){const rd=await remap.json();
+        if(rd.action==='remap'){loadSegs(aJobId);toast('✓ #'+(i+1)+' remapped ('+rd.metrics.word_count+'w)');return}
+        else if(rd.action==='realign_needed'){toast('⚠ Neue Wörter — Timing approximiert','warn')}}}
+    // Fallback: simple text update
+    await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,text})});
     const ta=document.querySelector(`[data-idx="${i}"]`);
     if(ta){ta.style.borderColor='var(--accent)';setTimeout(()=>ta.style.borderColor='',800)}
     toast('✓ #'+(i+1)+' gespeichert')

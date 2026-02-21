@@ -574,6 +574,8 @@ async def remap_words(job_id: str, edits: dict[str, str] = Body(...)):
         save_timeline, load_timeline, compute_metrics,
     )
     from src.transcription.base import TranscriptSegment
+    from src.utils.config import load_config
+    wt_cfg = load_config().word_timeline
 
     tasks.push_undo(job_id)
     p, data = _load_segs(job_id)
@@ -583,7 +585,8 @@ async def remap_words(job_id: str, edits: dict[str, str] = Body(...)):
     timeline = load_timeline(job_dir)
     if timeline is None:
         segments = [TranscriptSegment.from_dict(s) for s in data]
-        timeline = build_timeline_from_segments(segments)
+        timeline = build_timeline_from_segments(
+            segments, generate_syllables=wt_cfg.generate_syllables)
 
     # Parse edits: string keys → int segment indices
     edited: dict[int, str] = {}
@@ -596,7 +599,12 @@ async def remap_words(job_id: str, edits: dict[str, str] = Body(...)):
             raise HTTPException(400, f"Segment index {idx} out of range")
         edited[idx] = v
 
-    result = process_segment_edit(data, timeline, edited)
+    result = process_segment_edit(
+        data, timeline, edited,
+        gap_min_ms=wt_cfg.gap_min_ms,
+        gap_max_ms=wt_cfg.gap_max_ms,
+        min_duration_ms=wt_cfg.min_segment_duration_ms,
+    )
 
     if result.action == "remap":
         save_timeline(result.timeline, job_dir)
@@ -630,18 +638,21 @@ async def get_word_timeline(job_id: str):
 
 
 @router.post("/jobs/{job_id}/word-timeline/build")
-async def build_word_timeline(job_id: str, generate_syllables: bool = False):
+async def build_word_timeline(job_id: str, generate_syllables: bool | None = None):
     """Build word timeline from current segments."""
     from src.refine.word_timeline import build_timeline_from_segments, save_timeline, compute_metrics
     from src.transcription.base import TranscriptSegment
+    from src.utils.config import load_config
+    wt_cfg = load_config().word_timeline
 
     _, data = _load_segs(job_id)
     job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
     if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
         raise HTTPException(400, "Invalid job_id")
 
+    gen_sylls = generate_syllables if generate_syllables is not None else wt_cfg.generate_syllables
     segments = [TranscriptSegment.from_dict(s) for s in data]
-    timeline = build_timeline_from_segments(segments, generate_syllables=generate_syllables)
+    timeline = build_timeline_from_segments(segments, generate_syllables=gen_sylls)
     save_timeline(timeline, job_dir)
     metrics = compute_metrics(timeline)
     return {"status": "built", "metrics": metrics.to_dict()}
@@ -932,9 +943,28 @@ async def regenerate_ass(job_id: str, req: ExportRequest = ExportRequest()):
     from src.export.lrc_writer import write_lrc
     from src.export.srt_writer import write_srt
     from src.export.txt_writer import write_txt
+
+    job_output = tasks.OUTPUT_DIR / job_id
+
+    # If word timeline SSOT exists, apply derived times to segments first
+    try:
+        from src.refine.word_timeline import load_timeline, apply_derived_times
+        from src.utils.config import load_config
+        wt_cfg = load_config().word_timeline
+        timeline = load_timeline(job_output)
+        if timeline and wt_cfg.enabled:
+            data = apply_derived_times(
+                data, timeline,
+                gap_min_ms=wt_cfg.gap_min_ms,
+                gap_max_ms=wt_cfg.gap_max_ms,
+                min_duration_ms=wt_cfg.min_segment_duration_ms,
+            )
+            _save_segs(p, data, job_id)
+    except Exception:
+        pass  # non-critical: fall back to existing segment data
+
     segments = [TranscriptSegment.from_dict(s) for s in data]
     if req.approx_karaoke: segments = ensure_word_timestamps(segments)
-    job_output = tasks.OUTPUT_DIR / job_id
     stem = "output"
     for f in job_output.glob("*.srt"): stem = f.stem; break
     generated = []

@@ -541,7 +541,21 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
         seg_data = [s.to_dict() for s in segments]
         (job_output / "segments.json").write_text(
             json.dumps(seg_data, indent=2, ensure_ascii=False), encoding="utf-8")
-
+        # ── Word Timeline SSOT ────────────────────────────────────────────
+        if req.build_word_timeline:
+            try:
+                from src.refine.word_timeline import build_timeline_from_segments, save_timeline
+                from src.utils.config import load_config
+                wt_cfg = load_config().word_timeline
+                timeline = build_timeline_from_segments(
+                    segments, model_provider=transcript.backend,
+                    model_version=getattr(transcript, "model", "unknown"),
+                    generate_syllables=wt_cfg.generate_syllables,
+                )
+                save_timeline(timeline, job_output)
+                info(f"[{job_id}] Word timeline built ({len(segments)} segments)")
+            except Exception as wt_err:
+                warn(f"[{job_id}] Word timeline build failed (non-critical): {wt_err}")
         # ── Waveform (non-blocking, uses WAV copy if available) ───────────
         update_job(job_id, progress=0.95, stage="Generating waveform")
         try:
