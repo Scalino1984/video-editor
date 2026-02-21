@@ -2067,7 +2067,7 @@ async function renderProject(){
   if(!PID||!PROJ||!PROJ.clips.length){toast('Keine Clips zum Rendern','err');return}
   const btn=document.getElementById('renderBtn');btn.disabled=true;btn.textContent='⏳ Render…';
   // Save project before render to ensure all sub-settings are persisted
-  try{await fetch(B+'/api/editor/projects/'+PID+'/save',{method:'POST'})}catch(e){console.warn('Pre-render save:',e)}
+  try{await fetch(B+'/api/editor/projects/'+PID+'/save',{method:'POST'})}catch(e){console.warn('Failed to save project before render:',e)}
   // Show overlay progress card
   _showRenderProgress();
   try{

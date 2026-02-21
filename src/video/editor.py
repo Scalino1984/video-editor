@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 import threading
 import uuid
@@ -766,7 +767,6 @@ _OVERLAY_BLEND_MODES = frozenset({"normal", "screen", "addition", "multiply"})
 
 def _parse_srt_cues(text: str) -> list[dict]:
     """Parse SRT file into [{start, end, text}]."""
-    import re
     cues = []
     for block in text.strip().split("\n\n"):
         lines = block.strip().split("\n")
@@ -792,14 +792,15 @@ def _parse_srt_cues(text: str) -> list[dict]:
     return cues
 
 
+_KARAOKE_TAG_RE = re.compile(r"\{[^}]*\\(?:kf|ko|k)(\d+)[^}]*\}([^{]*)")
+
+
 def _parse_ass_cues(text: str) -> list[dict]:
     """Parse ASS Dialogue lines into [{start, end, text, words?}].
 
     Extracts karaoke word timing from ``\\kf``/``\\k``/``\\ko`` tags so that
     ``generate_styled_ass`` can re-create ``\\kf`` tags in the styled output.
     """
-    import re
-    _k_re = re.compile(r"\{[^}]*\\(?:kf|ko|k)(\d+)[^}]*\}([^{]*)")
     cues = []
     for line in text.split("\n"):
         if not line.startswith("Dialogue:"):
@@ -818,7 +819,7 @@ def _parse_ass_cues(text: str) -> list[dict]:
         # Extract karaoke word timing from \kf/\k/\ko tags
         words: list[dict] = []
         t = start
-        for m in _k_re.finditer(raw):
+        for m in _KARAOKE_TAG_RE.finditer(raw):
             dur_cs = int(m.group(1))
             w = m.group(2).replace("\\N", " ").replace("\\n", " ").strip()
             if not w:
