@@ -394,6 +394,148 @@ class TestKaraokeTagParsing:
         assert abs(words[0]["end"] - 1.5) < 0.01
         assert abs(words[1]["start"] - 1.5) < 0.01
 
+
+# ── Regression tests for gradient/font/size fixes ────────────────────────────
+
+class TestParseAssCuesKaraokePreservation:
+    """Verify _parse_ass_cues preserves karaoke word timing from \\kf tags."""
+
+    def test_parse_ass_cues_extracts_kf_words(self):
+        """_parse_ass_cues must extract word timing from \\kf tags."""
+        from src.video.editor import _parse_ass_cues
+
+        ass_text = (
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,0:00:02.00,Current,,0,0,0,,"
+            "{\\kf80\\1c&H0000FFFF\\2c&H00FFFFFF}Hallo "
+            "{\\kf110\\1c&H0000FFFF\\2c&H00FFFFFF}Welt"
+            "\n"
+        )
+        cues = _parse_ass_cues(ass_text)
+        assert len(cues) == 1
+        assert cues[0]["text"] == "Hallo Welt"
+        assert "words" in cues[0], "Karaoke word data must be preserved"
+        assert len(cues[0]["words"]) == 2
+        assert cues[0]["words"][0]["word"] == "Hallo"
+        assert cues[0]["words"][1]["word"] == "Welt"
+        # Duration check: 80cs = 0.8s
+        assert abs(cues[0]["words"][0]["end"] - cues[0]["words"][0]["start"] - 0.8) < 0.01
+
+    def test_parse_ass_cues_no_karaoke(self):
+        """Plain ASS dialogue without \\kf tags should have no words."""
+        from src.video.editor import _parse_ass_cues
+
+        ass_text = (
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,Hallo Welt\n"
+        )
+        cues = _parse_ass_cues(ass_text)
+        assert len(cues) == 1
+        assert "words" not in cues[0]
+
+    def test_fallback_ass_with_kf_preserves_karaoke(self, tmp_path: Path):
+        """generate_styled_ass fallback from ASS file must preserve \\kf karaoke data."""
+        from src.video.editor import generate_styled_ass
+
+        ass_content = (
+            "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n"
+            "[V4+ Styles]\n"
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+            "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+            "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            "Style: Default,Arial,48,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,"
+            "-1,0,0,0,100,100,0,0,1,2,0,2,20,20,40,1\n\n"
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,"
+            "{\\kf80\\1c&H0000FFFF\\2c&H00FFFFFF}Hallo "
+            "{\\kf110\\1c&H0000FFFF\\2c&H00FFFFFF}Welt"
+            "\n"
+        )
+        sub_path = tmp_path / "karaoke.ass"
+        sub_path.write_text(ass_content, encoding="utf-8")
+        out_path = tmp_path / "styled.ass"
+        project = _make_project(sub_lines=1)
+
+        result = generate_styled_ass(sub_path, project, out_path, segments=None)
+        assert result is not None
+        content = out_path.read_text(encoding="utf-8")
+        assert "\\kf" in content, "Karaoke tags must be preserved from original ASS"
+
+
+class TestProjectFromDictCoercion:
+    """Ensure Project.from_dict properly coerces types."""
+
+    def test_sub_size_coerced_to_int(self):
+        """sub_size stored as string in JSON must be coerced to int."""
+        from src.video.editor import Project
+
+        d = {
+            "id": "test", "name": "Test",
+            "sub_size": "72",  # string instead of int
+            "sub_outline_width": "3",
+            "sub_y_percent": "50",
+            "sub_margin_v": "30",
+            "sub_lines": "2",
+        }
+        proj = Project.from_dict(d)
+        assert isinstance(proj.sub_size, int)
+        assert proj.sub_size == 72
+        assert isinstance(proj.sub_outline_width, int)
+        assert proj.sub_outline_width == 3
+        assert isinstance(proj.sub_y_percent, int)
+        assert proj.sub_y_percent == 50
+        assert isinstance(proj.sub_lines, int)
+        assert proj.sub_lines == 2
+
+    def test_sub_font_coerced_to_str(self):
+        """sub_font must always be a string."""
+        from src.video.editor import Project
+
+        d = {"id": "test", "name": "Test", "sub_font": "Montserrat"}
+        proj = Project.from_dict(d)
+        assert isinstance(proj.sub_font, str)
+        assert proj.sub_font == "Montserrat"
+
+
+class TestPlayResEvenDimensions:
+    """Ensure ASS PlayRes uses even dimensions to match render canvas."""
+
+    def test_odd_dimensions_rounded_to_even(self, tmp_path: Path):
+        """Odd project dimensions must produce even PlayRes in ASS."""
+        from src.video.editor import generate_styled_ass
+
+        segments = _make_segments(with_words=True)
+        project = _make_project(width=1921, height=1081)
+        sub_path = tmp_path / "test.ass"
+        sub_path.write_text("", encoding="utf-8")
+        out_path = tmp_path / "styled.ass"
+
+        generate_styled_ass(sub_path, project, out_path, segments=segments)
+        content = out_path.read_text(encoding="utf-8")
+
+        assert "PlayResX: 1922" in content, "Odd width must be rounded to even"
+        assert "PlayResY: 1082" in content, "Odd height must be rounded to even"
+
+    def test_even_dimensions_unchanged(self, tmp_path: Path):
+        """Even project dimensions should pass through unchanged."""
+        from src.video.editor import generate_styled_ass
+
+        segments = _make_segments(with_words=True)
+        project = _make_project(width=1920, height=1080)
+        sub_path = tmp_path / "test.ass"
+        sub_path.write_text("", encoding="utf-8")
+        out_path = tmp_path / "styled.ass"
+
+        generate_styled_ass(sub_path, project, out_path, segments=segments)
+        content = out_path.read_text(encoding="utf-8")
+
+        assert "PlayResX: 1920" in content
+        assert "PlayResY: 1080" in content
+
+
 class TestLogging:
     """Test correlation IDs, file logging, and context management."""
 

@@ -11,7 +11,8 @@
 <link rel="manifest" href="/static/favicon/site.webmanifest">
 <meta name="theme-color" content="#00ffb4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&family=Roboto:wght@400;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -2065,6 +2066,8 @@ function toggleSnap(){SNAP=!SNAP;document.getElementById('snapBtn').style.opacit
 async function renderProject(){
   if(!PID||!PROJ||!PROJ.clips.length){toast('Keine Clips zum Rendern','err');return}
   const btn=document.getElementById('renderBtn');btn.disabled=true;btn.textContent='⏳ Render…';
+  // Save project before render to ensure all sub-settings are persisted
+  try{await fetch(B+'/api/editor/projects/'+PID+'/save',{method:'POST'})}catch(e){console.warn('Failed to save project before render:',e)}
   // Show overlay progress card
   _showRenderProgress();
   try{

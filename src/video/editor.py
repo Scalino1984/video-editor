@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 import threading
 import uuid
@@ -215,22 +216,22 @@ class Project:
             tracks.append(Track(**td))
         proj = cls(
             id=d["id"], name=d["name"],
-            width=d.get("width", 1920), height=d.get("height", 1080),
+            width=int(d.get("width", 1920)), height=int(d.get("height", 1080)),
             fps=d.get("fps", 30), preset=d.get("preset", "youtube"),
-            crf=d.get("crf", 20), audio_bitrate=d.get("audio_bitrate", "192k"),
+            crf=int(d.get("crf", 20)), audio_bitrate=d.get("audio_bitrate", "192k"),
             timeline_version=d.get("timeline_version", 2),
-            sub_font=d.get("sub_font", "Arial"),
-            sub_size=d.get("sub_size", 48),
-            sub_color=d.get("sub_color", "&H00FFFFFF"),
-            sub_outline_color=d.get("sub_outline_color", "&H00000000"),
-            sub_outline_width=d.get("sub_outline_width", 2),
+            sub_font=str(d.get("sub_font", "Arial")),
+            sub_size=int(d.get("sub_size", 48)),
+            sub_color=str(d.get("sub_color", "&H00FFFFFF")),
+            sub_outline_color=str(d.get("sub_outline_color", "&H00000000")),
+            sub_outline_width=int(d.get("sub_outline_width", 2)),
             sub_position=d.get("sub_position", "bottom"),
-            sub_margin_v=d.get("sub_margin_v", 40),
-            sub_y_percent=d.get("sub_y_percent", 85),
-            sub_lines=d.get("sub_lines", 1),
+            sub_margin_v=int(d.get("sub_margin_v", 40)),
+            sub_y_percent=int(d.get("sub_y_percent", 85)),
+            sub_lines=int(d.get("sub_lines", 1)),
             sub_bg_enabled=d.get("sub_bg_enabled", True),
-            sub_bg_color=d.get("sub_bg_color", "&H80000000"),
-            sub_highlight_color=d.get("sub_highlight_color", "&H0000FFFF"),
+            sub_bg_color=str(d.get("sub_bg_color", "&H80000000")),
+            sub_highlight_color=str(d.get("sub_highlight_color", "&H0000FFFF")),
             video_fit=d.get("video_fit", "cover"),
             assets=assets, clips=clips, tracks=tracks,
         )
@@ -766,7 +767,6 @@ _OVERLAY_BLEND_MODES = frozenset({"normal", "screen", "addition", "multiply"})
 
 def _parse_srt_cues(text: str) -> list[dict]:
     """Parse SRT file into [{start, end, text}]."""
-    import re
     cues = []
     for block in text.strip().split("\n\n"):
         lines = block.strip().split("\n")
@@ -792,8 +792,15 @@ def _parse_srt_cues(text: str) -> list[dict]:
     return cues
 
 
+_KARAOKE_TAG_RE = re.compile(r"\{[^}]*\\(?:kf|ko|k)(\d+)[^}]*\}([^{]*)")
+
+
 def _parse_ass_cues(text: str) -> list[dict]:
-    """Parse ASS Dialogue lines into [{start, end, text}]."""
+    """Parse ASS Dialogue lines into [{start, end, text, words?}].
+
+    Extracts karaoke word timing from ``\\kf``/``\\k``/``\\ko`` tags so that
+    ``generate_styled_ass`` can re-create ``\\kf`` tags in the styled output.
+    """
     cues = []
     for line in text.split("\n"):
         if not line.startswith("Dialogue:"):
@@ -808,10 +815,25 @@ def _parse_ass_cues(text: str) -> list[dict]:
 
         start, end = _t(parts[1]), _t(parts[2])
         raw = parts[9]
-        import re
+
+        # Extract karaoke word timing from \kf/\k/\ko tags
+        words: list[dict] = []
+        t = start
+        for m in _KARAOKE_TAG_RE.finditer(raw):
+            dur_cs = int(m.group(1))
+            w = m.group(2).replace("\\N", " ").replace("\\n", " ").strip()
+            if not w:
+                t += dur_cs / 100
+                continue
+            words.append({"start": t, "end": t + dur_cs / 100, "word": w})
+            t += dur_cs / 100
+
         txt = re.sub(r"\{[^}]*\}", "", raw).replace("\\N", "\n").replace("\\n", "\n").strip()
         if txt:
-            cues.append({"start": start, "end": end, "text": txt})
+            cue: dict = {"start": start, "end": end, "text": txt}
+            if words:
+                cue["words"] = words
+            cues.append(cue)
     return cues
 
 
@@ -863,7 +885,8 @@ def generate_styled_ass(
         return None
 
     p = project
-    w, h = p.width, p.height
+    # Ensure even dimensions to match the actual render canvas
+    w, h = p.width + (p.width % 2), p.height + (p.height % 2)
 
     # Convert y_percent (0=top, 100=bottom) to ASS alignment + MarginV
     y_pct = getattr(p, 'sub_y_percent', 85)
@@ -1118,15 +1141,16 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
                     import json as _json
                     segs_data = _json.loads(seg_json.read_text(encoding="utf-8"))
                     from src.transcription.base import TranscriptSegment
+                    from src.refine.alignment import ensure_word_timestamps
                     segs = [TranscriptSegment.from_dict(s) for s in segs_data]
+                    # Always ensure word timestamps for karaoke \kf tags
+                    segs = ensure_word_timestamps(segs)
                     ext = sub_path.suffix.lower()
                     if ext == ".srt":
                         from src.export.srt_writer import write_srt
                         write_srt(segs, sub_path)
                     elif ext == ".ass":
-                        from src.refine.alignment import ensure_word_timestamps
                         from src.export.ass_writer import write_ass
-                        segs = ensure_word_timestamps(segs)
                         write_ass(segs, sub_path)
                     _segs_for_styled = segs
                     _refreshed = True
@@ -1171,7 +1195,13 @@ def build_render_cmd(pid: str, output_path: Path) -> list[str] | None:
         esc_path = esc_path.replace("'", "'\\''")
         esc_path = esc_path.replace("[", "\\[").replace("]", "\\]")
 
+        # Build ass filter with optional fontsdir for custom font support
         filt = f"ass='{esc_path}'"
+        for fd in ("/usr/share/fonts", "/usr/local/share/fonts", str(Path.home() / ".fonts")):
+            if Path(fd).is_dir():
+                fd_esc = fd.replace("\\", "/").replace(":", "\\:").replace("'", "'\\''")
+                filt = f"ass='{esc_path}':fontsdir='{fd_esc}'"
+                break
         filter_parts.append(f"[{video_chain}]{filt}[{sub_label}]")
         video_chain = sub_label
 
