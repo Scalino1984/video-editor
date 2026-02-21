@@ -193,9 +193,9 @@ transcription:
   diarize: true
 
 whisperx:
-  model_size: "large-v3"     # tiny | base | small | medium | large-v3
-  compute_type: "float16"    # float16 | int8 | float32
-  batch_size: 16
+  model_size: "large-v3"     # tiny | base | small | medium | large-v3 (auto-downgrade to medium on CPU)
+  compute_type: "float16"    # float16 | int8 | float32 (auto int8 on CPU)
+  batch_size: 16             # GPU batch size (auto-reduced to 1 on CPU)
   device: "auto"             # auto | cpu | cuda
   cpu_threads: 0             # 0 = auto (half of cores, max 6). Env: WHISPERX_THREADS
 

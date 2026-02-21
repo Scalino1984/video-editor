@@ -88,7 +88,7 @@ class TestFileExplorer:
         saved = r.json()
         assert len(saved) >= 1
         proj = saved[0]
-        assert "filename" in proj
+        assert "id" in proj
         assert "name" in proj
         assert proj["name"] == "Test Project"
 
@@ -96,10 +96,10 @@ class TestFileExplorer:
         # Save
         editor_client.post(f"/api/editor/projects/{project_id}/save")
         saved = editor_client.get("/api/editor/saved-projects").json()
-        filename = saved[0]["filename"]
+        pid = saved[0]["id"]
 
         # Load
-        r = editor_client.post(f"/api/editor/load-project/{filename}")
+        r = editor_client.post(f"/api/editor/load-project/{pid}")
         assert r.status_code == 200
         data = r.json()
         assert "id" in data
@@ -109,19 +109,19 @@ class TestFileExplorer:
         # Save
         editor_client.post(f"/api/editor/projects/{project_id}/save")
         saved = editor_client.get("/api/editor/saved-projects").json()
-        filename = saved[0]["filename"]
+        pid = saved[0]["id"]
 
         # Delete
-        r = editor_client.delete(f"/api/editor/delete-project/{filename}")
+        r = editor_client.delete(f"/api/editor/delete-project/{pid}")
         assert r.status_code == 200
-        assert r.json()["deleted"] == filename
+        assert r.json()["deleted"] == pid
 
         # Verify deleted
         saved = editor_client.get("/api/editor/saved-projects").json()
-        assert all(s["filename"] != filename for s in saved)
+        assert all(s["id"] != pid for s in saved)
 
     def test_delete_nonexistent_project(self, editor_client):
-        r = editor_client.delete("/api/editor/delete-project/nonexistent.json")
+        r = editor_client.delete("/api/editor/delete-project/nonexistent_abc123")
         assert r.status_code == 404
 
     def test_delete_path_traversal_blocked(self, editor_client):
@@ -132,12 +132,9 @@ class TestFileExplorer:
         r = editor_client.delete("/api/editor/delete-project/../../etc/passwd")
         assert r.status_code in (400, 404, 422)
 
-    def test_delete_non_json_blocked(self, editor_client, _patch_dirs, storage_root):
-        # Create a non-JSON file in projects dir
-        proj_dir = storage_root / "editor" / "projects"
-        (proj_dir / "test.txt").write_text("not json")
-        r = editor_client.delete("/api/editor/delete-project/test.txt")
-        assert r.status_code == 400
+    def test_delete_nonexistent_pid_returns_404(self, editor_client, _patch_dirs):
+        r = editor_client.delete("/api/editor/delete-project/does_not_exist_abc")
+        assert r.status_code == 404
 
 
 # ── Karaoke fill render ─────────────────────────────────────────────────────
@@ -313,9 +310,9 @@ class TestKaraokeEditorSync:
         # List and load
         saved = editor_client.get("/api/editor/saved-projects").json()
         assert len(saved) >= 1
-        filename = saved[0]["filename"]
+        pid = saved[0]["id"]
 
-        loaded = editor_client.post(f"/api/editor/load-project/{filename}").json()
+        loaded = editor_client.post(f"/api/editor/load-project/{pid}").json()
         assert loaded["sub_font"] == "Noto Sans"
         assert loaded["sub_size"] == 60
         assert loaded["sub_highlight_color"] == "&H00FF00FF"

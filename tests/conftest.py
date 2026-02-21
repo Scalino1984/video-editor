@@ -85,8 +85,12 @@ def _patch_dirs(storage_root):
 
     orig_editor = editor_mod.EDITOR_DIR
     orig_routes_editor = routes_mod.EDITOR_DIR
+    orig_editor_output = editor_mod.OUTPUT_DIR
+    orig_routes_output = routes_mod.OUTPUT_DIR
     editor_mod.EDITOR_DIR = storage_root / "editor"
     routes_mod.EDITOR_DIR = storage_root / "editor"
+    editor_mod.OUTPUT_DIR = storage_root / "output"
+    routes_mod.OUTPUT_DIR = storage_root / "output"
 
     yield storage_root
 
@@ -95,6 +99,8 @@ def _patch_dirs(storage_root):
     kp_mod.OUTPUT_DIR = orig_kp_output
     editor_mod.EDITOR_DIR = orig_editor
     routes_mod.EDITOR_DIR = orig_routes_editor
+    editor_mod.OUTPUT_DIR = orig_editor_output
+    routes_mod.OUTPUT_DIR = orig_routes_output
 
 
 # ── Seed job helper ──────────────────────────────────────────────────────────

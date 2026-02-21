@@ -78,22 +78,44 @@ def get_job(job_id: str) -> JobInfo | None:
 
 
 MAX_FINISHED_JOBS = 200
+MAX_UNDO_IDLE_JOBS = 10  # only keep undo stacks for this many recent jobs
 
 
 def _cleanup_finished_jobs() -> None:
-    """Remove oldest finished jobs from memory when exceeding MAX_FINISHED_JOBS."""
+    """Remove oldest finished jobs from memory when exceeding MAX_FINISHED_JOBS.
+
+    Also clears undo/redo stacks for inactive finished jobs to save memory
+    (each stack entry stores the full segments.json string).
+    """
     terminal = {JobStatus.completed, JobStatus.failed, JobStatus.cancelled}
     with _jobs_lock:
         finished = [(jid, j) for jid, j in _jobs.items() if j.status in terminal]
-        if len(finished) <= MAX_FINISHED_JOBS:
-            return
-        finished.sort(key=lambda x: x[1].created_at)
-        to_remove = finished[:len(finished) - MAX_FINISHED_JOBS]
-        for jid, _ in to_remove:
-            _jobs.pop(jid, None)
-            _cancel_events.pop(jid, None)
-            _undo_stacks.pop(jid, None)
-            _redo_stacks.pop(jid, None)
+        if len(finished) > MAX_FINISHED_JOBS:
+            finished.sort(key=lambda x: x[1].created_at)
+            to_remove = finished[:len(finished) - MAX_FINISHED_JOBS]
+            for jid, _ in to_remove:
+                _jobs.pop(jid, None)
+                _cancel_events.pop(jid, None)
+                _undo_stacks.pop(jid, None)
+                _redo_stacks.pop(jid, None)
+
+    # Clear undo stacks for old finished jobs — major memory saver.
+    # Keep stacks only for the N most recently finished jobs.
+    with _undo_lock:
+        undo_jobs = list(_undo_stacks.keys())
+        if len(undo_jobs) > MAX_UNDO_IDLE_JOBS:
+            # Sort by job creation time, keep newest
+            with _jobs_lock:
+                timed = []
+                for jid in undo_jobs:
+                    j = _jobs.get(jid)
+                    t = j.created_at if j else datetime.min.replace(tzinfo=timezone.utc)
+                    timed.append((jid, t))
+            timed.sort(key=lambda x: x[1])
+            to_evict = timed[:len(timed) - MAX_UNDO_IDLE_JOBS]
+            for jid, _ in to_evict:
+                _undo_stacks.pop(jid, None)
+                _redo_stacks.pop(jid, None)
 
 
 def create_job(filename: str) -> JobInfo:
@@ -339,11 +361,18 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
                 info(f"[{job_id}] Lyrics template: {req.lyrics_file} (mode={req.lyrics_template_mode.value})")
                 update_job(job_id, progress=0.62, stage="Parsing lyrics")
 
-                from src.lyrics.template import parse_lyrics, get_lrc_timings
+                from src.lyrics.template import parse_lyrics, get_lrc_timings, group_by_stanzas
                 from src.lyrics.reports import generate_alignment_report, save_alignment_report, save_diff_report
 
                 parsed = parse_lyrics(lyrics_path, preserve_empty_lines=req.preserve_empty_lines)
-                target_lines = parsed.target_lines
+
+                # Wire lyrics_mode: merge_by_empty_lines groups stanzas into multi-line targets
+                if req.lyrics_mode.value == "merge_by_empty_lines":
+                    stanzas = group_by_stanzas(parsed)
+                    target_lines = ["\n".join(stanza) for stanza in stanzas if stanza]
+                    info(f"[{job_id}] Lyrics mode merge_by_empty_lines: {len(stanzas)} stanzas → {len(target_lines)} targets")
+                else:
+                    target_lines = parsed.target_lines
 
                 if target_lines:
                     # Save lyrics artifacts
@@ -352,39 +381,49 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
                     (job_output / "lyrics_parsed.json").write_text(
                         json.dumps(parsed.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
-                    update_job(job_id, progress=0.64, stage=f"Aligning {len(target_lines)} lyrics lines")
-
                     # Ensure word timestamps for alignment
                     segments = ensure_word_timestamps(segments, "force")
                     original_segments = list(segments)  # keep copy for report
 
-                    # Align lyrics to transcription
                     threshold = 0.5 if req.match_mode.value == "lenient" else 0.7
-                    segments = align_lyrics_to_segments(segments, target_lines,
-                                                        similarity_threshold=threshold)
 
-                    # Generate alignment report
-                    update_job(job_id, progress=0.67, stage="Generating alignment report")
-                    alignment_report = generate_alignment_report(
-                        target_lines, segments, original_segments)
-                    save_alignment_report(alignment_report, job_output / stem)
+                    # ── correct_words_only: keep ASR segmentation, only fix word text ──
+                    if req.lyrics_template_mode.value == "correct_words_only":
+                        update_job(job_id, progress=0.64, stage=f"Correcting words from {len(target_lines)} lyrics lines")
+                        from src.refine.lyrics_align import correct_words_from_lyrics
+                        segments = correct_words_from_lyrics(segments, target_lines,
+                                                             similarity_threshold=threshold)
+                        lyrics_aligned = True
+                        info(f"[{job_id}] Words corrected from lyrics (segments unchanged: {len(segments)})")
+                    else:
+                        # Full alignment modes: source_of_truth / layout_only / hybrid
+                        update_job(job_id, progress=0.64, stage=f"Aligning {len(target_lines)} lyrics lines")
 
-                    # Hybrid mode: save diff report
-                    if req.lyrics_template_mode.value == "hybrid_mark_differences":
-                        save_diff_report(alignment_report, job_output / stem)
+                        segments = align_lyrics_to_segments(segments, target_lines,
+                                                            similarity_threshold=threshold)
 
-                    # Layout-only mode: use ASR text but lyrics line breaks
-                    if req.lyrics_template_mode.value == "layout_only_reflow":
-                        for i, seg in enumerate(segments):
-                            if i < len(alignment_report.line_alignments):
-                                la = alignment_report.line_alignments[i]
-                                if la.asr_text.strip():
-                                    seg.text = la.asr_text  # keep ASR text, lyrics timing
+                        # Generate alignment report
+                        update_job(job_id, progress=0.67, stage="Generating alignment report")
+                        alignment_report = generate_alignment_report(
+                            target_lines, segments, original_segments)
+                        save_alignment_report(alignment_report, job_output / stem)
 
-                    lyrics_aligned = True
-                    info(f"[{job_id}] Lyrics aligned: {len(segments)} segments, "
-                         f"avg_score={alignment_report.avg_match_score:.2f}, "
-                         f"review={alignment_report.lines_needing_review}")
+                        # Hybrid mode: save diff report
+                        if req.lyrics_template_mode.value == "hybrid_mark_differences":
+                            save_diff_report(alignment_report, job_output / stem)
+
+                        # Layout-only mode: use ASR text but lyrics line breaks
+                        if req.lyrics_template_mode.value == "layout_only_reflow":
+                            for i, seg in enumerate(segments):
+                                if i < len(alignment_report.line_alignments):
+                                    la = alignment_report.line_alignments[i]
+                                    if la.asr_text.strip():
+                                        seg.text = la.asr_text  # keep ASR text, lyrics timing
+
+                        lyrics_aligned = True
+                        info(f"[{job_id}] Lyrics aligned: {len(segments)} segments, "
+                             f"avg_score={alignment_report.avg_match_score:.2f}, "
+                             f"review={alignment_report.lines_needing_review}")
                 else:
                     warn(f"[{job_id}] Lyrics file empty, falling back to normal refinement")
             else:
@@ -802,8 +841,16 @@ def _get_vocal_cpu_threads() -> int:
         return 0
 
 
+# ── Backend singleton cache ────────────────────────────────────────────────────
+# ML models are multi-GB — avoid reloading per request.
+# Key: "backend_name:model" → instance.  Cleared via unload_backend().
+_backend_cache: dict[str, "TranscriptionBackend"] = {}
+_backend_cache_lock = threading.Lock()
+
+
 def _get_backend(name: str, model: str = "", diarize: bool = True, req: TranscribeRequest | None = None):
     if name == "voxtral":
+        # Voxtral is API-only (no local model), no caching needed
         from src.transcription.voxtral import VoxtralBackend
         return VoxtralBackend(model=model or "voxtral-mini-latest", diarize=diarize)
     elif name == "openai_whisper":
@@ -811,7 +858,13 @@ def _get_backend(name: str, model: str = "", diarize: bool = True, req: Transcri
         return OpenAIWhisperBackend()
     elif name == "local_whisper":
         from src.transcription.local_whisper import LocalWhisperBackend
-        return LocalWhisperBackend()
+        cache_key = f"local_whisper:{req.whisperx_model_size if req else 'large-v3'}"
+        with _backend_cache_lock:
+            if cache_key in _backend_cache:
+                return _backend_cache[cache_key]
+            backend = LocalWhisperBackend()
+            _backend_cache[cache_key] = backend
+            return backend
     elif name == "whisperx":
         from src.transcription.whisperx_backend import WhisperXBackend
         kw = {}
@@ -822,5 +875,37 @@ def _get_backend(name: str, model: str = "", diarize: bool = True, req: Transcri
         from src.utils.config import load_config
         wxcfg = load_config().whisperx
         kw.setdefault("cpu_threads", wxcfg.cpu_threads)
-        return WhisperXBackend(**kw)
+        model_key = kw.get("model_size", "large-v3")
+        cache_key = f"whisperx:{model_key}"
+        with _backend_cache_lock:
+            if cache_key in _backend_cache:
+                return _backend_cache[cache_key]
+            backend = WhisperXBackend(**kw)
+            _backend_cache[cache_key] = backend
+            return backend
     raise ValueError(f"Unknown backend: {name}")
+
+
+def unload_backend(name: str | None = None) -> int:
+    """Unload cached backend model(s) to free memory.
+
+    Args:
+        name: Backend prefix to unload (e.g. 'whisperx'). None = unload all.
+    Returns:
+        Number of backends unloaded.
+    """
+    import gc
+    count = 0
+    with _backend_cache_lock:
+        keys = list(_backend_cache.keys())
+        for key in keys:
+            if name is None or key.startswith(name):
+                backend = _backend_cache.pop(key)
+                if hasattr(backend, 'unload'):
+                    backend.unload()
+                del backend
+                count += 1
+    if count:
+        gc.collect()
+        info(f"Unloaded {count} backend(s)" + (f" matching '{name}'" if name else ""))
+    return count

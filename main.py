@@ -93,6 +93,16 @@ async def lifespan(application: FastAPI):
         close_db()
     except Exception:
         pass
+    try:
+        from src.ai.database import close_all as close_chat_dbs
+        close_chat_dbs()
+    except Exception:
+        pass
+    try:
+        from src.api.tasks import unload_backend
+        unload_backend()
+    except Exception:
+        pass
 
 
 app = FastAPI(

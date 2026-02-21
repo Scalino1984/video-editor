@@ -105,12 +105,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div class="main">
 
   <!-- Active projects -->
-  <div class="section-title">🟢 Aktive Projekte <span class="badge" id="activeCnt">0</span></div>
+  <div class="section-title">🟢 Aktive Editor-Sitzungen <span class="badge" id="activeCnt">0</span></div>
   <div class="proj-grid" id="activeGrid"></div>
-  <div class="empty" id="activeEmpty" style="display:none"><div class="ic">🎬</div><p>Keine aktiven Projekte. Erstelle ein neues Projekt im <a href="/editor" style="color:var(--accent)">Video Editor</a>.</p></div>
+  <div class="empty" id="activeEmpty" style="display:none"><div class="ic">🎬</div><p>Keine aktiven Sitzungen. Öffne ein Projekt im <a href="/editor" style="color:var(--accent)">Video Editor</a>.</p></div>
 
-  <!-- Saved projects -->
-  <div class="section-title">💾 Gespeicherte Projekte <span class="badge" id="savedCnt">0</span></div>
+  <!-- Karaoke Transcriptions -->
+  <div class="section-title">🎤 Projekte <span class="badge" id="karaokeCnt">0</span></div>
+  <div class="proj-grid" id="karaokeGrid"></div>
+  <div class="empty" id="karaokeEmpty" style="display:none"><div class="ic">🎤</div><p>Keine Projekte vorhanden. Starte eine Transkription im <a href="/" style="color:var(--accent)">Karaoke Tool</a>.</p></div>
+
+  <!-- Saved editor projects -->
+  <div class="section-title">💾 Gespeicherte Editor-Projekte <span class="badge" id="savedCnt">0</span></div>
   <div class="proj-grid" id="savedGrid"></div>
   <div class="empty" id="savedEmpty" style="display:none"><div class="ic">📂</div><p>Keine gespeicherten Projekte vorhanden.</p></div>
 
@@ -140,10 +145,10 @@ function toast(msg, isErr){
 }
 
 /* ── Data ──────────────────────────────────────────────────────────────── */
-let _active=[], _saved=[];
+let _active=[], _saved=[], _karaoke=[];
 
 async function loadAll(){
-  await Promise.all([loadActive(), loadSaved()]);
+  await Promise.all([loadActive(), loadSaved(), loadKaraoke()]);
 }
 
 async function loadActive(){
@@ -162,6 +167,16 @@ async function loadSaved(){
     _saved=await r.json();
     renderSaved();
   }catch(e){console.warn('loadSaved:',e);_saved=[];renderSaved()}
+}
+
+async function loadKaraoke(){
+  try{
+    const r=await fetch(B+'/api/library?limit=50');
+    if(!r.ok) throw new Error(r.statusText);
+    const data=await r.json();
+    _karaoke=data.items||[];
+    renderKaraoke();
+  }catch(e){console.warn('loadKaraoke:',e);_karaoke=[];renderKaraoke()}
 }
 
 /* ── Render ─────────────────────────────────────────────────────────────── */
@@ -196,19 +211,50 @@ function renderSaved(){
   if(!_saved.length){grid.innerHTML='';empty.style.display='';return}
   empty.style.display='none';
   grid.innerHTML=_saved.map(p=>`
-    <div class="proj-card" ondblclick="loadSavedProject('${esc(p.filename)}')" onclick="void 0">
+    <div class="proj-card" ondblclick="loadSavedProject('${esc(p.id)}')" onclick="void 0">
       <div class="actions">
-        <button onclick="event.stopPropagation();loadSavedProject('${esc(p.filename)}')" title="Laden und im Editor öffnen">📂 Laden</button>
-        <button onclick="event.stopPropagation();renameSaved('${esc(p.filename)}','${esc(p.id)}',this)" title="Umbenennen">✏️</button>
-        <button class="del" onclick="event.stopPropagation();deleteSaved('${esc(p.filename)}')" title="Löschen">🗑️</button>
+        <button onclick="event.stopPropagation();loadSavedProject('${esc(p.id)}')" title="Laden und im Editor öffnen">📂 Laden</button>
+        <button class="del" onclick="event.stopPropagation();deleteSaved('${esc(p.id)}','${esc(p.name)}')" title="Löschen">🗑️</button>
       </div>
-      <div class="name" id="sname-${esc(p.filename)}">${he(p.name||p.filename)}</div>
+      <div class="name" id="sname-${esc(p.id)}">${he(p.name||p.id)}</div>
       <div class="meta">
         <span class="tag saved">gespeichert</span>
+        <span>${p.clips||0} Clips</span>
         <span>${p.size_kb} KB</span>
         <span>${p.date||'–'}</span>
       </div>
     </div>`).join('');
+}
+
+function renderKaraoke(){
+  const grid=document.getElementById('karaokeGrid');
+  const empty=document.getElementById('karaokeEmpty');
+  document.getElementById('karaokeCnt').textContent=_karaoke.length;
+  if(!_karaoke.length){grid.innerHTML='';empty.style.display='';return}
+  empty.style.display='none';
+  grid.innerHTML=_karaoke.map(k=>{
+    const jid=k.job_id||k.id;
+    const dur=k.duration_sec?fmtDur(k.duration_sec):'–';
+    const conf=k.avg_confidence?(k.avg_confidence*100).toFixed(0)+'%':'–';
+    const rev=k.needs_review>0?`<span style="color:var(--warn)">⚠${k.needs_review}</span>`:'';
+    return `
+    <div class="proj-card" ondblclick="openKaraoke('${esc(jid)}')" onclick="void 0">
+      <div class="actions">
+        <button onclick="event.stopPropagation();openKaraoke('${esc(jid)}')" title="Im Karaoke Tool öffnen">🎤 Öffnen</button>
+        <button onclick="event.stopPropagation();openKaraokeInEditor('${esc(jid)}')" title="Im Editor öffnen">🎬</button>
+        <button class="del" onclick="event.stopPropagation();deleteKaraoke('${esc(jid)}','${esc(k.title)}')" title="Löschen">🗑️</button>
+      </div>
+      <div class="name">${he(k.title||k.source_filename||jid)}</div>
+      <div class="meta">
+        <span class="tag" style="background:rgba(0,229,160,.15);color:var(--accent)">🎤 karaoke</span>
+        <span>${he(k.backend||'?')}</span>
+        <span>${he(k.language||'?')}</span>
+        <span>${dur}</span>
+        <span>${conf}</span>
+        <span>${k.segments_count||0} seg</span>
+        ${rev}
+      </div>
+    </div>`}).join('');
 }
 
 /* ── Actions ────────────────────────────────────────────────────────────── */
@@ -220,6 +266,25 @@ function openInKaraoke(pid){
   window.location.href='/?pid='+encodeURIComponent(pid);
 }
 
+function openKaraoke(jobId){
+  window.location.href='/?pid='+encodeURIComponent(jobId);
+}
+
+function openKaraokeInEditor(jobId){
+  // Unified ID: just open editor with the same project ID
+  window.location.href='/editor?pid='+encodeURIComponent(jobId);
+}
+
+async function deleteKaraoke(jobId, title){
+  if(!confirm('Transkription "'+(title||jobId)+'" wirklich löschen?'))return;
+  try{
+    const r=await fetch(B+'/api/library/'+jobId,{method:'DELETE'});
+    if(!r.ok) throw new Error(r.statusText);
+    toast('Gelöscht ✓');
+    await loadKaraoke();
+  }catch(e){toast('Fehler: '+e.message,true)}
+}
+
 async function saveActive(pid){
   try{
     const r=await fetch(B+'/api/editor/projects/'+pid+'/save',{method:'POST'});
@@ -229,13 +294,12 @@ async function saveActive(pid){
   }catch(e){toast('Fehler beim Speichern: '+e.message, true)}
 }
 
-async function loadSavedProject(filename){
+async function loadSavedProject(pid){
   try{
-    const r=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(filename),{method:'POST'});
+    const r=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(pid),{method:'POST'});
     if(!r.ok) throw new Error(r.statusText);
     const data=await r.json();
-    const pid=data.id;
-    if(pid) window.location.href='/editor?pid='+encodeURIComponent(pid);
+    if(data.id) window.location.href='/editor?pid='+encodeURIComponent(data.id);
     else toast('Projekt geladen, aber keine ID erhalten', true);
   }catch(e){toast('Fehler beim Laden: '+e.message, true)}
 }
@@ -264,7 +328,7 @@ async function renameActive(pid, btn){
   inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
 }
 
-async function renameSaved(filename, pid, btn){
+async function renameSaved(pid, btn){
   // Load the saved project, rename, and re-save
   const card=btn.closest('.proj-card');
   const nameEl=card.querySelector('.name');
@@ -276,13 +340,11 @@ async function renameSaved(filename, pid, btn){
     const nv=inp.value.trim();
     if(!nv||nv===old){nameEl.textContent=old;return}
     try{
-      // Load, rename in editor state, save back
-      const lr=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(filename),{method:'POST'});
+      const lr=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(pid),{method:'POST'});
       if(!lr.ok) throw new Error(lr.statusText);
       const data=await lr.json();
-      const loadedPid=data.id;
-      await fetch(B+'/api/editor/projects/'+loadedPid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
-      await fetch(B+'/api/editor/projects/'+loadedPid+'/save',{method:'POST'});
+      await fetch(B+'/api/editor/projects/'+data.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
+      await fetch(B+'/api/editor/projects/'+data.id+'/save',{method:'POST'});
       nameEl.textContent=nv;
       toast('Umbenannt ✓');
       await loadSaved();
@@ -292,10 +354,10 @@ async function renameSaved(filename, pid, btn){
   inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
 }
 
-async function deleteSaved(filename){
-  if(!confirm('Projekt "'+filename+'" wirklich löschen?')) return;
+async function deleteSaved(pid, name){
+  if(!confirm('Editor-Projekt "'+(name||pid)+'" wirklich löschen?')) return;
   try{
-    const r=await fetch(B+'/api/editor/delete-project/'+encodeURIComponent(filename),{method:'DELETE'});
+    const r=await fetch(B+'/api/editor/delete-project/'+encodeURIComponent(pid),{method:'DELETE'});
     if(!r.ok) throw new Error(r.statusText);
     toast('Gelöscht ✓');
     await loadSaved();

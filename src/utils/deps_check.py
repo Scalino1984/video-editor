@@ -1,7 +1,13 @@
-"""Dependency self-check with helpful installation hints."""
+"""Dependency self-check with helpful installation hints.
+
+IMPORTANT: Never import heavy ML libraries (torch, whisperx, demucs, essentia)
+at check time — use importlib.util.find_spec() instead.  Importing torch alone
+pulls ~500 MB into resident memory.
+"""
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -40,14 +46,12 @@ def check_ffprobe() -> DepStatus:
 
 
 def check_demucs() -> DepStatus:
-    try:
-        import demucs  # noqa: F401
+    if importlib.util.find_spec("demucs") is not None:
         return DepStatus("demucs", True)
-    except ImportError:
-        return DepStatus(
-            "demucs", False,
-            hint="Install: pip install demucs  (requires PyTorch)"
-        )
+    return DepStatus(
+        "demucs", False,
+        hint="Install: pip install demucs  (requires PyTorch)"
+    )
 
 
 def check_openai_key() -> DepStatus:
@@ -80,36 +84,30 @@ def check_mistral_key() -> DepStatus:
 
 
 def check_webrtcvad() -> DepStatus:
-    try:
-        import webrtcvad  # noqa: F401
+    if importlib.util.find_spec("webrtcvad") is not None:
         return DepStatus("webrtcvad", True)
-    except ImportError:
-        return DepStatus(
-            "webrtcvad", False,
-            hint="Install: pip install webrtcvad"
-        )
+    return DepStatus(
+        "webrtcvad", False,
+        hint="Install: pip install webrtcvad"
+    )
 
 
 def check_whisperx() -> DepStatus:
-    try:
-        import whisperx  # noqa: F401
+    if importlib.util.find_spec("whisperx") is not None:
         return DepStatus("whisperx", True)
-    except ImportError:
-        return DepStatus(
-            "whisperx", False,
-            hint="Install: pip install whisperx  (requires torch, torchaudio)"
-        )
+    return DepStatus(
+        "whisperx", False,
+        hint="Install: pip install whisperx  (requires torch, torchaudio)"
+    )
 
 
 def check_faster_whisper() -> DepStatus:
-    try:
-        import faster_whisper  # noqa: F401
+    if importlib.util.find_spec("faster_whisper") is not None:
         return DepStatus("faster-whisper", True)
-    except ImportError:
-        return DepStatus(
-            "faster-whisper", False,
-            hint="Install: pip install faster-whisper"
-        )
+    return DepStatus(
+        "faster-whisper", False,
+        hint="Install: pip install faster-whisper"
+    )
 
 
 def check_all(backend: str = "voxtral", vocal_isolation: bool = False) -> list[DepStatus]:
@@ -139,21 +137,15 @@ def check_all_backends() -> dict[str, bool]:
 
 
 def check_essentia() -> DepStatus:
-    try:
-        import essentia
-        ver = getattr(essentia, "__version__", "OK")
-        return DepStatus("essentia", True, str(ver), "pip install essentia")
-    except ImportError:
-        return DepStatus("essentia", False, hint="pip install essentia (BPM detection)")
+    if importlib.util.find_spec("essentia") is not None:
+        return DepStatus("essentia", True, hint="pip install essentia")
+    return DepStatus("essentia", False, hint="pip install essentia (BPM detection)")
 
 
 def check_pydantic_ai() -> DepStatus:
-    try:
-        import pydantic_ai
-        ver = getattr(pydantic_ai, "__version__", "OK")
-        return DepStatus("pydantic-ai", True, str(ver), "pip install pydantic-ai")
-    except ImportError:
-        return DepStatus("pydantic-ai", False, hint="pip install pydantic-ai (AI Chat)")
+    if importlib.util.find_spec("pydantic_ai") is not None:
+        return DepStatus("pydantic-ai", True, hint="pip install pydantic-ai")
+    return DepStatus("pydantic-ai", False, hint="pip install pydantic-ai (AI Chat)")
 
 
 def print_dep_status(deps: list[DepStatus], strict: bool = False) -> bool:

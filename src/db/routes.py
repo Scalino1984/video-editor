@@ -227,13 +227,15 @@ async def render_video_endpoint(
     # Save background
     bg_name = _safe_filename(f"bg_{background_file.filename}")
     bg_path = job_dir / bg_name
-    bg_path.write_bytes(await background_file.read())
+    with open(bg_path, "wb") as f:
+        shutil.copyfileobj(background_file.file, f)
 
     # Resolve subtitle path
     if has_sub_file:
         sub_name = _safe_filename(subtitle_file.filename)
         sub_path = job_dir / sub_name
-        sub_path.write_bytes(await subtitle_file.read())
+        with open(sub_path, "wb") as f:
+            shutil.copyfileobj(subtitle_file.file, f)
     else:
         sub_path = _copy_subtitle_from_job(source_job_id, job_dir)
         if not sub_path:
@@ -244,7 +246,8 @@ async def render_video_endpoint(
     if has_audio_file:
         audio_name = _safe_filename(audio_file.filename)
         audio_path = job_dir / audio_name
-        audio_path.write_bytes(await audio_file.read())
+        with open(audio_path, "wb") as f:
+            shutil.copyfileobj(audio_file.file, f)
     elif source_job_id:
         audio_path = _find_audio_from_job(source_job_id)
 

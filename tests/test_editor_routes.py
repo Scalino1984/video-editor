@@ -104,6 +104,20 @@ class TestEditorSaveLoad:
 
         r = editor_client.get("/api/editor/saved-projects")
         assert r.status_code == 200
+        saved = r.json()
+        assert any(s["id"] == project_id for s in saved)
+
+    def test_save_load_roundtrip(self, editor_client, project_id, _patch_dirs, storage_root):
+        """Save to disk, then load back into memory."""
+        # Save
+        r = editor_client.post(f"/api/editor/projects/{project_id}/save")
+        assert r.status_code == 200
+        # Load back
+        r = editor_client.post(f"/api/editor/load-project/{project_id}")
+        assert r.status_code == 200
+        loaded = r.json()
+        assert loaded["id"] == project_id
+        assert loaded["name"] == "Test Project"
 
 
 class TestEditorImportJob:
@@ -113,68 +127,74 @@ class TestEditorImportJob:
         r = editor_client.post(f"/api/editor/projects/{project_id}/import-job/{job_id}")
         assert r.status_code in (200, 404)  # 404 if no matching assets found
 
-    def test_import_job_sets_source_job_id(self, editor_client, project_id, _patch_dirs, storage_root):
-        """Import-job should set source_job_id on the project."""
+    def test_import_job_creates_assets(self, editor_client, _patch_dirs, storage_root):
+        """Import-job should add audio + subtitle assets to the project."""
         job_id = "testjob123"
-        # Create job output dir where the route expects it (data/output/)
-        job_dir = Path("data/output") / job_id
+        # Create job output dir
+        job_dir = storage_root / "output" / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
         (job_dir / "song.mp3").write_bytes(b"\x00" * 64)
         (job_dir / "song.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
-        try:
-            r = editor_client.post(f"/api/editor/projects/{project_id}/import-job/{job_id}")
-            assert r.status_code == 200
-            assert r.json()["imported"] > 0
-            # Verify project now has source_job_id
-            proj = editor_client.get(f"/api/editor/projects/{project_id}")
-            assert proj.status_code == 200
-            assert proj.json()["source_job_id"] == job_id
-        finally:
-            shutil.rmtree(job_dir, ignore_errors=True)
-
-
-class TestProjectSourceJobId:
-    """Tests for the source_job_id field on Project."""
-
-    def test_new_project_has_no_source_job_id(self, editor_client, project_id):
-        r = editor_client.get(f"/api/editor/projects/{project_id}")
+        # Create project with matching ID (unified)
+        r = editor_client.post("/api/editor/projects",
+                               data={"name": "Test", "id": job_id})
         assert r.status_code == 200
-        assert r.json()["source_job_id"] is None
+        pid = r.json()["id"]
+        assert pid == job_id
+        # Import
+        r = editor_client.post(f"/api/editor/projects/{pid}/import-job/{job_id}")
+        assert r.status_code == 200
+        assert r.json()["imported"] > 0
 
-    def test_source_job_id_survives_save_load(self, editor_client, project_id, _patch_dirs, storage_root):
-        """source_job_id should persist through save/load cycle."""
-        from src.video.editor import get_project
-        p = get_project(project_id)
-        p.source_job_id = "myjob456"
-        # Save
-        r = editor_client.post(f"/api/editor/projects/{project_id}/save")
+    def test_create_project_with_custom_id(self, editor_client, _patch_dirs, storage_root):
+        """Creating a project with a custom ID should use that ID."""
+        r = editor_client.post("/api/editor/projects",
+                               data={"name": "Custom", "id": "myid123"})
         assert r.status_code == 200
-        # List saved projects
-        saved = editor_client.get("/api/editor/saved-projects").json()
-        assert len(saved) > 0
-        filename = saved[0]["filename"]
-        # Load into new in-memory project
-        r = editor_client.post(f"/api/editor/load-project/{filename}")
-        assert r.status_code == 200
-        loaded_pid = r.json()["id"]
-        proj = editor_client.get(f"/api/editor/projects/{loaded_pid}")
-        assert proj.json()["source_job_id"] == "myjob456"
+        assert r.json()["id"] == "myid123"
+
+
+class TestUnifiedProjectId:
+    """Tests for the unified project ID system (pid == job_id)."""
 
     def test_project_to_dict_from_dict_roundtrip(self):
-        """source_job_id roundtrips through to_dict/from_dict."""
+        """Project roundtrips through to_dict/from_dict."""
         from src.video.editor import Project
 
         p = Project(id="test1", name="Test")
-        p.source_job_id = "abc123"
         d = p.to_dict()
-        assert d["source_job_id"] == "abc123"
+        assert d["id"] == "test1"
+        assert d["name"] == "Test"
+        assert "source_job_id" not in d
         p2 = Project.from_dict(d)
-        assert p2.source_job_id == "abc123"
+        assert p2.id == "test1"
+        assert p2.name == "Test"
 
-    def test_from_dict_without_source_job_id(self):
-        """Legacy dicts without source_job_id should default to None."""
-        from src.video.editor import Project
+    def test_auto_create_for_karaoke_job(self, editor_client, _patch_dirs, storage_root):
+        """GET /projects/{pid} should auto-create for existing karaoke job dirs."""
+        job_id = "karaokejob42"
+        job_dir = storage_root / "output" / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        (job_dir / "segments.json").write_text("[]", encoding="utf-8")
+        # GET should auto-create the editor project
+        r = editor_client.get(f"/api/editor/projects/{job_id}")
+        assert r.status_code == 200
+        assert r.json()["id"] == job_id
 
-        d = {"id": "test2", "name": "Legacy"}
-        p = Project.from_dict(d)
-        assert p.source_job_id is None
+    def test_no_auto_create_for_nonexistent_dir(self, editor_client, _patch_dirs, storage_root):
+        """GET /projects/{pid} should 404 for nonexistent directories."""
+        r = editor_client.get("/api/editor/projects/nonexistent999")
+        assert r.status_code == 404
+
+    def test_delete_editor_project(self, editor_client, project_id, _patch_dirs, storage_root):
+        """DELETE should remove editor.json only."""
+        # Save first
+        r = editor_client.post(f"/api/editor/projects/{project_id}/save")
+        assert r.status_code == 200
+        # Verify editor.json exists
+        editor_json = storage_root / "output" / project_id / "editor.json"
+        assert editor_json.exists()
+        # Delete
+        r = editor_client.delete(f"/api/editor/delete-project/{project_id}")
+        assert r.status_code == 200
+        assert not editor_json.exists()

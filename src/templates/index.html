@@ -92,7 +92,7 @@ button{font-family:var(--font);cursor:pointer;border:none;border-radius:6px;padd
 input,select,textarea{font-family:var(--font);background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.82rem;width:100%;transition:border-color .15s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
-.app{display:grid;grid-template-columns:290px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
+.app{display:grid;grid-template-columns:290px 1fr;grid-template-rows:auto auto 1fr;min-height:100vh}
 .hdr{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
 .hdr h1{font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hdr .v{font-family:var(--mono);font-size:.6rem;background:var(--bg4);color:var(--dim);padding:2px 6px;border-radius:4px}
@@ -166,8 +166,11 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .si.active{border-color:var(--accent);background:rgba(0,229,160,.04)}
 .si.overlap{border-right:3px solid var(--danger)}
 .si.pinned{border-left:3px solid var(--purple)}
-.sidx{font-family:var(--mono);font-size:.65rem;color:var(--dim);text-align:center;cursor:pointer}
+.si.selected{border-color:var(--accent);background:rgba(0,229,160,.08);box-shadow:inset 0 0 0 1px var(--accent)}
+.sidx{font-family:var(--mono);font-size:.65rem;color:var(--dim);text-align:center;cursor:pointer;user-select:none}
 .sidx:hover{color:var(--accent)}
+.seg-num{display:inline-block;padding:1px 3px;border-radius:3px;transition:background .15s}
+.si.selected .seg-num{background:var(--accent);color:#0c0e14;font-weight:700}
 .stm{font-family:var(--mono);font-size:.6rem;color:var(--dim);display:block}
 .stm-edit{background:transparent;border:none;color:var(--dim);font-family:var(--mono);font-size:.6rem;width:55px;padding:0;cursor:pointer}
 .stm-edit:hover{color:var(--accent2)}
@@ -184,8 +187,14 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .cm{background:rgba(255,170,34,.12);color:var(--warn)}
 .cl{background:rgba(255,68,102,.12);color:var(--danger)}
 .sbtns{display:flex;flex-wrap:wrap;gap:2px}
-.sbtns button{padding:2px 4px;font-size:.6rem;background:var(--bg4);color:var(--dim);border:1px solid var(--border)}
+.sbtns button{padding:2px 4px;font-size:.6rem;background:var(--bg4);color:var(--dim);border:1px solid var(--border);border-radius:3px;transition:all .12s}
 .sbtns button:hover{color:var(--text);border-color:var(--accent)}
+.sbtns .merge-btn{color:var(--accent2)}
+.sbtns .merge-btn:hover{background:var(--accent2);color:#0c0e14}
+.merge-sel-bar{display:none;align-items:center;gap:5px;background:var(--accent);color:#0c0e14;padding:3px 10px;border-radius:5px;font-size:.7rem;font-weight:600;cursor:default;white-space:nowrap}
+.merge-sel-bar.show{display:flex}
+.merge-sel-bar button{background:rgba(0,0,0,.2);color:#0c0e14;border:none;padding:2px 8px;border-radius:3px;font-size:.68rem;font-weight:600;cursor:pointer}
+.merge-sel-bar button:hover{background:rgba(0,0,0,.35)}
 .dls{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .dl{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .15s}
 .dl:hover{border-color:var(--accent);background:var(--bg4)}
@@ -404,7 +413,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <div class="dot" id="hDot"></div>
   </div>
 </header>
-<div id="projBanner" style="display:none;padding:6px 16px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:.75rem;color:var(--dim);align-items:center;gap:8px">
+<div id="projBanner" style="display:none;grid-column:1/-1;padding:6px 16px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:.75rem;color:var(--dim);align-items:center;gap:8px">
   <span style="color:var(--accent)">📌</span>
   <span>Projekt geöffnet: <b id="projBannerName" style="color:var(--fg)"></b></span>
   <a id="projBannerEditor" href="/editor" class="btn-s btn-sm" style="text-decoration:none;font-size:.65rem;padding:2px 8px;margin-left:auto">🎬 Im Editor öffnen</a>
@@ -433,7 +442,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
   <div id="lyOpts" style="display:none;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-top:-2px;font-size:.65rem">
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
       <label style="color:var(--dim)">Template</label>
-      <select id="sLTM" style="flex:1;font-size:.65rem"><option value="lyrics_source_of_truth" title="Lyrics-Text wird 1:1 übernommen, ASR-Timestamps zugeordnet">Source of Truth</option><option value="layout_only_reflow" title="ASR-Text beibehalten, nur Zeilenumbrüche aus Lyrics übernehmen">Layout Only</option><option value="hybrid_mark_differences" title="Lyrics-Text verwenden, Abweichungen zum ASR markieren">Hybrid</option></select>
+      <select id="sLTM" style="flex:1;font-size:.65rem"><option value="lyrics_source_of_truth" title="Lyrics-Text wird 1:1 übernommen, ASR-Timestamps zugeordnet">Source of Truth</option><option value="layout_only_reflow" title="ASR-Text beibehalten, nur Zeilenumbrüche aus Lyrics übernehmen">Layout Only</option><option value="hybrid_mark_differences" title="Lyrics-Text verwenden, Abweichungen zum ASR markieren">Hybrid</option><option value="correct_words_only" title="ASR-Segmentierung beibehalten, nur Wörter anhand der Lyrics korrigieren">Nur Wörter korrigieren</option></select>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <label style="color:var(--dim)">Match</label>
@@ -585,6 +594,11 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
           <button class="btn-s btn-sm" onclick="tShift()" title="Alle Timestamps um X Millisekunden verschieben (positiv/negativ)">⏱ Shift</button>
           <button class="btn-s btn-sm" onclick="fixGaps()" title="Lücken zwischen Segmenten automatisch mit Mindestabstand (80ms) korrigieren">🔧 Fix Gaps</button>
           <button class="btn-s btn-sm" onclick="applyDict()" title="Custom Dictionary auf alle Segmente anwenden (falsch→korrekt)">📖 Dict</button>
+          <div class="merge-sel-bar" id="mergeSelBar">
+            <span id="mergeSelLbl">0 ausgewählt</span>
+            <button onclick="mergeSelected()" title="Ausgewählte Segmente zusammenführen (M)">⊕ Merge</button>
+            <button onclick="clearSel()" title="Auswahl aufheben">✕</button>
+          </div>
           <div style="margin-left:auto;display:flex;gap:3px">
             <button class="btn btn-sm" onclick="openSubEditor()" title="Subtitle-Editor öffnen">📝 Editor</button>
             <button class="btn-s btn-sm" onclick="regenFmt()" title="ASS/VTT/LRC aus aktuellen Segmenten neu generieren">🔄 Regen</button>
@@ -1058,6 +1072,8 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 <tr><td><code>Ctrl+Y</code></td><td>Redo</td></tr>
 <tr><td><code>Ctrl+F</code></td><td>Suche fokussieren</td></tr>
 <tr><td><code>S</code></td><td>Split bei Playhead</td></tr>
+<tr><td><code>M</code></td><td>Merge bei Playhead (mit nächstem Segment)</td></tr>
+<tr><td><code>Shift+M</code></td><td>Ausgewählte Segmente zusammenführen</td></tr>
 <tr><td><code>T</code></td><td>Tap-to-Time Modus</td></tr>
 <tr><td><code>F</code></td><td>Fullscreen Karaoke</td></tr>
 <tr><td><code>Shift+Drag</code></td><td>A/B Loop Region setzen</td></tr>
@@ -1135,7 +1151,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 </div>
 <script>
 const B='';let uploaded=[],aJobId=null,poll=null,wfPeaks=null,wfDur=0,cSegs=[],curFil='all',looping=false,loopSeg=null,subOffset=0;
-let _projMode=null; // {pid, name, source_job_id} when opened via ?pid=
+let _projMode=null; // {pid, name} when opened via ?pid=
 const au=document.getElementById('audioEl');
 function toast(m,t='ok'){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toasts').appendChild(e);setTimeout(()=>e.remove(),3500)}
 function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
@@ -1382,10 +1398,37 @@ else el.classList.remove('active')})}
 
 // ── Segments ──
 let overlaps=new Set();
+let selSegs=new Set();
 async function loadSegs(jid){try{cSegs=await(await fetch(B+'/api/jobs/'+jid+'/segments')).json();
 // detect overlaps
 overlaps=new Set();for(let i=0;i<cSegs.length-1;i++){if(cSegs[i+1].start<cSegs[i].end){overlaps.add(i);overlaps.add(i+1)}}
 renderSegs();drawWF();drawMM()}catch(e){document.getElementById('segList').innerHTML='<div class="empty"><p>Fehler</p></div>'}}
+
+// ── Segment Selection ──
+let _lastSel=-1;
+function toggleSel(i,e){
+  if(e.shiftKey&&_lastSel>=0){const lo=Math.min(_lastSel,i),hi=Math.max(_lastSel,i);for(let j=lo;j<=hi;j++)selSegs.add(j)}
+  else if(e.ctrlKey||e.metaKey){if(selSegs.has(i))selSegs.delete(i);else selSegs.add(i)}
+  else{if(selSegs.size===1&&selSegs.has(i))selSegs.clear();else{selSegs.clear();selSegs.add(i)}}
+  _lastSel=i;updSelUI()}
+function clearSel(){selSegs.clear();_lastSel=-1;updSelUI()}
+function updSelUI(){
+  document.querySelectorAll('.si').forEach(el=>{const idx=parseInt(el.dataset.idx);el.classList.toggle('selected',selSegs.has(idx))});
+  const bar=document.getElementById('mergeSelBar');
+  if(selSegs.size>=2){bar.classList.add('show');document.getElementById('mergeSelLbl').textContent=selSegs.size+' ausgewählt'}
+  else bar.classList.remove('show')}
+async function mergeSelected(){
+  if(!aJobId||selSegs.size<2)return;
+  const sorted=[...selSegs].sort((a,b)=>a-b);
+  for(let i=1;i<sorted.length;i++){if(sorted[i]!==sorted[i-1]+1){toast('Nur zusammenhängende Segmente mergbar','err');return}}
+  try{await fetch(B+'/api/jobs/'+aJobId+'/segments/merge',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({index_a:sorted[0],index_b:sorted[sorted.length-1]})});
+    selSegs.clear();_lastSel=-1;toast(sorted.length+' Segmente gemergt ⊕');loadSegs(aJobId)}catch(e){toast('Merge Fehler','err')}}
+async function mergeAtPlayhead(){
+  if(!aJobId||!cSegs.length)return;const t=au.currentTime;let idx=-1;
+  for(let i=0;i<cSegs.length;i++){if(t>=cSegs[i].start&&t<cSegs[i].end){idx=i;break}}
+  if(idx<0||idx+1>=cSegs.length){toast('Kein Segment bei Playhead oder letztes Segment','err');return}
+  mergeSeg(idx)}
 
 function renderSegs(){
   let segs=cSegs.map((s,i)=>({...s,_i:i}));
@@ -1398,20 +1441,21 @@ function renderSegs(){
     const conf=s.confidence||(s.words&&s.words.length?s.words.reduce((a,w)=>a+(w.confidence||1),0)/s.words.length:1);
     const cc=conf>=.8?'ch':conf>=.6?'cm':'cl';
     const dur=s.end-s.start;const cps=dur>0?s.text.length/dur:0;
-    let cls='si';if(conf<.6)cls+=' low';if(overlaps.has(i))cls+=' overlap';if(s.pinned)cls+=' pinned';
+    let cls='si';if(conf<.6)cls+=' low';if(overlaps.has(i))cls+=' overlap';if(s.pinned)cls+=' pinned';if(selSegs.has(i))cls+=' selected';
     const spk=s.speaker?`<span class="speaker-tag" onclick="editSpeaker(${i})" title="Speaker-Label bearbeiten">${esc(s.speaker)}</span>`:'';
     const cpsW=cps>22?`<span class="cps-warn" title="Hohe Zeichenrate">${cps.toFixed(0)} cps!</span>`:'';
     return`<div class="${cls}" data-idx="${i}" id="seg${i}">
-<div class="sidx" onclick="playSeg(${i})" title="Klick = Segment abspielen">#${i+1}<br>
-<input class="stm-edit" value="${fmtMs(s.start)}" onchange="updTime(${i},'start',this.value)" title="Start">
-<input class="stm-edit" value="${fmtMs(s.end)}" onchange="updTime(${i},'end',this.value)" title="End">
+<div class="sidx" onclick="toggleSel(${i},event)" title="Klick = auswählen · Shift = Bereich · Play: ▶"><span class="seg-num">#${i+1}</span><br>
+<input class="stm-edit" value="${fmtMs(s.start)}" onchange="updTime(${i},'start',this.value)" onclick="event.stopPropagation()" title="Start">
+<input class="stm-edit" value="${fmtMs(s.end)}" onchange="updTime(${i},'end',this.value)" onclick="event.stopPropagation()" title="End">
 </div>
 <div class="stx"><textarea rows="2" data-idx="${i}" onchange="updSeg(${i},this.value)" onfocus="loopSeg=cSegs[${i}]">${esc(s.text)}</textarea>${spk}${cpsW}</div>
 <div class="scf ${cc}">${(conf*100).toFixed(0)}%</div>
 <div class="sbtns">
 <button onclick="playSeg(${i})" title="Play">▶</button>
-<button onclick="splitSeg(${i})" title="Split">✂</button>
-<button onclick="mergeSeg(${i})" title="Merge↓">⊕</button>
+<button onclick="splitSeg(${i})" title="Split (S)">✂</button>
+<button class="merge-btn" onclick="mergeSegUp(${i})" title="Mit vorigem Segment mergen"${i===0?' disabled':''}>⊕↑</button>
+<button class="merge-btn" onclick="mergeSeg(${i})" title="Mit nächstem Segment mergen"${i>=cSegs.length-1?' disabled':''}>⊕↓</button>
 <button onclick="togglePin(${i})" title="Pin">${s.pinned?'📌':'📍'}</button>
 <button onclick="editSpeaker(${i})" title="Speaker">🎤</button>
 </div></div>`}).join('')}
@@ -1434,7 +1478,9 @@ function playSeg(i){if(!cSegs[i])return;au.currentTime=cSegs[i].start;au.play();
 async function splitSeg(i){if(!aJobId||!cSegs[i])return;const s=cSegs[i];
 try{await fetch(B+'/api/jobs/'+aJobId+'/segments/split',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,split_at:(s.start+s.end)/2})});toast('Split ✂');loadSegs(aJobId)}catch(e){toast('Err','err')}}
 async function mergeSeg(i){if(!aJobId||i+1>=cSegs.length)return;
-try{await fetch(B+'/api/jobs/'+aJobId+'/segments/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index_a:i,index_b:i+1})});toast('Merged ⊕');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index_a:i,index_b:i+1})});toast('Merged ⊕↓');loadSegs(aJobId)}catch(e){toast('Err','err')}}
+async function mergeSegUp(i){if(!aJobId||i<=0)return;
+try{await fetch(B+'/api/jobs/'+aJobId+'/segments/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index_a:i-1,index_b:i})});toast('Merged ⊕↑');loadSegs(aJobId)}catch(e){toast('Err','err')}}
 async function togglePin(i){if(!aJobId)return;try{await fetch(B+'/api/jobs/'+aJobId+'/segments/toggle-pin?index='+i,{method:'POST'});loadSegs(aJobId)}catch(e){}}
 async function editSpeaker(i){const sp=prompt('Speaker-Label:',cSegs[i].speaker||'');if(sp===null)return;
 try{await fetch(B+'/api/jobs/'+aJobId+'/segments',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,speaker:sp})});loadSegs(aJobId)}catch(e){toast('Err','err')}}
@@ -2425,34 +2471,48 @@ function _updateKstNavLinks(){
 async function _initProjectMode(){
   const urlPid=new URLSearchParams(location.search).get('pid');
   if(!urlPid)return false;
-  try{
-    const proj=await(await fetch(B+'/api/editor/projects/'+encodeURIComponent(urlPid))).json();
-    if(!proj||!proj.id)return false;
-    _projMode={pid:proj.id,name:proj.name,source_job_id:proj.source_job_id||null};
-    // Show project banner
-    const banner=document.getElementById('projBanner');
-    if(banner)banner.style.display='flex';
-    const bn=document.getElementById('projBannerName');
-    if(bn)bn.textContent=proj.name;
-    _updateKstNavLinks();
-    // If project has a linked job, load its segments
-    if(proj.source_job_id){
-      try{
-        const j=await(await fetch(B+'/api/jobs/'+proj.source_job_id)).json();
-        if(j&&j.job_id){selJob(j.job_id);return true}
-      }catch(e){}
-    }
-    // Fallback: try to find job_id from subtitle asset paths
-    const assets=proj.assets?Object.values(proj.assets):[];
-    for(const a of assets){
-      if(a.type==='subtitle'&&a.path){
-        const m=a.path.match(/data\/output\/([a-f0-9]+)\//);
-        if(m){try{const j=await(await fetch(B+'/api/jobs/'+m[1])).json();if(j&&j.job_id){selJob(j.job_id);return true}}catch(e){}}
-      }
-    }
-    toast('Projekt geladen — kein verknüpfter Karaoke-Job gefunden');
+
+  // Unified project ID: pid == job_id — load directly
+  if(await _tryLoadJob(urlPid)){
     return true;
-  }catch(e){toast('Projekt nicht gefunden','err');return false}
+  }
+
+  toast('Projekt nicht gefunden','err');
+  return false;
+}
+
+async function _tryLoadJob(jobId){
+  // Try active in-memory job first
+  try{
+    const j=await(await fetch(B+'/api/jobs/'+jobId)).json();
+    if(j&&j.job_id&&j.status==='completed'){
+      _projMode=_projMode||{pid:jobId,name:j.filename||jobId};
+      _showProjectBanner(_projMode.name);
+      selJob(j.job_id);
+      return true;
+    }
+  }catch(e){}
+  // Try loading from filesystem (project.json / library)
+  try{
+    const r=await(await fetch(B+'/api/library/'+jobId)).json();
+    if(r&&(r.job_id||r.id)){
+      const jid=r.job_id||r.id;
+      _projMode=_projMode||{pid:jid,name:r.title||r.source_filename||jid};
+      _showProjectBanner(_projMode.name);
+      _persistSession({job_id:jid});
+      await loadFromLibrary(r);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+function _showProjectBanner(name){
+  const banner=document.getElementById('projBanner');
+  if(banner)banner.style.display='flex';
+  const bn=document.getElementById('projBannerName');
+  if(bn)bn.textContent=name;
+  _updateKstNavLinks();
 }
 function exitProjectMode(){
   _projMode=null;
@@ -2718,7 +2778,10 @@ document.addEventListener('keydown',e=>{
   if(e.key==='t'||e.key==='T'){e.preventDefault();toggleTapToTime();return}
   if(e.key==='f'&&!e.ctrlKey){e.preventDefault();toggleFSKaraoke();return}
   if(e.key==='s'&&!e.ctrlKey){e.preventDefault();splitAtPlayhead();return}
+  if(e.key==='m'&&!e.ctrlKey&&!e.shiftKey){e.preventDefault();mergeAtPlayhead();return}
+  if(e.key==='M'&&!e.ctrlKey){e.preventDefault();mergeSelected();return}
   if(e.key==='c'&&e.shiftKey&&!e.ctrlKey){e.preventDefault();clearABLoop();return}
+  if(e.key==='Escape'&&selSegs.size>0){clearSel();return}
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

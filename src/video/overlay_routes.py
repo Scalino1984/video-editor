@@ -90,7 +90,7 @@ async def api_import_overlay_to_project(
 ):
     """Import an overlay from the library into an editor project as asset + clip."""
     from src.video.editor import (
-        EDITOR_DIR,
+        OUTPUT_DIR,
         get_project,
         add_asset,
         add_clip,
@@ -117,14 +117,15 @@ async def api_import_overlay_to_project(
     if len(overlay_clips) >= MAX_OVERLAYS_PER_PROJECT:
         raise HTTPException(400, f"Maximum {MAX_OVERLAYS_PER_PROJECT} overlays per project exceeded")
 
-    # Copy file to project assets
-    assets_dir = EDITOR_DIR / "assets"
+    # Copy file to project directory
+    proj_dir = OUTPUT_DIR / pid
+    proj_dir.mkdir(parents=True, exist_ok=True)
     safe_name = file_path.name.replace("/", "_").replace("\\", "_").replace("\x00", "")
     # Remove control characters
     safe_name = "".join(c for c in safe_name if c.isprintable())
     if not safe_name:
         safe_name = "overlay.mp4"
-    dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
+    dest = proj_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
     shutil.copy2(file_path, dest)
 
     # Add as asset

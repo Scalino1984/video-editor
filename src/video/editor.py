@@ -30,8 +30,10 @@ from src.video.render import probe_media, ProbeResult
 EDITOR_DIR = Path("data/editor")
 EDITOR_DIR.mkdir(parents=True, exist_ok=True)
 (EDITOR_DIR / "assets").mkdir(exist_ok=True)
-(EDITOR_DIR / "projects").mkdir(exist_ok=True)
 (EDITOR_DIR / "renders").mkdir(exist_ok=True)
+
+OUTPUT_DIR = Path("data/output")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_UNDO = 80
 
@@ -160,7 +162,6 @@ class Project:
     sub_bg_color: str = "&H80000000"  # ASS: semi-transparent black
     sub_highlight_color: str = "&H0000FFFF"  # ASS: yellow karaoke highlight
     video_fit: str = "cover"  # cover | contain | stretch
-    source_job_id: str | None = None  # linked karaoke job (set on import-job)
 
     @property
     def computed_duration(self) -> float:
@@ -194,7 +195,6 @@ class Project:
             "sub_bg_color": self.sub_bg_color,
             "sub_highlight_color": self.sub_highlight_color,
             "video_fit": self.video_fit,
-            "source_job_id": self.source_job_id,
             "assets": {k: v.to_dict() for k, v in self.assets.items()},
             "clips": [c.to_dict() for c in self.clips],
         }
@@ -232,7 +232,6 @@ class Project:
             sub_bg_color=d.get("sub_bg_color", "&H80000000"),
             sub_highlight_color=d.get("sub_highlight_color", "&H0000FFFF"),
             video_fit=d.get("video_fit", "cover"),
-            source_job_id=d.get("source_job_id"),
             assets=assets, clips=clips, tracks=tracks,
         )
         # Upgrade legacy v1 projects: ensure default tracks exist
@@ -309,8 +308,11 @@ def _uid() -> str:
 
 
 def create_project(name: str = "Untitled", width: int = 1920,
-                   height: int = 1080, fps: float = 30) -> Project:
-    pid = _uid()
+                   height: int = 1080, fps: float = 30,
+                   pid: str | None = None) -> Project:
+    pid = pid or _uid()
+    # Ensure output directory exists for this project
+    (OUTPUT_DIR / pid).mkdir(parents=True, exist_ok=True)
     proj = Project(id=pid, name=name, width=width, height=height, fps=fps,
                    tracks=_default_tracks())
     _projects[pid] = proj
@@ -321,7 +323,11 @@ def create_project(name: str = "Untitled", width: int = 1920,
 
 
 def get_project(pid: str) -> Project | None:
-    return _projects.get(pid)
+    p = _projects.get(pid)
+    if p:
+        return p
+    # Auto-load from disk
+    return load_project(pid)
 
 
 def list_projects() -> list[dict]:
@@ -367,19 +373,19 @@ def save_project(pid: str) -> Path | None:
     p = _projects.get(pid)
     if not p:
         return None
-    # Use project name in filename for easier identification
-    safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in (p.name or "")).strip()[:40]
-    if safe_name and safe_name.lower() != "untitled":
-        filename = f"{safe_name}_{pid[:8]}.json"
-    else:
-        filename = f"{pid}.json"
-    path = EDITOR_DIR / "projects" / filename
+    out = OUTPUT_DIR / pid
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "editor.json"
     path.write_text(p.to_json(), encoding="utf-8")
     info(f"[editor] Project saved: {path}")
     return path
 
 
-def load_project(path: Path) -> Project | None:
+def load_project(pid: str) -> Project | None:
+    """Load editor project from data/output/{pid}/editor.json into memory."""
+    path = OUTPUT_DIR / pid / "editor.json"
+    if not path.exists():
+        return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         proj = Project.from_dict(data)
@@ -388,8 +394,38 @@ def load_project(path: Path) -> Project | None:
         _redo_stacks[proj.id] = deque(maxlen=MAX_UNDO)
         return proj
     except Exception as e:
-        error(f"[editor] Failed to load project: {e}")
+        error(f"[editor] Failed to load project {pid}: {e}")
         return None
+
+
+def list_saved_projects() -> list[dict]:
+    """Scan data/output/*/editor.json for saved editor projects."""
+    import time as _time
+    if not OUTPUT_DIR.is_dir():
+        return []
+    results = []
+    for d in OUTPUT_DIR.iterdir():
+        if not d.is_dir():
+            continue
+        editor_path = d / "editor.json"
+        if not editor_path.exists():
+            continue
+        try:
+            data = json.loads(editor_path.read_text(encoding="utf-8"))
+            stat = editor_path.stat()
+            results.append({
+                "id": data.get("id", d.name),
+                "name": data.get("name", d.name),
+                "clips": len(data.get("clips", [])),
+                "assets": len(data.get("assets", {})),
+                "duration": data.get("duration", 0),
+                "size_kb": round(stat.st_size / 1024, 1),
+                "date": _time.strftime("%d.%m.%y %H:%M", _time.localtime(stat.st_mtime)),
+            })
+        except Exception:
+            continue
+    results.sort(key=lambda p: p.get("date", ""), reverse=True)
+    return results
 
 
 # ── Asset management ──────────────────────────────────────────────────────────

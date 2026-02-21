@@ -15,9 +15,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from src.utils.logging import info, warn, error
 from src.video.editor import (
-    EDITOR_DIR, TRACK_TYPES,
+    EDITOR_DIR, OUTPUT_DIR, TRACK_TYPES,
     create_project, get_project, list_projects,
-    save_project, load_project,
+    save_project, load_project, list_saved_projects,
     add_asset, add_clip, remove_clip, update_clip,
     split_clip, add_effect, remove_effect,
     undo, redo, _push_undo,
@@ -176,16 +176,35 @@ async def api_create_project(
     width: int = Form(1920),
     height: int = Form(1080),
     fps: float = Form(30),
+    id: str = Form(""),
 ):
-    p = create_project(name, width, height, fps)
+    p = create_project(name, width, height, fps, pid=id if id else None)
     return p.to_dict()
 
 
 @router.get("/projects/{pid}")
 async def api_get_project(pid: str):
     p = get_project(pid)
-    if not p:
+    if p:
+        return p.to_dict()
+    # Auto-create editor project for valid output directories (karaoke jobs)
+    job_dir = (OUTPUT_DIR / pid).resolve()
+    if not job_dir.is_relative_to(OUTPUT_DIR.resolve()) or not job_dir.is_dir():
         raise HTTPException(404, "Project not found")
+    # Infer name from project.json if available
+    name = pid
+    proj_json = job_dir / "project.json"
+    if proj_json.exists():
+        try:
+            data = json.loads(proj_json.read_text(encoding="utf-8"))
+            name = data.get("name", pid)
+        except Exception:
+            pass
+    p = create_project(name=name, pid=pid)
+    # Auto-import audio + subtitle files from job directory
+    _auto_import_job_assets(pid, job_dir)
+    # Reload to include auto-imported assets
+    p = get_project(pid)
     return p.to_dict()
 
 
@@ -227,50 +246,29 @@ async def api_save_project(pid: str):
 
 @router.get("/saved-projects")
 async def api_list_saved_projects():
-    """List saved project JSON files on disk."""
-    proj_dir = EDITOR_DIR / "projects"
-    results = []
-    for f in sorted(proj_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            from datetime import datetime
-            mtime = datetime.fromtimestamp(f.stat().st_mtime)
-            results.append({
-                "filename": f.name,
-                "name": data.get("name", f.stem),
-                "id": data.get("id", f.stem),
-                "size_kb": round(f.stat().st_size / 1024, 1),
-                "date": mtime.strftime("%d.%m.%y %H:%M"),
-            })
-        except Exception:
-            pass
-    return results
+    """List saved editor projects on disk (data/output/*/editor.json)."""
+    return list_saved_projects()
 
 
-@router.post("/load-project/{filename}")
-async def api_load_project(filename: str):
-    """Load a saved project from disk."""
-    path = (EDITOR_DIR / "projects" / filename).resolve()
-    if not path.is_relative_to((EDITOR_DIR / "projects").resolve()) or not path.exists():
-        raise HTTPException(404, "Project file not found")
-    proj = load_project(path)
+@router.post("/load-project/{pid}")
+async def api_load_project(pid: str):
+    """Load a saved editor project from disk into memory."""
+    proj = load_project(pid)
     if not proj:
-        raise HTTPException(500, "Failed to load project")
+        raise HTTPException(404, "Editor project not found")
     return proj.to_dict()
 
 
-@router.delete("/delete-project/{filename}")
-async def api_delete_saved_project(filename: str):
-    """Delete a saved project JSON file from disk (safe: path-traversal protected)."""
-    path = (EDITOR_DIR / "projects" / filename).resolve()
-    if not path.is_relative_to((EDITOR_DIR / "projects").resolve()):
-        raise HTTPException(400, "Invalid filename")
+@router.delete("/delete-project/{pid}")
+async def api_delete_saved_project(pid: str):
+    """Delete a saved editor project (editor.json only, preserves karaoke data)."""
+    path = (OUTPUT_DIR / pid / "editor.json").resolve()
+    if not path.is_relative_to(OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid project ID")
     if not path.exists():
-        raise HTTPException(404, "Project file not found")
-    if path.suffix.lower() != ".json":
-        raise HTTPException(400, "Only JSON project files can be deleted")
+        raise HTTPException(404, "Editor project not found")
     path.unlink()
-    return {"deleted": filename}
+    return {"deleted": pid}
 
 
 @router.post("/projects/{pid}/undo")
@@ -378,83 +376,95 @@ async def api_asset_thumbnail(pid: str, asset_id: str):
 
 # ── Import from Karaoke Sub Tool ──────────────────────────────────────────────
 
+
+def _import_file_as_asset(pid: str, source: Path, track: str,
+                          *, copy: bool = False) -> dict | None:
+    """Add a file as asset + clip. Optionally copy to editor assets dir."""
+    if copy:
+        assets_dir = EDITOR_DIR / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{source.name}"
+        shutil.copy2(source, dest)
+    else:
+        dest = source
+    asset = add_asset(pid, source.name, dest)
+    if asset:
+        add_clip(pid, asset.id, track=track, start=0)
+        return asset.to_dict()
+    return None
+
+
+def _find_and_import_audio(pid: str, job_dir: Path, job_id: str,
+                           *, copy: bool = False) -> list[dict]:
+    """Find audio files in job dir (+ uploads) and import the first one."""
+    imported = []
+    upload_dir = Path("data/uploads")
+    for search_dir in [job_dir, upload_dir]:
+        for ext in (".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aac", ".opus"):
+            for f in search_dir.glob(f"*{ext}"):
+                if search_dir == upload_dir and not f.name.startswith(job_id[:8]):
+                    continue
+                result = _import_file_as_asset(pid, f, "audio", copy=copy)
+                if result:
+                    imported.append(result)
+                    return imported
+    return imported
+
+
+def _find_and_import_subtitle(pid: str, job_dir: Path,
+                              *, copy: bool = False) -> list[dict]:
+    """Find best subtitle by priority ASS > SRT > VTT > LRC and import it."""
+    for ext in (".ass", ".srt", ".vtt", ".lrc"):
+        candidates = list(job_dir.glob(f"*{ext}"))
+        if candidates:
+            result = _import_file_as_asset(pid, candidates[0], "subtitle", copy=copy)
+            if result:
+                return [result]
+            break
+    return []
+
+
+def _auto_import_job_assets(pid: str, job_dir: Path) -> int:
+    """Auto-import audio + subtitle from a job directory (in-place, no copy).
+
+    Called when auto-creating an editor project for an existing karaoke job.
+    """
+    p = get_project(pid)
+    if not p:
+        return 0
+    count = 0
+    audio = _find_and_import_audio(pid, job_dir, pid, copy=False)
+    count += len(audio)
+    subs = _find_and_import_subtitle(pid, job_dir, copy=False)
+    count += len(subs)
+    return count
+
+
 @router.post("/projects/{pid}/import-job/{job_id}")
 async def api_import_from_job(pid: str, job_id: str):
     """Import audio + subtitles from a completed karaoke job.
 
-    Files are copied to editor assets dir so they survive job deletion.
-    Cross-references are tracked in the file registry.
+    When pid == job_id (unified project), files are referenced in-place.
+    When pid != job_id (cross-import), files are copied to editor assets dir.
     """
     p = get_project(pid)
     if not p:
         raise HTTPException(404, "Project not found")
 
     # Validate job_id to prevent path traversal
-    job_dir = (Path("data/output") / job_id).resolve()
-    if not job_dir.is_relative_to(Path("data/output").resolve()):
+    job_dir = (OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(OUTPUT_DIR.resolve()):
         raise HTTPException(400, "Invalid job_id")
-    upload_dir = Path("data/uploads")
-    assets_dir = EDITOR_DIR / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
     if not job_dir.exists():
         raise HTTPException(404, f"Job output not found: {job_id}")
 
     _push_undo(pid)
+
+    # Same project → reference in-place; cross-import → copy
+    need_copy = (pid != job_id)
     imported = []
-
-    def _copy_and_add(source: Path, track: str) -> dict | None:
-        """Copy file to editor assets dir and add as project asset."""
-        dest = assets_dir / f"{uuid.uuid4().hex[:8]}_{source.name}"
-        shutil.copy2(source, dest)
-        asset = add_asset(pid, source.name, dest)
-        if asset:
-            add_clip(pid, asset.id, track=track, start=0)
-            # Register in file registry with cross-reference
-            try:
-                from src.db.library import register_file, add_file_reference
-                file_id = register_file(
-                    storage_path=str(dest),
-                    original_name=source.name,
-                    file_type="project_asset",
-                    tool_scope="both",
-                    job_id=job_id,
-                    project_id=pid,
-                )
-                add_file_reference(file_id, "project", pid)
-                add_file_reference(file_id, "job", job_id)
-            except Exception:
-                pass  # non-critical
-            return asset.to_dict()
-        return None
-
-    # Find audio file — check job output dir first, then uploads
-    for search_dir in [job_dir, upload_dir]:
-        if imported and any(a.get("type") == "audio" for a in imported):
-            break
-        for ext in (".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aac", ".opus"):
-            for f in search_dir.glob(f"*{ext}"):
-                # For uploads dir, only match files that start with job_id prefix
-                if search_dir == upload_dir and not f.name.startswith(job_id[:8]):
-                    continue
-                result = _copy_and_add(f, "audio")
-                if result:
-                    imported.append(result)
-                break
-            if imported and any(a.get("type") == "audio" for a in imported):
-                break
-
-    # Find subtitle files — import ALL available formats (.ass, .srt, .vtt, .lrc)
-    for ext in (".ass", ".srt", ".vtt", ".lrc"):
-        for f in job_dir.glob(f"*{ext}"):
-            result = _copy_and_add(f, "subtitle")
-            if result:
-                imported.append(result)
-            break
-
-    # Track linked karaoke job for cross-tool navigation
-    if imported:
-        p.source_job_id = job_id
+    imported.extend(_find_and_import_audio(pid, job_dir, job_id, copy=need_copy))
+    imported.extend(_find_and_import_subtitle(pid, job_dir, copy=need_copy))
 
     return {"imported": len(imported), "assets": imported}
 

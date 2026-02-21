@@ -43,6 +43,43 @@ async def media_queue_status():
     return get_media_queue_status()
 
 
+@router.get("/memory")
+async def memory_status():
+    """Return current memory usage breakdown for diagnostics."""
+    import os
+    import sys
+    status: dict = {}
+    # Process RSS
+    try:
+        with open(f"/proc/{os.getpid()}/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    status["rss_mb"] = int(line.split()[1]) / 1024
+                elif line.startswith("VmSize:"):
+                    status["vsz_mb"] = int(line.split()[1]) / 1024
+    except Exception:
+        pass
+    # In-memory caches
+    status["jobs_count"] = len(tasks.get_jobs())
+    status["undo_stacks"] = sum(len(s) for s in tasks._undo_stacks.values())
+    status["redo_stacks"] = sum(len(s) for s in tasks._redo_stacks.values())
+    status["sse_subscribers"] = len(tasks._sse_subscribers)
+    status["cached_backends"] = list(tasks._backend_cache.keys())
+    try:
+        from src.ai.database import _dbs
+        status["chat_dbs_open"] = len(_dbs)
+    except Exception:
+        pass
+    return status
+
+
+@router.post("/memory/unload-backends")
+async def unload_backends(name: str | None = Query(None)):
+    """Unload cached ML models to free memory. Optional: name prefix filter."""
+    count = tasks.unload_backend(name)
+    return {"unloaded": count}
+
+
 @router.get("/presets")
 async def list_presets():
     from src.export.themes import PRESETS
@@ -85,9 +122,11 @@ async def upload_file(file: UploadFile = File(...)):
         stem, i = dest.stem, 1
         while dest.exists():
             dest = tasks.UPLOAD_DIR / f"{stem}_{i}{suffix}"; i += 1
-    content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
+    # Stream to disk instead of buffering entire file in memory
+    import shutil as _shutil
+    with open(dest, "wb") as f_out:
+        _shutil.copyfileobj(file.file, f_out)
+    file_size = dest.stat().st_size
 
     # Register in media registry
     media_id = ""
@@ -97,7 +136,7 @@ async def upload_file(file: UploadFile = File(...)):
         from src.db.library import register_media, _classify_file
         file_type, _mime, taggable, editable = _classify_file(dest.name)
         media_id = register_media(
-            filename=dest.name, path=str(dest), size=len(content),
+            filename=dest.name, path=str(dest), size=file_size,
         )
     except Exception:
         pass  # non-critical
@@ -110,13 +149,13 @@ async def upload_file(file: UploadFile = File(...)):
             original_name=dest.name,
             file_type="original",
             tool_scope="karaoke",
-            size=len(content),
+            size=file_size,
         )
     except Exception:
         pass  # non-critical
 
     return {
-        "filename": dest.name, "size": len(content),
+        "filename": dest.name, "size": file_size,
         "media_id": media_id, "taggable": taggable, "editable": editable,
     }
 
@@ -187,6 +226,8 @@ async def start_transcription(background_tasks: BackgroundTasks,
     if not audio_path.exists(): raise HTTPException(404, f"Not found: {filename}")
     if lyrics_file:
         lp = tasks.UPLOAD_DIR / lyrics_file
+        if not lp.resolve().is_relative_to(tasks.UPLOAD_DIR.resolve()):
+            raise HTTPException(400, f"Invalid lyrics path: {lyrics_file}")
         if not lp.exists() or lp.suffix.lower() not in (".txt", ".lrc"):
             raise HTTPException(400, f"Lyrics file not found or not .txt/.lrc: {lyrics_file}")
         req.lyrics_file = lyrics_file
@@ -226,7 +267,9 @@ async def transcribe_with_upload(background_tasks: BackgroundTasks,
     suffix = Path(file.filename).suffix.lower()
     if suffix not in SUPPORTED_FORMATS: raise HTTPException(400, f"Unsupported: {suffix}")
     dest = tasks.UPLOAD_DIR / file.filename
-    with open(dest, "wb") as f: f.write(await file.read())
+    import shutil as _shutil
+    with open(dest, "wb") as f_out:
+        _shutil.copyfileobj(file.file, f_out)
     req = TranscribeRequest(backend=backend, language=language, generate_ass=generate_ass,
         karaoke_mode=karaoke_mode, preset=preset)
     job = tasks.create_job(file.filename)
@@ -369,6 +412,8 @@ def _save_segs(p: Path, data: list[dict], job_id: str):
     _validate_words(data)
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     _sync_srt(job_id, data)
+    # Notify editor clients that subtitles changed
+    tasks._emit_sse({"type": "subtitle_updated", "job_id": job_id, "segments": len(data)})
     # Update project.json metadata (non-blocking)
     try:
         from src.api.karaoke_project import update_project_metadata

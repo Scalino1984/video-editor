@@ -59,6 +59,13 @@ class LocalWhisperBackend(TranscriptionBackend):
             )
         return self._model
 
+    def unload(self) -> None:
+        """Release model from memory."""
+        if self._model is not None:
+            del self._model
+            self._model = None
+            info("Local Whisper model unloaded")
+
     def transcribe(self, audio_path: Path, language: str = "auto",
                    word_timestamps: bool = True, **kwargs: Any) -> TranscriptResult:
         ok, msg = self.check_available()

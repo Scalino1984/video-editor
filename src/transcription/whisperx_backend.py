@@ -46,9 +46,10 @@ def _apply_thread_limits(cpu_threads: int = 0) -> int:
         cores = os.cpu_count() or 4
         threads = max(2, min(cores // 2, 6))
 
-    # Set env vars BEFORE torch import (affects OpenMP, MKL, BLAS)
+    # Set env vars BEFORE torch import (affects OpenMP, MKL, BLAS, CTranslate2)
     for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
-                "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+                "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
+                "CT2_INTER_THREADS", "CT2_INTRA_THREADS"):
         os.environ[var] = str(threads)
 
     # Set torch thread limits (if already imported)
@@ -103,23 +104,42 @@ class WhisperXBackend(TranscriptionBackend):
                 _apply_thread_limits(self.cpu_threads)
             self._threads_applied = True
 
+    # Models too heavy for CPU — auto-downgrade to a practical model
+    _CPU_MODEL_DOWNGRADE: dict[str, str] = {
+        "large-v3": "medium",
+        "large-v2": "medium",
+        "large-v1": "medium",
+        "large": "medium",
+    }
+
     def _get_model(self):
         if self._model is None:
             self._ensure_thread_limits()
             import whisperx
             device = self._resolve_device()
             compute = self.compute_type if device == "cuda" else "int8"
-            # Reduce batch size on CPU to limit memory + thread pressure
+
+            model_name = self.model_size
             effective_batch = self.batch_size
-            if device == "cpu" and self.batch_size > 4:
-                effective_batch = 4
-                info(f"WhisperX: batch_size reduced to {effective_batch} for CPU mode")
+
+            if device == "cpu":
+                # Auto-downgrade heavy models — large-v3 on CPU eats all RAM + cores
+                downgrade = self._CPU_MODEL_DOWNGRADE.get(model_name)
+                if downgrade:
+                    warn(f"WhisperX: '{model_name}' too heavy for CPU, downgrading to '{downgrade}'")
+                    model_name = downgrade
+                # batch_size=1 on CPU to prevent multi-process CPU saturation
+                effective_batch = 1
+                info(f"WhisperX: batch_size set to {effective_batch} for CPU mode")
+
             self._effective_batch_size = effective_batch
-            info(f"Loading WhisperX model: {self.model_size} on {device} ({compute})")
+            self._actual_model_name = model_name
+            info(f"Loading WhisperX model: {model_name} on {device} ({compute})")
             self._model = whisperx.load_model(
-                self.model_size,
+                model_name,
                 device=device,
                 compute_type=compute,
+                threads=max(1, int(os.environ.get("OMP_NUM_THREADS", "2"))),
             )
         return self._model
 
@@ -138,6 +158,21 @@ class WhisperXBackend(TranscriptionBackend):
                 return None, None
         return self._align_models[language]
 
+    def unload(self) -> None:
+        """Release all models from memory (WhisperX + alignment models)."""
+        if self._model is not None:
+            del self._model
+            self._model = None
+        if self._align_models:
+            self._align_models.clear()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except (ImportError, RuntimeError):
+            pass
+        info("WhisperX models unloaded")
+
     def transcribe(self, audio_path: Path, language: str = "auto",
                    word_timestamps: bool = True, **kwargs: Any) -> TranscriptResult:
         ok, msg = self.check_available()
@@ -147,7 +182,9 @@ class WhisperXBackend(TranscriptionBackend):
         import whisperx
 
         device = self._resolve_device()
-        info(f"Transcribing with WhisperX ({self.model_size}): {audio_path.name}")
+        model = self._get_model()
+        actual_model = getattr(self, '_actual_model_name', self.model_size)
+        info(f"Transcribing with WhisperX ({actual_model}): {audio_path.name}")
 
         start_time = time.time()
 
@@ -155,7 +192,6 @@ class WhisperXBackend(TranscriptionBackend):
         audio = whisperx.load_audio(str(audio_path))
 
         # step 1: transcribe with whisper
-        model = self._get_model()
         effective_batch = getattr(self, '_effective_batch_size', self.batch_size)
         transcribe_opts: dict[str, Any] = {"batch_size": effective_batch}
         if language != "auto":
@@ -170,17 +206,24 @@ class WhisperXBackend(TranscriptionBackend):
         if word_timestamps:
             model_a, metadata = self._get_align_model(detected_lang, device)
             if model_a is not None:
+                # Keep pre-alignment result to validate alignment quality
+                pre_align_segments = result["segments"]
                 try:
-                    result = whisperx.align(
-                        result["segments"],
+                    aligned_result = whisperx.align(
+                        pre_align_segments,
                         model_a,
                         metadata,
                         audio,
                         device,
                         return_char_alignments=False,
                     )
-                    aligned = True
-                    debug("WhisperX forced alignment complete")
+                    # Validate: check if alignment produced sane timestamps
+                    if self._alignment_is_sane(aligned_result.get("segments", [])):
+                        result = aligned_result
+                        aligned = True
+                        debug("WhisperX forced alignment complete")
+                    else:
+                        warn("WhisperX alignment produced aberrant timestamps, falling back to segment-level")
                 except Exception as e:
                     warn(f"Alignment failed, using segment-level timestamps: {e}")
 
@@ -239,6 +282,9 @@ class WhisperXBackend(TranscriptionBackend):
                 has_word_timestamps=has_words,
             ))
 
+        # Post-transcription sanity: split absurdly long segments
+        segments = self._sanitize_segment_durations(segments)
+
         info(f"WhisperX: {len(segments)} segments, "
              f"{'aligned' if aligned else 'segment-level'} timestamps, "
              f"language: {detected_lang}")
@@ -249,3 +295,72 @@ class WhisperXBackend(TranscriptionBackend):
             backend=self.name,
             duration=elapsed,
         )
+
+    # ── Post-processing helpers ───────────────────────────────────────────
+
+    @staticmethod
+    def _alignment_is_sane(aligned_segs: list[dict]) -> bool:
+        """Check if aligned segments have reasonable timestamps.
+
+        Returns False if any segment has absurd duration relative to its
+        word count (e.g. 114s for 3 words), which indicates alignment failure.
+        """
+        if not aligned_segs:
+            return True
+        for seg in aligned_segs:
+            start = seg.get("start", 0)
+            end = seg.get("end", 0)
+            duration = end - start
+            words = seg.get("words", [])
+            word_count = len(words) if words else max(1, len(seg.get("text", "").split()))
+            if word_count == 0:
+                continue
+            # Max reasonable: ~3s per word (very slow speech). Anything beyond is broken.
+            if duration > word_count * 3.0 and duration > 15.0:
+                return False
+        return True
+
+    @staticmethod
+    def _sanitize_segment_durations(segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
+        """Split segments that are absurdly long relative to their word count.
+
+        This catches cases where WhisperX produces e.g. a 114s segment for 3 words.
+        Segments exceeding ~3s/word AND > 15s total are split into per-word segments
+        (if word timestamps exist) or clamped to a reasonable duration.
+        """
+        result: list[TranscriptSegment] = []
+        for seg in segments:
+            duration = seg.end - seg.start
+            words_text = seg.text.split()
+            word_count = max(1, len(words_text))
+            max_reasonable = max(15.0, word_count * 3.0)
+
+            if duration <= max_reasonable:
+                result.append(seg)
+                continue
+
+            # Segment is aberrant
+            warn(f"WhisperX: aberrant segment {seg.start:.2f}-{seg.end:.2f} "
+                 f"({duration:.1f}s, {word_count} words) — splitting/clamping")
+
+            if seg.words and len(seg.words) >= 2:
+                # Split into individual word-level segments
+                for w in seg.words:
+                    w_dur = w.end - w.start
+                    # Also clamp individual words if needed
+                    if w_dur > 5.0:
+                        w = WordInfo(start=w.start, end=w.start + min(1.0, w_dur), word=w.word, confidence=w.confidence)
+                    result.append(TranscriptSegment(
+                        start=w.start, end=w.end, text=w.word,
+                        words=[w], confidence=w.confidence,
+                        has_word_timestamps=True,
+                    ))
+            else:
+                # No word timestamps — clamp duration to reasonable estimate
+                clamped_end = seg.start + min(word_count * 1.5, 10.0)
+                result.append(TranscriptSegment(
+                    start=seg.start, end=clamped_end, text=seg.text,
+                    words=seg.words, confidence=seg.confidence * 0.5,
+                    has_word_timestamps=seg.has_word_timestamps,
+                ))
+        return result

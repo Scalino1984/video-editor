@@ -316,8 +316,8 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 <aside class="sidebar">
   <div class="sb-tabs">
     <div class="sb-tab on" data-tab="assets" onclick="sbTab('assets')">📁 Assets</div>
+    <div class="sb-tab" data-tab="overlays" onclick="sbTab('overlays')">✨ Overlays</div>
     <div class="sb-tab" data-tab="loops" onclick="sbTab('loops')">🎬 Loops</div>
-    <div class="sb-tab" data-tab="jobs" onclick="sbTab('jobs')">📋 Jobs</div>
     <div class="sb-tab" data-tab="templates" onclick="sbTab('templates')">⚡ Quick</div>
   </div>
 
@@ -332,10 +332,11 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <div id="assetList"></div>
   </div>
 
-  <!-- Jobs Tab -->
-  <div class="sb-content" id="sbJobs" style="display:none">
-    <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">Abgeschlossene Karaoke-Jobs importieren:</div>
-    <div id="jobList"><div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">Lade Jobs...</div></div>
+  <!-- Overlays Tab -->
+  <div class="sb-content" id="sbOverlays" style="display:none">
+    <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">Overlay-Effekte (Light Leaks, Partikel, etc.):</div>
+    <div style="margin-bottom:8px"><input type="text" id="overlaySearch" placeholder="🔍 Overlay suchen..." oninput="loadOverlays(this.value)" style="width:100%;padding:5px 8px;font-size:.7rem;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text)"></div>
+    <div id="overlayList"><div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">Tab öffnen zum Laden...</div></div>
   </div>
 
   <!-- Loops Tab -->
@@ -727,6 +728,8 @@ function _resetEditorUI(){
   const propsE=document.getElementById('clipPropsEmpty');if(propsE)propsE.style.display='';
   // Reset loop video grid
   const lg=document.getElementById('loopVideoGrid');if(lg)lg.innerHTML='<div class="loop-empty">Format wählen, um passende Loop-Videos zu laden</div>';
+  // Reset overlay list
+  const ol=document.getElementById('overlayList');if(ol)ol.innerHTML='<div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">Tab öffnen zum Laden...</div>';
 }
 
 async function loadProjectData(){
@@ -760,13 +763,13 @@ async function saveProject(){
 async function edUndo(){
   if(!PID)return;
   const r=await(await fetch(B+'/api/editor/projects/'+PID+'/undo',{method:'POST'})).json();
-  if(r.success){PROJ=r.project;renderTimeline();renderAssets();toast('↩ Undo')}
+  if(r.success){PROJ=r.project;renderTimeline();renderAssets();syncMediaSources();updateSubtitleStyle();updateProps();toast('↩ Undo')}
   else toast('Nichts zum Rückgängigmachen','err')}
 
 async function edRedo(){
   if(!PID)return;
   const r=await(await fetch(B+'/api/editor/projects/'+PID+'/redo',{method:'POST'})).json();
-  if(r.success){PROJ=r.project;renderTimeline();renderAssets();toast('↪ Redo')}
+  if(r.success){PROJ=r.project;renderTimeline();renderAssets();syncMediaSources();updateSubtitleStyle();updateProps();toast('↪ Redo')}
   else toast('Nichts zum Wiederholen','err')}
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -858,10 +861,10 @@ async function addAssetToTimeline(assetId){
 function sbTab(t){
   document.querySelectorAll('.sidebar .sb-tab').forEach(e=>e.classList.toggle('on',e.dataset.tab===t));
   document.getElementById('sbAssets').style.display=t==='assets'?'':'none';
+  document.getElementById('sbOverlays').style.display=t==='overlays'?'':'none';
   document.getElementById('sbLoops').style.display=t==='loops'?'':'none';
-  document.getElementById('sbJobs').style.display=t==='jobs'?'':'none';
   document.getElementById('sbTemplates').style.display=t==='templates'?'':'none';
-  if(t==='jobs')loadJobs();
+  if(t==='overlays')loadOverlays();
   if(t==='loops')loadLoopVideos()}
 
 let _jobCache=[];
@@ -871,17 +874,51 @@ async function loadJobs(){
     const r=await(await fetch(B+'/api/library?limit=100')).json();
     const items=r.items||[];
     _jobCache=items;
-    const el=document.getElementById('jobList');
-    if(!items.length){el.innerHTML='<div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">Keine Einträge in der Library</div>';return}
-    el.innerHTML=items.map(j=>{
-      const name=j.title||j.source_filename||'?';
-      const dur=j.duration_sec>0?fmt(j.duration_sec):'';
-      return `<div class="asset-item" onclick="importJob('${j.job_id||j.id}','${esc(name)}')">
-      <div class="asset-thumb">🎤</div>
-      <div class="asset-info"><div class="asset-name">${esc(name)}</div>
-      <div class="asset-meta">${j.backend||''} · ${dur} · ${j.segments_count||0} Seg</div></div>
-      <button class="btn-s btn-sm">Import</button></div>`}).join('')
-  }catch(e){document.getElementById('jobList').innerHTML='<div style="color:var(--dim);font-size:.7rem">'+e.message+'</div>'}}
+  }catch(e){}}
+
+// ── Overlay Library ──
+let _overlayCache=[];
+async function loadOverlays(q){
+  const el=document.getElementById('overlayList');
+  try{
+    const params=new URLSearchParams({limit:'50'});
+    if(q)params.set('q',q);
+    const r=await(await fetch(B+'/api/overlays?'+params)).json();
+    const items=r.items||[];
+    _overlayCache=items;
+    if(!items.length){el.innerHTML='<div style="color:var(--dim);font-size:.7rem;text-align:center;padding:20px">'+(q?'Keine Treffer':'Keine Overlays gefunden.<br><span style="font-size:.65rem">Lege .mp4/.mov Dateien in<br><code>data/editor/overlays/</code> ab.</span>')+'</div>';return}
+    el.innerHTML=items.map(o=>{
+      const dur=o.duration_sec>0?fmt(o.duration_sec):'';
+      const alpha=o.has_alpha?'α ':'';const sz=o.file_size>0?(o.file_size/1048576).toFixed(1)+'MB':'';
+      return `<div class="asset-item" style="position:relative" title="${escAttr(o.name)}\n${o.width}×${o.height} · ${dur} · ${alpha}${o.pix_fmt}">
+        <div class="asset-thumb" style="background:#0d3320"><video src="${B}${o.preview_url}" muted loop style="width:100%;height:100%;object-fit:cover;border-radius:4px"
+          onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video></div>
+        <div class="asset-info"><div class="asset-name">${esc(o.name)}</div>
+        <div class="asset-meta">${dur} · ${o.width}×${o.height} · ${alpha}${sz}</div></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <select class="blend-sel" data-oid="${o.id}" style="font-size:.6rem;padding:2px;width:70px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px">
+            <option value="normal">Normal</option><option value="screen" selected>Screen</option>
+            <option value="addition">Addition</option><option value="multiply">Multiply</option></select>
+          <button class="btn-s btn-sm" onclick="importOverlay('${o.id}',this)" title="Overlay zum Projekt hinzufügen">+ Add</button>
+        </div></div>`}).join('')
+  }catch(e){el.innerHTML='<div style="color:var(--dim);font-size:.7rem">'+e.message+'</div>'}}
+
+async function importOverlay(oid,btn){
+  if(!PID){toast('Zuerst ein Projekt erstellen','err');return}
+  const sel=btn.parentElement.querySelector('.blend-sel');
+  const blend=sel?sel.value:'screen';
+  const old=btn.textContent;btn.textContent='⏳';btn.disabled=true;
+  try{
+    const fd=new URLSearchParams({start:'0',duration:'0',opacity:'0.7',blend_mode:blend});
+    const r=await fetch(B+'/api/overlays/'+oid+'/import/'+PID,{method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||'Import fehlgeschlagen')}
+    const d=await r.json();
+    // Reload project to show new clip
+    await loadProjectData();
+    toast('✨ Overlay importiert: '+(d.asset?.name||''));
+  }catch(e){toast(e.message,'err')}
+  finally{btn.textContent=old;btn.disabled=false}}
 
 async function openJobModal(){
   const modal=document.getElementById('jobModal');
@@ -936,7 +973,7 @@ async function importJob(jobId,name){
     try{
       const r=await(await fetch(B+'/api/editor/projects',{method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:new URLSearchParams({name:projName})})).json();
+        body:new URLSearchParams({name:projName,id:jobId})})).json();
       PID=r.id;PROJ=r;document.getElementById('projName').textContent=r.name
     }catch(e){toast('Projekt erstellen: '+e.message,'err');return}}
   try{
@@ -976,10 +1013,10 @@ function renderProjectModal(memProjs,savedProjs){
     </div>`).join('')}
   if(savedProjs.length){
     html+='<div style="font-size:.65rem;font-weight:600;color:var(--dim);text-transform:uppercase;padding:4px 12px;margin-top:8px">Gespeicherte Projekte</div>';
-    html+=savedProjs.map(p=>`<div class="job-modal-item" onclick="loadSavedProject('${esc(p.filename)}')">
+    html+=savedProjs.map(p=>`<div class="job-modal-item" onclick="loadSavedProject('${esc(p.id)}')">
       <div class="jm-icon">💾</div>
-      <div class="jm-info"><div class="jm-name">${esc(p.name||p.filename)}</div>
-        <div class="jm-meta">${p.filename} · ${p.size_kb||'?'}KB · ${p.date||''}</div></div>
+      <div class="jm-info"><div class="jm-name">${esc(p.name||p.id)}</div>
+        <div class="jm-meta">${p.clips||0} Clips · ${p.size_kb||'?'}KB · ${p.date||''}</div></div>
     </div>`).join('')}
   if(!html)html='<div style="color:var(--dim);font-size:.75rem;text-align:center;padding:30px">Keine Projekte vorhanden</div>';
   el.innerHTML=html}
@@ -989,13 +1026,13 @@ async function switchProject(pid){
   PID=pid;await loadProjectData();updateProps();
   toast('Projekt geladen: '+PROJ.name)}
 
-async function loadSavedProject(filename){
+async function loadSavedProject(pid){
   closeProjectModal();
   try{
-    const r=await(await fetch(B+'/api/editor/load-project/'+encodeURIComponent(filename),{method:'POST'})).json();
+    const r=await(await fetch(B+'/api/editor/load-project/'+encodeURIComponent(pid),{method:'POST'})).json();
     PID=r.id;PROJ=r;
     document.getElementById('projName').textContent=r.name;
-    renderAssets();renderTimeline();updateProps();syncMediaSources();
+    renderAssets();renderTimeline();updateProps();syncMediaSources();loadSubtitleCues();updateSubtitleStyle();
     toast('Projekt geladen: '+r.name)
   }catch(e){toast('Laden: '+e.message,'err')}}
 
@@ -1614,7 +1651,11 @@ function syncMediaSources(){
       if(vid.dataset.curSrc!==src){
         vid.src=src;vid.dataset.curSrc=src;vid.loop=true;vid.load();
         vid.style.display='';document.getElementById('previewEmpty').style.display='none'}
-      vid.loop=true}} // always ensure loop
+      vid.loop=true}
+  } else {
+    // No video/overlay clip — clear preview
+    if(vid.dataset.curSrc){vid.pause();vid.removeAttribute('src');vid.load();vid.dataset.curSrc='';vid.style.display='none';
+      if(!(PROJ.clips||[]).some(c=>c.track==='audio'||c.track==='subtitle'))document.getElementById('previewEmpty').style.display='block'}}
   // Find first audio clip
   const ac=(PROJ.clips||[]).find(c=>c.track==='audio');
   if(ac){
@@ -1622,6 +1663,9 @@ function syncMediaSources(){
     if(asset&&asset.type==='audio'){
       const src=B+'/api/editor/projects/'+PID+'/assets/'+ac.asset_id+'/file';
       if(au.dataset.curSrc!==src){au.src=src;au.dataset.curSrc=src;au.load()}}}
+  else {
+    // No audio clip — clear audio
+    if(au.dataset.curSrc){au.pause();au.removeAttribute('src');au.load();au.dataset.curSrc=''}}
   // Load subtitle cues for preview overlay
   loadSubtitleCues();
 }
@@ -1799,13 +1843,18 @@ function _bsearchCue(t){
     else hi=mid-1}
   return res>=0&&t<=_subtitleCues[res].end?res:-1}
 
+function _clearSubOverlay(){
+  const el=document.getElementById('subOverlay');
+  if(el){el.innerHTML='';el.className='sub-overlay'}
+  _lastSubIdx=-1;_preloadedIdx=-1}
+
 async function loadSubtitleCues(){
   _subtitleCues=[];_subBpm=0;_subBeatInterval=0;
-  if(!PROJ||!PID)return;
+  if(!PROJ||!PID){_clearSubOverlay();return}
   const subClip=(PROJ.clips||[]).find(c=>c.track==='subtitle');
-  if(!subClip){console.log('[subs] No subtitle clip on timeline');return}
+  if(!subClip){console.log('[subs] No subtitle clip on timeline');_clearSubOverlay();return}
   const asset=PROJ.assets[subClip.asset_id];
-  if(!asset){console.warn('[subs] Asset not found for clip',subClip.asset_id);return}
+  if(!asset){console.warn('[subs] Asset not found for clip',subClip.asset_id);_clearSubOverlay();return}
   try{
     const url=B+'/api/editor/projects/'+PID+'/assets/'+subClip.asset_id+'/file';
     console.log('[subs] Fetching',url);
@@ -2257,6 +2306,24 @@ dz.addEventListener('drop',ev=>{ev.preventDefault();dz.style.borderColor='';
 document.getElementById('previewEmpty').style.display='block';
 drawRuler();
 window.addEventListener('resize',()=>{if(PROJ)updatePreviewAspect()});
+
+// ── SSE: Live-Sync für Untertitel-Änderungen ──
+let _editorSSE=null;
+function connectEditorSSE(){
+  if(_editorSSE)_editorSSE.close();
+  _editorSSE=new EventSource(B+'/api/events');
+  _editorSSE.onmessage=e=>{
+    try{
+      const d=JSON.parse(e.data);
+      if(d.type==='subtitle_updated'&&PID&&d.job_id===PID){
+        console.log('[sse] Untertitel aktualisiert — lade Cues neu');
+        loadSubtitleCues();
+      }
+    }catch(ex){}
+  };
+  _editorSSE.onerror=()=>setTimeout(connectEditorSSE,5000);
+}
+connectEditorSSE();
 
 // Read ?pid= from URL, else load last active project
 (async()=>{

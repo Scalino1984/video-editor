@@ -87,3 +87,7 @@ class TranscriptionBackend(ABC):
 
     def check_available(self) -> tuple[bool, str]:
         return True, "OK"
+
+    def unload(self) -> None:
+        """Release model from memory. Override in backends that cache models."""
+        pass

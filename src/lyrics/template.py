@@ -28,6 +28,7 @@ class TemplateMode(str, Enum):
     source_of_truth = "lyrics_source_of_truth"
     layout_only = "layout_only_reflow"
     hybrid = "hybrid_mark_differences"
+    correct_words_only = "correct_words_only"
 
 
 class MatchMode(str, Enum):

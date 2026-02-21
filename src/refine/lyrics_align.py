@@ -230,8 +230,9 @@ def _find_best_match_start(
     best_idx = None
     best_score = 0.0
 
-    # Search window: from current position to some lookahead
-    search_end = min(len(all_words), start_from + len(all_words) // 2 + 50)
+    # Search window: capped to avoid O(n²) when corpus is large
+    max_window = max(50, len(target_tokens) * 3)
+    search_end = min(len(all_words), start_from + max_window)
 
     for i in range(start_from, search_end):
         w_norm = _normalize_word(all_words[i].word)
@@ -284,6 +285,132 @@ def _similarity(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
     return SequenceMatcher(None, a, b).ratio()
+
+
+def correct_words_from_lyrics(
+    segments: list[TranscriptSegment],
+    lyrics_text: list[str],
+    similarity_threshold: float = 0.4,
+) -> list[TranscriptSegment]:
+    """Correct ASR word text using lyrics as reference — keep segmentation & timing.
+
+    Unlike align_lyrics_to_segments(), this mode does NOT restructure segments.
+    It only walks through all ASR words and all lyrics words in parallel,
+    replacing each ASR word's text with the matching lyrics word when the
+    similarity is high enough.
+
+    Args:
+        segments: Transcribed segments (untouched structure)
+        lyrics_text: Lines from lyrics file (will be flattened to word list)
+        similarity_threshold: Minimum similarity to accept a correction
+
+    Returns:
+        Same segment list with corrected word and segment texts
+    """
+    # Flatten lyrics into a word list
+    lyrics_words = []
+    for line in lyrics_text:
+        for w in line.split():
+            if w.strip():
+                lyrics_words.append(w.strip())
+
+    if not lyrics_words:
+        warn("correct_words_from_lyrics: no lyrics words available")
+        return segments
+
+    # Flatten all ASR words
+    all_asr_words: list[tuple[int, int, WordInfo]] = []  # (seg_idx, word_idx, word)
+    for si, seg in enumerate(segments):
+        if seg.words:
+            for wi, w in enumerate(seg.words):
+                all_asr_words.append((si, wi, w))
+
+    if not all_asr_words:
+        # No word-level data — fall back to segment-level correction
+        return _correct_segment_texts(segments, lyrics_words, similarity_threshold)
+
+    info(f"Word correction: {len(all_asr_words)} ASR words ← {len(lyrics_words)} lyrics words")
+
+    lyr_idx = 0
+    corrections = 0
+
+    for si, wi, asr_word in all_asr_words:
+        if lyr_idx >= len(lyrics_words):
+            break
+
+        asr_norm = _normalize_word(asr_word.word)
+        if not asr_norm:
+            continue
+
+        # Try to find a matching lyrics word within a small window
+        best_offset = None
+        best_score = 0.0
+        search_limit = min(lyr_idx + 5, len(lyrics_words))
+
+        for offset in range(lyr_idx, search_limit):
+            lyr_norm = _normalize_word(lyrics_words[offset])
+            score = _similarity(asr_norm, lyr_norm)
+            if score > best_score:
+                best_score = score
+                best_offset = offset
+
+        if best_offset is not None and best_score >= similarity_threshold:
+            # Replace ASR word text with lyrics word (preserves timing)
+            if best_score < 1.0:
+                segments[si].words[wi] = WordInfo(
+                    start=asr_word.start,
+                    end=asr_word.end,
+                    word=lyrics_words[best_offset],
+                    confidence=asr_word.confidence,
+                )
+                corrections += 1
+            lyr_idx = best_offset + 1
+        else:
+            # No good match — skip this ASR word, don't advance lyrics pointer
+            pass
+
+    # Rebuild segment texts from corrected words
+    for seg in segments:
+        if seg.words:
+            seg.text = " ".join(w.word for w in seg.words)
+
+    info(f"Word correction complete: {corrections} words corrected")
+    return segments
+
+
+def _correct_segment_texts(
+    segments: list[TranscriptSegment],
+    lyrics_words: list[str],
+    threshold: float,
+) -> list[TranscriptSegment]:
+    """Fallback: correct segment-level text when no word timestamps exist."""
+    lyr_idx = 0
+    for seg in segments:
+        seg_tokens = seg.text.split()
+        new_tokens = []
+        for token in seg_tokens:
+            if lyr_idx >= len(lyrics_words):
+                new_tokens.append(token)
+                continue
+            t_norm = _normalize_word(token)
+            l_norm = _normalize_word(lyrics_words[lyr_idx])
+            if _word_match(t_norm, l_norm, threshold):
+                new_tokens.append(lyrics_words[lyr_idx])
+                lyr_idx += 1
+            else:
+                # Look ahead in lyrics for a match
+                found = False
+                for la in range(1, min(4, len(lyrics_words) - lyr_idx)):
+                    la_norm = _normalize_word(lyrics_words[lyr_idx + la])
+                    if _word_match(t_norm, la_norm, threshold):
+                        new_tokens.append(lyrics_words[lyr_idx + la])
+                        lyr_idx = lyr_idx + la + 1
+                        found = True
+                        break
+                if not found:
+                    new_tokens.append(token)
+        seg.text = " ".join(new_tokens)
+    return segments
 
 
 def _build_line_words(

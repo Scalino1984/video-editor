@@ -1070,3 +1070,160 @@ class TestCoverageGapDetection:
         filtered = [s for s in intro_segs if s.end <= gap_sec + 1.0]
         assert len(filtered) == 3
         assert filtered[-1].text == "Just before gap"
+
+
+# ── WhisperX CPU safety + segment sanity ─────────────────────────────
+
+
+class TestWhisperXCPUDowngrade:
+    """Test auto-downgrade of large models on CPU."""
+
+    def test_cpu_model_downgrade_map(self):
+        from src.transcription.whisperx_backend import WhisperXBackend
+        assert WhisperXBackend._CPU_MODEL_DOWNGRADE["large-v3"] == "medium"
+        assert WhisperXBackend._CPU_MODEL_DOWNGRADE["large-v2"] == "medium"
+        assert "small" not in WhisperXBackend._CPU_MODEL_DOWNGRADE
+
+    def test_small_model_not_downgraded(self):
+        from src.transcription.whisperx_backend import WhisperXBackend
+        assert "small" not in WhisperXBackend._CPU_MODEL_DOWNGRADE
+        assert "base" not in WhisperXBackend._CPU_MODEL_DOWNGRADE
+        assert "medium" not in WhisperXBackend._CPU_MODEL_DOWNGRADE
+
+
+class TestWhisperXAlignmentValidation:
+    """Test _alignment_is_sane detects aberrant timestamps."""
+
+    def test_sane_segments(self):
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            {"start": 0.0, "end": 3.0, "text": "Hello world", "words": [{"word": "Hello"}, {"word": "world"}]},
+            {"start": 3.5, "end": 6.0, "text": "Good morning", "words": [{"word": "Good"}, {"word": "morning"}]},
+        ]
+        assert WhisperXBackend._alignment_is_sane(segs) is True
+
+    def test_aberrant_segment_detected(self):
+        """114s for 3 words should be detected as insane."""
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            {"start": 0.0, "end": 114.11, "text": "Wer bleibt oben",
+             "words": [{"word": "Wer"}, {"word": "bleibt"}, {"word": "oben"}]},
+        ]
+        assert WhisperXBackend._alignment_is_sane(segs) is False
+
+    def test_borderline_segment_accepted(self):
+        """3 words in 9s (3s/word) is within threshold."""
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            {"start": 0.0, "end": 9.0, "text": "Wer bleibt oben",
+             "words": [{"word": "Wer"}, {"word": "bleibt"}, {"word": "oben"}]},
+        ]
+        assert WhisperXBackend._alignment_is_sane(segs) is True
+
+    def test_long_but_many_words_accepted(self):
+        """30s with 15 words is fine (2s/word)."""
+        from src.transcription.whisperx_backend import WhisperXBackend
+        words = [{"word": f"w{i}"} for i in range(15)]
+        segs = [{"start": 0.0, "end": 30.0, "text": " ".join(w["word"] for w in words), "words": words}]
+        assert WhisperXBackend._alignment_is_sane(segs) is True
+
+    def test_empty_segments_accepted(self):
+        from src.transcription.whisperx_backend import WhisperXBackend
+        assert WhisperXBackend._alignment_is_sane([]) is True
+
+
+class TestWhisperXSegmentSanitize:
+    """Test _sanitize_segment_durations splits/clamps aberrant segments."""
+
+    def test_normal_segments_unchanged(self):
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            TranscriptSegment(start=0.0, end=3.0, text="Hello world", words=[
+                WordInfo(start=0.0, end=1.5, word="Hello"),
+                WordInfo(start=1.5, end=3.0, word="world"),
+            ]),
+        ]
+        result = WhisperXBackend._sanitize_segment_durations(segs)
+        assert len(result) == 1
+        assert result[0].start == 0.0
+        assert result[0].end == 3.0
+
+    def test_aberrant_segment_split_by_words(self):
+        """114s segment with 3 words should be split into 3 segments."""
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            TranscriptSegment(start=0.0, end=114.11, text="Wer bleibt oben", words=[
+                WordInfo(start=0.0, end=0.5, word="Wer"),
+                WordInfo(start=0.5, end=1.2, word="bleibt"),
+                WordInfo(start=1.2, end=2.0, word="oben"),
+            ]),
+        ]
+        result = WhisperXBackend._sanitize_segment_durations(segs)
+        assert len(result) == 3
+        assert result[0].text == "Wer"
+        assert result[1].text == "bleibt"
+        assert result[2].text == "oben"
+        # Total duration of split segments should be reasonable
+        total = sum(s.end - s.start for s in result)
+        assert total < 10.0
+
+    def test_aberrant_segment_clamped_without_words(self):
+        """Aberrant segment without word timestamps gets clamped."""
+        from src.transcription.base import TranscriptSegment
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            TranscriptSegment(start=0.0, end=114.11, text="Wer bleibt oben", words=[]),
+        ]
+        result = WhisperXBackend._sanitize_segment_durations(segs)
+        assert len(result) == 1
+        assert result[0].end < 15.0  # clamped
+        assert result[0].confidence < 0.85 * 0.6  # reduced confidence
+
+    def test_word_level_timestamp_also_clamped(self):
+        """Individual words with insane timestamps are also clamped."""
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            TranscriptSegment(start=0.0, end=120.0, text="Wer bleibt", words=[
+                WordInfo(start=0.0, end=60.0, word="Wer"),
+                WordInfo(start=60.0, end=120.0, word="bleibt"),
+            ]),
+        ]
+        result = WhisperXBackend._sanitize_segment_durations(segs)
+        assert len(result) == 2
+        # Individual word segments should be clamped to max 5s
+        for s in result:
+            assert (s.end - s.start) <= 5.0
+
+    def test_mixed_good_and_bad_segments(self):
+        """Only aberrant segments are affected, good ones pass through."""
+        from src.transcription.base import TranscriptSegment, WordInfo
+        from src.transcription.whisperx_backend import WhisperXBackend
+        segs = [
+            TranscriptSegment(start=0.0, end=100.0, text="Bad segment", words=[
+                WordInfo(start=0.0, end=1.0, word="Bad"),
+                WordInfo(start=1.0, end=2.0, word="segment"),
+            ]),
+            TranscriptSegment(start=100.0, end=103.0, text="Good segment", words=[
+                WordInfo(start=100.0, end=101.5, word="Good"),
+                WordInfo(start=101.5, end=103.0, word="segment"),
+            ]),
+        ]
+        result = WhisperXBackend._sanitize_segment_durations(segs)
+        assert len(result) == 3  # bad=2 words + good=1 segment
+        assert result[-1].text == "Good segment"
+        assert result[-1].start == 100.0
+
+
+class TestWhisperXThreadLimits:
+    """Test CT2 thread env vars are set."""
+
+    def test_ct2_env_vars_set(self):
+        import os
+        from src.transcription.whisperx_backend import _apply_thread_limits
+        _apply_thread_limits(3)
+        assert os.environ.get("CT2_INTER_THREADS") == "3"
+        assert os.environ.get("CT2_INTRA_THREADS") == "3"
+        assert os.environ.get("OMP_NUM_THREADS") == "3"

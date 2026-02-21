@@ -99,16 +99,26 @@ class Database:
         self._executor.shutdown(wait=False)
 
 
-# ── Global DB cache per job ───────────────────────────────────────────────────
+# ── Global DB cache per job (LRU-bounded) ───────────────────────────────────────
 
+_MAX_OPEN_DBS = 5
 _dbs: dict[str, Database] = {}
 
 
 def get_db(job_id: str, output_dir: Path) -> Database:
-    """Get or create a Database for a job."""
-    if job_id not in _dbs:
-        db_path = output_dir / job_id / ".chat_history.sqlite"
-        _dbs[job_id] = Database.connect(db_path)
+    """Get or create a Database for a job (LRU-bounded)."""
+    if job_id in _dbs:
+        # Move to end (most recently used)
+        _dbs[job_id] = _dbs.pop(job_id)
+        return _dbs[job_id]
+    # Evict oldest if at capacity
+    while len(_dbs) >= _MAX_OPEN_DBS:
+        oldest_id, oldest_db = next(iter(_dbs.items()))
+        oldest_db.close()
+        del _dbs[oldest_id]
+        debug(f"Chat DB evicted: {oldest_id}")
+    db_path = output_dir / job_id / ".chat_history.sqlite"
+    _dbs[job_id] = Database.connect(db_path)
     return _dbs[job_id]
 
 
