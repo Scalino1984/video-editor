@@ -559,6 +559,94 @@ async def search_replace_segments(job_id: str, req: SearchReplace):
     return {"replaced_in_segments": count}
 
 
+# ── Word Timeline / Remap ────────────────────────────────────────────────────
+
+@router.post("/jobs/{job_id}/segments/remap-words")
+async def remap_words(job_id: str, edits: dict[str, str] = Body(...)):
+    """Remap words between segments using the word timeline SSOT.
+
+    Body: { "segment_index": "new text", ... }
+    If all words exist in the timeline, performs remap-only (no re-alignment).
+    Returns action taken and updated segments.
+    """
+    from src.refine.word_timeline import (
+        build_timeline_from_segments, process_segment_edit,
+        save_timeline, load_timeline, compute_metrics,
+    )
+    from src.transcription.base import TranscriptSegment
+
+    tasks.push_undo(job_id)
+    p, data = _load_segs(job_id)
+    job_dir = p.parent
+
+    # Load or build word timeline
+    timeline = load_timeline(job_dir)
+    if timeline is None:
+        segments = [TranscriptSegment.from_dict(s) for s in data]
+        timeline = build_timeline_from_segments(segments)
+
+    # Parse edits: string keys → int segment indices
+    edited: dict[int, str] = {}
+    for k, v in edits.items():
+        try:
+            idx = int(k)
+        except ValueError:
+            raise HTTPException(400, f"Invalid segment index: {k}")
+        if idx < 0 or idx >= len(data):
+            raise HTTPException(400, f"Segment index {idx} out of range")
+        edited[idx] = v
+
+    result = process_segment_edit(data, timeline, edited)
+
+    if result.action == "remap":
+        save_timeline(result.timeline, job_dir)
+        _save_segs(p, result.segments, job_id)
+
+    metrics = compute_metrics(result.timeline)
+    return {
+        "action": result.action,
+        "confidence": round(result.confidence, 3),
+        "needs_review": result.needs_review,
+        "metrics": metrics.to_dict(),
+        "details": result.details,
+    }
+
+
+@router.get("/jobs/{job_id}/word-timeline")
+async def get_word_timeline(job_id: str):
+    """Get the word timeline for a job (if available)."""
+    from src.refine.word_timeline import load_timeline, compute_metrics
+
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
+
+    timeline = load_timeline(job_dir)
+    if timeline is None:
+        raise HTTPException(404, "No word timeline found")
+
+    metrics = compute_metrics(timeline)
+    return {"timeline": timeline.to_dict(), "metrics": metrics.to_dict()}
+
+
+@router.post("/jobs/{job_id}/word-timeline/build")
+async def build_word_timeline(job_id: str, generate_syllables: bool = False):
+    """Build word timeline from current segments."""
+    from src.refine.word_timeline import build_timeline_from_segments, save_timeline, compute_metrics
+    from src.transcription.base import TranscriptSegment
+
+    _, data = _load_segs(job_id)
+    job_dir = (tasks.OUTPUT_DIR / job_id).resolve()
+    if not job_dir.is_relative_to(tasks.OUTPUT_DIR.resolve()):
+        raise HTTPException(400, "Invalid job_id")
+
+    segments = [TranscriptSegment.from_dict(s) for s in data]
+    timeline = build_timeline_from_segments(segments, generate_syllables=generate_syllables)
+    save_timeline(timeline, job_dir)
+    metrics = compute_metrics(timeline)
+    return {"status": "built", "metrics": metrics.to_dict()}
+
+
 # ── Dictionary ────────────────────────────────────────────────────────────────
 
 @router.get("/dictionary")
