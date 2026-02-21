@@ -1,4 +1,7 @@
-r"""Karaoke ASS tag generation (\k, \kf, \ko)."""
+r"""Karaoke ASS tag generation (\k, \kf, \ko).
+
+Supports word-level and syllable-level progressive coloring.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +40,42 @@ def generate_karaoke_line(segment: TranscriptSegment, mode: str = "kf",
         # add space between words (but not after last)
         if i < len(segment.words) - 1:
             parts.append(" ")
+
+    return "".join(parts)
+
+
+def generate_syllable_karaoke_line(syllables: list, mode: str = "kf",
+                                   highlight_color: str = "") -> str:
+    r"""Generate ASS karaoke-tagged text from SyllableTokens.
+
+    Each syllable becomes its own \k unit for fine-grained progressive fill.
+    Expects syllable objects with start_ms, end_ms, text, word_id attributes.
+    """
+    if not syllables:
+        return ""
+
+    tag = f"\\{mode}"
+    parts: list[str] = []
+
+    color_tag = ""
+    if highlight_color and mode != "ko":
+        color_tag = f"\\1c{highlight_color}"
+
+    prev_word_id = None
+    for i, syl in enumerate(syllables):
+        dur_ms = max(10, syl.end_ms - syl.start_ms)
+        dur_cs = max(1, round(dur_ms / 10))
+
+        # Add space between words (detect word boundary by word_id change)
+        if prev_word_id is not None and syl.word_id != prev_word_id:
+            parts.append(" ")
+
+        if i == 0 and color_tag:
+            parts.append(f"{{{tag}{dur_cs}{color_tag}}}{syl.text}")
+        else:
+            parts.append(f"{{{tag}{dur_cs}}}{syl.text}")
+
+        prev_word_id = syl.word_id
 
     return "".join(parts)
 
