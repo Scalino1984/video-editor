@@ -43,7 +43,9 @@ def _cleanup_failed_output(job_id: str) -> None:
             return
         # Only audio files (orphaned uploads) → delete
         if all(f.is_file() and f.suffix.lower() in _AUDIO_EXTS for f in files):
-            shutil.rmtree(d, ignore_errors=True)
+            def _on_error(func, path, exc_info):
+                warn(f"[{job_id}] Cleanup rmtree error: {path} — {exc_info[1]}")
+            shutil.rmtree(d, onexc=lambda fn, p, e: _on_error(fn, p, (type(e), e, None)))
             debug(f"[{job_id}] Cleaned up orphan-audio output dir ({len(files)} files)")
     except Exception as exc:
         debug(f"[{job_id}] Cleanup failed: {exc}")

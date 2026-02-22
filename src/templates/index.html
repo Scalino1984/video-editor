@@ -1133,7 +1133,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 </table>
 <p>Du kannst auch frei chatten — die AI hat vollen Zugriff auf alle Segmente und kann sie direkt bearbeiten.</p>
 
-<h3>� Projektordner</h3>
+<h3>📂 Projektordner</h3>
 <p>Jede fertige Transkription wird automatisch als Projekt gespeichert. Über den <b>📂</b>-Button im Header öffnet sich der Projektordner:</p>
 <table class="htable">
 <tr><th>Aktion</th><th>Beschreibung</th></tr>
@@ -1265,13 +1265,8 @@ const j=await r.json();if(r.ok){toast('Job gestartet'+(lyricsFile?' (mit Lyrics)
 
 // ── Jobs ──
 function startPoll(){if(poll)clearInterval(poll);poll=setInterval(refreshJobs,2500);refreshJobs()}
-let _lastCompletedIds=new Set();
 async function refreshJobs(){try{const jobs=await(await fetch(B+'/api/jobs')).json();rJL(jobs);
 if(aJobId){const j=jobs.find(j=>j.job_id===aJobId);if(j)rDetail(j)}
-// Refresh saved projects when new jobs complete
-const nowDone=new Set(jobs.filter(j=>j.status==='completed').map(j=>j.job_id));
-if([...nowDone].some(id=>!_lastCompletedIds.has(id))){/* projects refreshed via modal */}
-_lastCompletedIds=nowDone;
 if(!jobs.some(j=>!['completed','failed','cancelled'].includes(j.status))&&poll){clearInterval(poll);poll=null}}catch(e){}}
 function rJL(jobs){const el=document.getElementById('jl');if(!jobs.length){el.innerHTML='<div style="font-size:.7rem;color:var(--dim);padding:5px">Keine Jobs</div>';return}
 const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌',cancelled:'⛔'};
@@ -2204,7 +2199,7 @@ if(it.editor_clips>0) metaParts.push(it.editor_clips+' clips');
 if(rev) metaParts.push(rev);
 metaParts.push(ds);
 const div=document.createElement('div');div.className='lib-item';
-div.innerHTML=`<div class="li-title" id="lt-${it.id}" title="${esc(it.source_filename||it.name)}">${tbadge}${esc(it.name)}</div>
+div.innerHTML=`<div class="li-title" id="lt-${it.id}" data-name="${esc(it.name)}" title="${esc(it.source_filename||it.name)}">${tbadge}${esc(it.name)}</div>
 <div class="li-meta">${metaParts.join(' · ')}</div>
 <div class="li-acts">
 <button class="li-act" onclick="event.stopPropagation();renameLib('${it.id}')" title="Umbenennen">✏️</button>
@@ -2344,17 +2339,19 @@ if(aJobId===id){aJobId=null;_clearSession();document.getElementById('jd').style.
 
 async function renameLib(id){
   const nameEl=document.getElementById('lt-'+id);if(!nameEl)return;
-  const oldName=nameEl.textContent.replace(/^[🎤🎬]\+?[🎤🎬]?\s*/,'');
+  const oldHTML=nameEl.innerHTML;
+  const oldName=nameEl.getAttribute('data-name')||nameEl.textContent.replace(/^[🎤🎬+\s]+/,'').trim();
   const inp=document.createElement('input');inp.type='text';inp.value=oldName;inp.className='li-rename';
   nameEl.replaceWith(inp);inp.focus();inp.select();
+  const restore=()=>{const sp=document.createElement('div');sp.className='li-title';sp.id='lt-'+id;sp.innerHTML=oldHTML;inp.replaceWith(sp)};
   const finish=async()=>{const nv=inp.value.trim();
-    if(!nv||nv===oldName){const sp=document.createElement('div');sp.className='li-title';sp.id='lt-'+id;sp.textContent=oldName;inp.replaceWith(sp);return}
+    if(!nv||nv===oldName){restore();return}
     try{await fetch(B+'/api/projects/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
     toast('Umbenannt → '+nv);loadProjectFolder();
     if(aJobId===id){const bn=document.getElementById('projBannerName');if(bn)bn.textContent=nv;
       document.getElementById('dF').textContent=nv}}
-    catch(e){toast('Fehler beim Umbenennen','err');loadProjectFolder()}};
-  inp.onblur=finish;inp.onkeydown=e=>{if(e.key==='Enter')finish();if(e.key==='Escape'){const sp=document.createElement('div');sp.className='li-title';sp.id='lt-'+id;sp.textContent=oldName;inp.replaceWith(sp)}}}
+    catch(e){toast('Fehler beim Umbenennen','err')}};
+  inp.onblur=finish;inp.onkeydown=e=>{if(e.key==='Enter')finish();if(e.key==='Escape')restore()}}
 
 // ── Video Render ──
 async function startRender(){

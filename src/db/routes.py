@@ -70,7 +70,6 @@ async def list_unified_projects(
     offset: int = Query(0, ge=0),
 ) -> UnifiedProjectsResponse:
     """Unified project listing: merges Karaoke + Editor projects."""
-    import time as _time
     from src.api.karaoke_project import ensure_project, OUTPUT_DIR
 
     if not OUTPUT_DIR.is_dir():
@@ -174,6 +173,8 @@ class UnifiedRenameRequest(BaseModel):
 @router.patch("/api/projects/{project_id}")
 async def rename_unified_project(project_id: str, body: UnifiedRenameRequest):
     """Rename a unified project (updates project.json and/or editor.json)."""
+    if "/" in project_id or "\\" in project_id or project_id in (".", ".."):
+        raise HTTPException(400, "Invalid project ID")
     from src.api.karaoke_project import OUTPUT_DIR
 
     d = OUTPUT_DIR / project_id
@@ -218,6 +219,8 @@ async def rename_unified_project(project_id: str, body: UnifiedRenameRequest):
 @router.delete("/api/projects/{project_id}")
 async def delete_unified_project(project_id: str):
     """Delete a unified project (removes entire output directory)."""
+    if "/" in project_id or "\\" in project_id or project_id in (".", ".."):
+        raise HTTPException(400, "Invalid project ID")
     from src.api.karaoke_project import OUTPUT_DIR
 
     d = OUTPUT_DIR / project_id
@@ -225,12 +228,9 @@ async def delete_unified_project(project_id: str):
         raise HTTPException(404, "Project not found")
 
     # Safety: only delete inside output dir
-    try:
-        d_resolved = d.resolve()
-        out_resolved = OUTPUT_DIR.resolve()
-        if not str(d_resolved).startswith(str(out_resolved)):
-            raise HTTPException(400, "Invalid project path")
-    except Exception:
+    d_resolved = d.resolve()
+    out_resolved = OUTPUT_DIR.resolve()
+    if not d_resolved.is_relative_to(out_resolved):
         raise HTTPException(400, "Invalid project path")
 
     shutil.rmtree(d, ignore_errors=True)
