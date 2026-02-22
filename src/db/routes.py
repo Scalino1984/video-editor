@@ -1,5 +1,6 @@
-"""Library & Video API routes.
+"""Library, Unified Projects & Video API routes.
 
+- /api/projects — Unified project listing (Karaoke + Editor merged)
 - /api/library/* — Transcriptions Library (CRUD, search, pagination)
 - /api/render-video — Video rendering job (file upload or source_job_id)
 - /api/render/{job_id}/download — Download rendered video
@@ -25,6 +26,216 @@ from src.api.models import JobStatus, JobResult
 from src.utils.logging import info, warn, error, debug
 
 router = APIRouter(tags=["library", "video"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  UNIFIED PROJECTS — Merges Karaoke (project.json) + Editor (editor.json)
+#  Source of truth: data/output/*/{project.json, editor.json}
+# ══════════════════════════════════════════════════════════════════════════════
+
+class UnifiedProject(BaseModel):
+    id: str
+    name: str
+    type: str  # "karaoke" | "editor" | "both"
+    has_karaoke: bool
+    has_editor: bool
+    created_at: str
+    updated_at: str
+    # Karaoke fields (None if no project.json)
+    source_filename: str | None = None
+    language: str | None = None
+    backend: str | None = None
+    duration_sec: float = 0.0
+    bpm: float = 0.0
+    segments_count: int = 0
+    has_word_timestamps: bool = False
+    needs_review: int = 0
+    avg_confidence: float = 0.0
+    tags: list[str] = []
+    # Editor fields (None if no editor.json)
+    editor_clips: int = 0
+    editor_assets: int = 0
+    editor_size_kb: float = 0.0
+
+
+class UnifiedProjectsResponse(BaseModel):
+    items: list[UnifiedProject]
+    total: int
+
+
+@router.get("/api/projects")
+async def list_unified_projects(
+    q: str = Query("", description="Search name/filename/backend"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> UnifiedProjectsResponse:
+    """Unified project listing: merges Karaoke + Editor projects."""
+    from src.api.karaoke_project import ensure_project, OUTPUT_DIR
+
+    if not OUTPUT_DIR.is_dir():
+        return UnifiedProjectsResponse(items=[], total=0)
+
+    items: list[dict[str, Any]] = []
+    q_lower = q.lower().strip()
+
+    for d in OUTPUT_DIR.iterdir():
+        if not d.is_dir():
+            continue
+
+        has_karaoke = (d / "project.json").exists() or (d / "segments.json").exists()
+        has_editor = (d / "editor.json").exists()
+
+        if not has_karaoke and not has_editor:
+            continue
+
+        entry: dict[str, Any] = {
+            "id": d.name,
+            "has_karaoke": has_karaoke,
+            "has_editor": has_editor,
+        }
+
+        name = d.name
+        created_at = datetime.fromtimestamp(d.stat().st_mtime, tz=timezone.utc).isoformat()
+        updated_at = created_at
+
+        # Load karaoke project data
+        if has_karaoke:
+            proj = ensure_project(d.name)
+            if proj:
+                name = proj.name
+                created_at = proj.created_at
+                updated_at = proj.updated_at
+                entry.update(
+                    source_filename=proj.source_filename,
+                    language=proj.language_detected,
+                    backend=proj.backend_used,
+                    duration_sec=proj.duration_sec,
+                    bpm=proj.bpm,
+                    segments_count=proj.segments_count,
+                    has_word_timestamps=proj.has_word_timestamps,
+                    needs_review=proj.needs_review,
+                    avg_confidence=proj.avg_confidence,
+                    tags=proj.tags,
+                )
+
+        # Load editor project data
+        if has_editor:
+            try:
+                ed = json.loads((d / "editor.json").read_text(encoding="utf-8"))
+                # Use editor name only if no karaoke name
+                if not has_karaoke:
+                    name = ed.get("name", name)
+                entry.update(
+                    editor_clips=len(ed.get("clips", [])),
+                    editor_assets=len(ed.get("assets", {})),
+                    editor_size_kb=round((d / "editor.json").stat().st_size / 1024, 1),
+                )
+                # Use editor mtime as updated_at if newer
+                ed_mtime = datetime.fromtimestamp(
+                    (d / "editor.json").stat().st_mtime, tz=timezone.utc
+                ).isoformat()
+                if ed_mtime > updated_at:
+                    updated_at = ed_mtime
+            except Exception:
+                pass
+
+        entry["name"] = name
+        entry["created_at"] = created_at
+        entry["updated_at"] = updated_at
+
+        # Classify type
+        if has_karaoke and has_editor:
+            entry["type"] = "both"
+        elif has_editor:
+            entry["type"] = "editor"
+        else:
+            entry["type"] = "karaoke"
+
+        # Search filter
+        if q_lower:
+            searchable = f"{name} {entry.get('source_filename', '')} {entry.get('backend', '')} {entry.get('language', '')}".lower()
+            if q_lower not in searchable:
+                continue
+
+        items.append(entry)
+
+    # Sort newest first
+    items.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    total = len(items)
+    page = items[offset:offset + limit]
+    return UnifiedProjectsResponse(items=[UnifiedProject(**it) for it in page], total=total)
+
+
+class UnifiedRenameRequest(BaseModel):
+    name: str
+
+
+@router.patch("/api/projects/{project_id}")
+async def rename_unified_project(project_id: str, body: UnifiedRenameRequest):
+    """Rename a unified project (updates project.json and/or editor.json)."""
+    if "/" in project_id or "\\" in project_id or project_id in (".", ".."):
+        raise HTTPException(400, "Invalid project ID")
+    from src.api.karaoke_project import OUTPUT_DIR
+
+    d = OUTPUT_DIR / project_id
+    if not d.is_dir():
+        raise HTTPException(404, "Project not found")
+
+    new_name = body.name.strip()
+    if not new_name:
+        raise HTTPException(400, "Name must not be empty")
+
+    updated = False
+
+    # Update project.json (karaoke)
+    pj = d / "project.json"
+    if pj.exists():
+        try:
+            data = json.loads(pj.read_text(encoding="utf-8"))
+            data["name"] = new_name
+            data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            pj.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            updated = True
+        except Exception as exc:
+            warn(f"rename_unified_project: project.json update failed: {exc}")
+
+    # Update editor.json
+    ej = d / "editor.json"
+    if ej.exists():
+        try:
+            data = json.loads(ej.read_text(encoding="utf-8"))
+            data["name"] = new_name
+            ej.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            updated = True
+        except Exception as exc:
+            warn(f"rename_unified_project: editor.json update failed: {exc}")
+
+    if not updated:
+        raise HTTPException(404, "No project.json or editor.json found")
+
+    return {"ok": True, "name": new_name}
+
+
+@router.delete("/api/projects/{project_id}")
+async def delete_unified_project(project_id: str):
+    """Delete a unified project (removes entire output directory)."""
+    if "/" in project_id or "\\" in project_id or project_id in (".", ".."):
+        raise HTTPException(400, "Invalid project ID")
+    from src.api.karaoke_project import OUTPUT_DIR
+
+    d = OUTPUT_DIR / project_id
+    if not d.is_dir():
+        raise HTTPException(404, "Project not found")
+
+    # Safety: only delete inside output dir
+    d_resolved = d.resolve()
+    out_resolved = OUTPUT_DIR.resolve()
+    if not d_resolved.is_relative_to(out_resolved):
+        raise HTTPException(400, "Invalid project path")
+
+    shutil.rmtree(d, ignore_errors=True)
+    info(f"Deleted unified project: {project_id}")
+    return {"ok": True}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

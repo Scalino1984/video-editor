@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import tempfile
 import threading
 import time
@@ -23,6 +24,31 @@ UPLOAD_DIR = Path("data/uploads")
 OUTPUT_DIR = Path("data/output")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Audio-only extensions considered orphaned (no useful output produced)
+_AUDIO_EXTS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".opus", ".wma"}
+
+
+def _cleanup_failed_output(job_id: str) -> None:
+    """Remove output dir for a failed job if it's empty or only contains audio files."""
+    d = OUTPUT_DIR / job_id
+    if not d.is_dir():
+        return
+    try:
+        files = list(d.iterdir())
+        # Empty dir → delete
+        if not files:
+            d.rmdir()
+            debug(f"[{job_id}] Cleaned up empty output dir")
+            return
+        # Only audio files (orphaned uploads) → delete
+        if all(f.is_file() and f.suffix.lower() in _AUDIO_EXTS for f in files):
+            def _on_error(func, path, exc_info):
+                warn(f"[{job_id}] Cleanup rmtree error: {path} — {exc_info[1]}")
+            shutil.rmtree(d, onexc=lambda fn, p, e: _on_error(fn, p, (type(e), e, None)))
+            debug(f"[{job_id}] Cleaned up orphan-audio output dir ({len(files)} files)")
+    except Exception as exc:
+        debug(f"[{job_id}] Cleanup failed: {exc}")
 
 _executor = ThreadPoolExecutor(max_workers=2)
 _jobs: dict[str, JobInfo] = {}
@@ -631,6 +657,7 @@ def _transcribe_sync(job_id: str, audio_path: Path, req: TranscribeRequest) -> N
         update_job(job_id, status=JobStatus.failed, stage="Error", error=str(e),
                    completed_at=datetime.now(timezone.utc))
         _emit_sse({"type": "job_failed", "job_id": job_id, "error": str(e)})
+        _cleanup_failed_output(job_id)
     finally:
         _cancel_events.pop(job_id, None)
 
@@ -663,6 +690,7 @@ def _refine_sync(job_id: str, srt_path: Path, req: RefineRequest) -> None:
                    completed_at=datetime.now(timezone.utc), result=result)
     except Exception as e:
         update_job(job_id, status=JobStatus.failed, error=str(e), completed_at=datetime.now(timezone.utc))
+        _cleanup_failed_output(job_id)
 
 
 async def run_export_job(job_id: str, srt_path: Path, req: ExportRequest) -> None:
@@ -698,6 +726,7 @@ def _export_sync(job_id: str, srt_path: Path, req: ExportRequest) -> None:
                    completed_at=datetime.now(timezone.utc), result=result)
     except Exception as e:
         update_job(job_id, status=JobStatus.failed, error=str(e), completed_at=datetime.now(timezone.utc))
+        _cleanup_failed_output(job_id)
 
 
 # ── Waveform (uses converted WAV, not original compressed audio) ──────────────

@@ -104,20 +104,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 <div class="main">
 
-  <!-- Active projects -->
-  <div class="section-title">🟢 Aktive Editor-Sitzungen <span class="badge" id="activeCnt">0</span></div>
-  <div class="proj-grid" id="activeGrid"></div>
-  <div class="empty" id="activeEmpty" style="display:none"><div class="ic">🎬</div><p>Keine aktiven Sitzungen. Öffne ein Projekt im <a href="/editor" style="color:var(--accent)">Video Editor</a>.</p></div>
-
-  <!-- Karaoke Transcriptions -->
-  <div class="section-title">🎤 Projekte <span class="badge" id="karaokeCnt">0</span></div>
-  <div class="proj-grid" id="karaokeGrid"></div>
-  <div class="empty" id="karaokeEmpty" style="display:none"><div class="ic">🎤</div><p>Keine Projekte vorhanden. Starte eine Transkription im <a href="/" style="color:var(--accent)">Karaoke Tool</a>.</p></div>
-
-  <!-- Saved editor projects -->
-  <div class="section-title">💾 Gespeicherte Editor-Projekte <span class="badge" id="savedCnt">0</span></div>
-  <div class="proj-grid" id="savedGrid"></div>
-  <div class="empty" id="savedEmpty" style="display:none"><div class="ic">📂</div><p>Keine gespeicherten Projekte vorhanden.</p></div>
+  <!-- Unified Projects -->
+  <div class="section-title">📂 Projekte <span class="badge" id="projCnt">0</span>
+    <input type="text" id="projSearch" placeholder="Suche..." oninput="clearTimeout(_searchT);_searchT=setTimeout(loadProjects,400)"
+      style="margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;font-size:.72rem;font-family:var(--font);width:200px;outline:none">
+  </div>
+  <div class="proj-grid" id="projGrid"></div>
+  <div class="empty" id="projEmpty" style="display:none"><div class="ic">📂</div><p>Keine Projekte vorhanden. Starte eine Transkription im <a href="/" style="color:var(--accent)">Karaoke Tool</a> oder erstelle ein Projekt im <a href="/editor" style="color:var(--accent)">Video Editor</a>.</p></div>
 
 </div>
 
@@ -145,166 +138,87 @@ function toast(msg, isErr){
 }
 
 /* ── Data ──────────────────────────────────────────────────────────────── */
-let _active=[], _saved=[], _karaoke=[];
+let _projects=[], _searchT=null;
 
-async function loadAll(){
-  await Promise.all([loadActive(), loadSaved(), loadKaraoke()]);
-}
+async function loadAll(){ await loadProjects() }
 
-async function loadActive(){
+async function loadProjects(){
+  const q=(document.getElementById('projSearch')?.value||'').trim();
   try{
-    const r=await fetch(B+'/api/editor/projects');
-    if(!r.ok) throw new Error(r.statusText);
-    _active=await r.json();
-    renderActive();
-  }catch(e){console.warn('loadActive:',e);_active=[];renderActive()}
-}
-
-async function loadSaved(){
-  try{
-    const r=await fetch(B+'/api/editor/saved-projects');
-    if(!r.ok) throw new Error(r.statusText);
-    _saved=await r.json();
-    renderSaved();
-  }catch(e){console.warn('loadSaved:',e);_saved=[];renderSaved()}
-}
-
-async function loadKaraoke(){
-  try{
-    const r=await fetch(B+'/api/library?limit=50');
+    const r=await fetch(B+`/api/projects?limit=100&q=${encodeURIComponent(q)}`);
     if(!r.ok) throw new Error(r.statusText);
     const data=await r.json();
-    _karaoke=data.items||[];
-    renderKaraoke();
-  }catch(e){console.warn('loadKaraoke:',e);_karaoke=[];renderKaraoke()}
+    _projects=data.items||[];
+    renderProjects();
+  }catch(e){console.warn('loadProjects:',e);_projects=[];renderProjects()}
 }
 
 /* ── Render ─────────────────────────────────────────────────────────────── */
-function renderActive(){
-  const grid=document.getElementById('activeGrid');
-  const empty=document.getElementById('activeEmpty');
-  document.getElementById('activeCnt').textContent=_active.length;
-  if(!_active.length){grid.innerHTML='';empty.style.display='';return}
+function renderProjects(){
+  const grid=document.getElementById('projGrid');
+  const empty=document.getElementById('projEmpty');
+  document.getElementById('projCnt').textContent=_projects.length;
+  if(!_projects.length){grid.innerHTML='';empty.style.display='';return}
   empty.style.display='none';
-  grid.innerHTML=_active.map(p=>`
-    <div class="proj-card" ondblclick="openActive('${esc(p.id)}')" onclick="void 0">
-      <div class="actions">
-        <button onclick="event.stopPropagation();openActive('${esc(p.id)}')" title="Im Editor öffnen">🎬 Öffnen</button>
-        <button onclick="event.stopPropagation();openInKaraoke('${esc(p.id)}')" title="Im Karaoke Tool öffnen">🎤</button>
-        <button onclick="event.stopPropagation();saveActive('${esc(p.id)}')" title="Auf Disk speichern">💾</button>
-        <button onclick="event.stopPropagation();renameActive('${esc(p.id)}',this)" title="Umbenennen">✏️</button>
-      </div>
-      <div class="name" id="name-${esc(p.id)}">${he(p.name||p.id)}</div>
-      <div class="meta">
-        <span class="tag active">aktiv</span>
-        <span>${p.width||'?'}×${p.height||'?'}</span>
-        <span>${p.clips?.length||0} Clips</span>
-        <span>${p.duration?fmtDur(p.duration):'–'}</span>
-      </div>
-    </div>`).join('');
-}
+  grid.innerHTML=_projects.map(p=>{
+    const dur=p.duration_sec?fmtDur(p.duration_sec):'–';
+    const conf=p.avg_confidence?(p.avg_confidence*100).toFixed(0)+'%':'';
+    const rev=p.needs_review>0?`<span style="color:var(--warn)">⚠${p.needs_review}</span>`:'';
 
-function renderSaved(){
-  const grid=document.getElementById('savedGrid');
-  const empty=document.getElementById('savedEmpty');
-  document.getElementById('savedCnt').textContent=_saved.length;
-  if(!_saved.length){grid.innerHTML='';empty.style.display='';return}
-  empty.style.display='none';
-  grid.innerHTML=_saved.map(p=>`
-    <div class="proj-card" ondblclick="loadSavedProject('${esc(p.id)}')" onclick="void 0">
-      <div class="actions">
-        <button onclick="event.stopPropagation();loadSavedProject('${esc(p.id)}')" title="Laden und im Editor öffnen">📂 Laden</button>
-        <button class="del" onclick="event.stopPropagation();deleteSaved('${esc(p.id)}','${esc(p.name)}')" title="Löschen">🗑️</button>
-      </div>
-      <div class="name" id="sname-${esc(p.id)}">${he(p.name||p.id)}</div>
-      <div class="meta">
-        <span class="tag saved">gespeichert</span>
-        <span>${p.clips||0} Clips</span>
-        <span>${p.size_kb} KB</span>
-        <span>${p.date||'–'}</span>
-      </div>
-    </div>`).join('');
-}
+    // Type badge
+    let badge='';
+    if(p.type==='both') badge='<span class="tag" style="background:linear-gradient(90deg,rgba(0,229,160,.15),rgba(0,184,255,.15));color:var(--accent)">🎤+🎬</span>';
+    else if(p.type==='editor') badge='<span class="tag active">🎬 editor</span>';
+    else badge='<span class="tag" style="background:rgba(0,229,160,.15);color:var(--accent)">🎤 karaoke</span>';
 
-function renderKaraoke(){
-  const grid=document.getElementById('karaokeGrid');
-  const empty=document.getElementById('karaokeEmpty');
-  document.getElementById('karaokeCnt').textContent=_karaoke.length;
-  if(!_karaoke.length){grid.innerHTML='';empty.style.display='';return}
-  empty.style.display='none';
-  grid.innerHTML=_karaoke.map(k=>{
-    const jid=k.job_id||k.id;
-    const dur=k.duration_sec?fmtDur(k.duration_sec):'–';
-    const conf=k.avg_confidence?(k.avg_confidence*100).toFixed(0)+'%':'–';
-    const rev=k.needs_review>0?`<span style="color:var(--warn)">⚠${k.needs_review}</span>`:'';
+    // Meta details
+    let meta=[badge];
+    if(p.backend) meta.push(he(p.backend));
+    if(p.language) meta.push(he(p.language));
+    if(p.duration_sec>0) meta.push(dur);
+    if(conf) meta.push(conf);
+    if(p.segments_count>0) meta.push(p.segments_count+' seg');
+    if(p.editor_clips>0) meta.push(p.editor_clips+' clips');
+    if(rev) meta.push(rev);
+
+    // Action buttons
+    let acts='';
+    if(p.has_karaoke) acts+=`<button onclick="event.stopPropagation();openInKaraoke('${esc(p.id)}')" title="Im Karaoke Tool öffnen">🎤</button>`;
+    acts+=`<button onclick="event.stopPropagation();openInEditor('${esc(p.id)}')" title="Im Editor öffnen">🎬</button>`;
+    acts+=`<button onclick="event.stopPropagation();renameProject('${esc(p.id)}',this)" title="Umbenennen">✏️</button>`;
+    acts+=`<button class="del" onclick="event.stopPropagation();deleteProject('${esc(p.id)}','${esc(p.name)}')" title="Löschen">🗑️</button>`;
+
+    // Default dblclick: karaoke if available, else editor
+    const defaultOpen = p.has_karaoke ? `openInKaraoke('${esc(p.id)}')` : `openInEditor('${esc(p.id)}')`;
+
     return `
-    <div class="proj-card" ondblclick="openKaraoke('${esc(jid)}')" onclick="void 0">
-      <div class="actions">
-        <button onclick="event.stopPropagation();openKaraoke('${esc(jid)}')" title="Im Karaoke Tool öffnen">🎤 Öffnen</button>
-        <button onclick="event.stopPropagation();openKaraokeInEditor('${esc(jid)}')" title="Im Editor öffnen">🎬</button>
-        <button class="del" onclick="event.stopPropagation();deleteKaraoke('${esc(jid)}','${esc(k.title)}')" title="Löschen">🗑️</button>
-      </div>
-      <div class="name">${he(k.title||k.source_filename||jid)}</div>
-      <div class="meta">
-        <span class="tag" style="background:rgba(0,229,160,.15);color:var(--accent)">🎤 karaoke</span>
-        <span>${he(k.backend||'?')}</span>
-        <span>${he(k.language||'?')}</span>
-        <span>${dur}</span>
-        <span>${conf}</span>
-        <span>${k.segments_count||0} seg</span>
-        ${rev}
-      </div>
+    <div class="proj-card" ondblclick="${defaultOpen}" onclick="void 0">
+      <div class="actions">${acts}</div>
+      <div class="name" id="pname-${esc(p.id)}">${he(p.name||p.id)}</div>
+      <div class="meta"><span>${meta.join('</span><span>')}</span></div>
     </div>`}).join('');
 }
 
 /* ── Actions ────────────────────────────────────────────────────────────── */
-function openActive(pid){
-  window.location.href='/editor?pid='+encodeURIComponent(pid);
-}
-
 function openInKaraoke(pid){
   window.location.href='/?pid='+encodeURIComponent(pid);
 }
 
-function openKaraoke(jobId){
-  window.location.href='/?pid='+encodeURIComponent(jobId);
+function openInEditor(pid){
+  window.location.href='/editor?pid='+encodeURIComponent(pid);
 }
 
-function openKaraokeInEditor(jobId){
-  // Unified ID: just open editor with the same project ID
-  window.location.href='/editor?pid='+encodeURIComponent(jobId);
-}
-
-async function deleteKaraoke(jobId, title){
-  if(!confirm('Transkription "'+(title||jobId)+'" wirklich löschen?'))return;
+async function deleteProject(pid, name){
+  if(!confirm('Projekt "'+(name||pid)+'" wirklich löschen?'))return;
   try{
-    const r=await fetch(B+'/api/library/'+jobId,{method:'DELETE'});
+    const r=await fetch(B+'/api/projects/'+pid,{method:'DELETE'});
     if(!r.ok) throw new Error(r.statusText);
     toast('Gelöscht ✓');
-    await loadKaraoke();
+    await loadProjects();
   }catch(e){toast('Fehler: '+e.message,true)}
 }
 
-async function saveActive(pid){
-  try{
-    const r=await fetch(B+'/api/editor/projects/'+pid+'/save',{method:'POST'});
-    if(!r.ok) throw new Error(r.statusText);
-    toast('Projekt gespeichert ✓');
-    await loadSaved();
-  }catch(e){toast('Fehler beim Speichern: '+e.message, true)}
-}
-
-async function loadSavedProject(pid){
-  try{
-    const r=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(pid),{method:'POST'});
-    if(!r.ok) throw new Error(r.statusText);
-    const data=await r.json();
-    if(data.id) window.location.href='/editor?pid='+encodeURIComponent(data.id);
-    else toast('Projekt geladen, aber keine ID erhalten', true);
-  }catch(e){toast('Fehler beim Laden: '+e.message, true)}
-}
-
-async function renameActive(pid, btn){
+async function renameProject(pid, btn){
   const card=btn.closest('.proj-card');
   const nameEl=card.querySelector('.name');
   const old=nameEl.textContent;
@@ -315,53 +229,16 @@ async function renameActive(pid, btn){
     const nv=inp.value.trim();
     if(!nv||nv===old){nameEl.textContent=old;return}
     try{
-      const r=await fetch(B+'/api/editor/projects/'+pid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
+      const r=await fetch(B+'/api/projects/'+pid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
       if(!r.ok) throw new Error(r.statusText);
       nameEl.textContent=nv;
       toast('Umbenannt ✓');
-      // Update local state
-      const proj=_active.find(p=>p.id===pid);
+      const proj=_projects.find(p=>p.id===pid);
       if(proj) proj.name=nv;
     }catch(e){nameEl.textContent=old;toast('Fehler: '+e.message,true)}
   }
   inp.addEventListener('blur', commit);
   inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
-}
-
-async function renameSaved(pid, btn){
-  // Load the saved project, rename, and re-save
-  const card=btn.closest('.proj-card');
-  const nameEl=card.querySelector('.name');
-  const old=nameEl.textContent;
-  nameEl.innerHTML='<input class="rename-input" value="'+he(old)+'" />';
-  const inp=nameEl.querySelector('input');
-  inp.focus();inp.select();
-  async function commit(){
-    const nv=inp.value.trim();
-    if(!nv||nv===old){nameEl.textContent=old;return}
-    try{
-      const lr=await fetch(B+'/api/editor/load-project/'+encodeURIComponent(pid),{method:'POST'});
-      if(!lr.ok) throw new Error(lr.statusText);
-      const data=await lr.json();
-      await fetch(B+'/api/editor/projects/'+data.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
-      await fetch(B+'/api/editor/projects/'+data.id+'/save',{method:'POST'});
-      nameEl.textContent=nv;
-      toast('Umbenannt ✓');
-      await loadSaved();
-    }catch(e){nameEl.textContent=old;toast('Fehler: '+e.message,true)}
-  }
-  inp.addEventListener('blur', commit);
-  inp.addEventListener('keydown', e=>{if(e.key==='Enter'){inp.blur()}if(e.key==='Escape'){nameEl.textContent=old}});
-}
-
-async function deleteSaved(pid, name){
-  if(!confirm('Editor-Projekt "'+(name||pid)+'" wirklich löschen?')) return;
-  try{
-    const r=await fetch(B+'/api/editor/delete-project/'+encodeURIComponent(pid),{method:'DELETE'});
-    if(!r.ok) throw new Error(r.statusText);
-    toast('Gelöscht ✓');
-    await loadSaved();
-  }catch(e){toast('Fehler: '+e.message, true)}
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */

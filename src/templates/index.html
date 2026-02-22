@@ -319,7 +319,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .ref-upload-bar label{font-size:.6rem;color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px dashed var(--border);border-radius:4px;transition:all .15s}
 .ref-upload-bar label:hover{border-color:var(--accent);color:var(--accent)}
 .ref-upload-bar .ref-filename{font-family:var(--mono);font-size:.58rem;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Library Modal */
+/* Projektordner Modal */
 .lib-btn{background:var(--bg4);color:var(--dim);border:1px solid var(--border);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0}
 .lib-btn:hover{color:var(--accent);border-color:var(--accent)}
 .lib-list{max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
@@ -331,6 +331,11 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 .lib-item .li-badge.rev{background:#f5a62333;color:#f5a623}
 .lib-item .li-del{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.8rem;padding:2px 4px;border-radius:3px;flex-shrink:0}
 .lib-item .li-del:hover{color:#e74c3c;background:#e74c3c22}
+.li-acts{display:flex;gap:2px;flex-shrink:0}
+.li-act{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;padding:2px 5px;border-radius:3px;transition:all .12s}
+.li-act:hover{color:var(--accent);background:var(--bg5,rgba(255,255,255,.08))}
+.li-act.del:hover{color:#e74c3c;background:#e74c3c22}
+.li-rename{background:var(--bg3);border:1px solid var(--accent);padding:4px 8px;border-radius:4px;font-size:.78rem;color:var(--text);width:100%;outline:none}
 .lib-search{margin-bottom:8px}
 .lib-empty{text-align:center;color:var(--dim);padding:30px 0;font-size:.8rem}
 /* Video Render */
@@ -404,7 +409,7 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
     <button class="btn-s btn-sm" onclick="clearAll()" title="Alles zurücksetzen" style="color:var(--danger)">🗑️ Clear</button>
     <button class="btn-s btn-sm" onclick="toggleTapToTime()" title="Tap-to-Time Modus (T)">🎤 Tap</button>
     <button class="btn-s btn-sm" onclick="toggleFSKaraoke()" title="Fullscreen Karaoke (F)">🖥️</button>
-    <button class="lib-btn" onclick="toggleLibrary()" title="Library">📚</button>
+    <button class="lib-btn" onclick="toggleProjectFolder()" title="Projekte öffnen">📂</button>
     <a id="navEditor" href="/editor" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="Video Editor">🎬 Editor</a>
     <a id="navFiles" href="/files" class="btn-s btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="File Explorer">📁 Files</a>
     <button class="chat-btn disabled" id="chatBtn" onclick="toggleChat()" title="AI Chat">🤖</button>
@@ -781,20 +786,20 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
   </div>
 </div>
 
-<!-- Library Modal -->
-<div class="modal-bg" id="libModal" onclick="if(event.target===this)toggleLibrary()">
-  <div class="modal" style="max-width:650px;width:95%">
-    <div class="modal-head"><h2 style="font-size:1rem">📚 Transcriptions Library</h2>
-      <div class="modal-close" onclick="toggleLibrary()" title="Schließen">✕</div>
+<!-- Projektordner Modal -->
+<div class="modal-bg" id="libModal" onclick="if(event.target===this)toggleProjectFolder()">
+  <div class="modal" style="max-width:720px;width:95%">
+    <div class="modal-head"><h2 style="font-size:1rem">📂 Projekte</h2>
+      <div class="modal-close" onclick="toggleProjectFolder()" title="Schließen">✕</div>
     </div>
     <div class="modal-body" style="padding:12px">
-      <input type="text" class="lib-search" id="libSearch" placeholder="Suche nach Titel, Datei, Backend..." title="Library nach Titel, Datei oder Backend durchsuchen"
-        oninput="clearTimeout(libST);libST=setTimeout(loadLibrary,400)" style="width:100%;padding:7px 10px;font-size:.78rem;border-radius:6px">
+      <input type="text" class="lib-search" id="libSearch" placeholder="Suche nach Titel, Datei, Backend..." title="Projekte durchsuchen"
+        oninput="clearTimeout(libST);libST=setTimeout(loadProjectFolder,400)" style="width:100%;padding:7px 10px;font-size:.78rem;border-radius:6px">
       <div class="lib-list" id="libList"><div class="lib-empty">Lade...</div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.65rem;color:var(--dim)">
         <span id="libCount">—</span>
-        <div><button class="btn-s btn-sm" onclick="libPage=Math.max(0,libPage-1);loadLibrary()" id="libPrev" disabled title="Vorherige Seite">◂ Prev</button>
-        <button class="btn-s btn-sm" onclick="libPage++;loadLibrary()" id="libNext" title="Nächste Seite">Next ▸</button></div>
+        <div><button class="btn-s btn-sm" onclick="libPage=Math.max(0,libPage-1);loadProjectFolder()" id="libPrev" disabled title="Vorherige Seite">◂ Prev</button>
+        <button class="btn-s btn-sm" onclick="libPage++;loadProjectFolder()" id="libNext" title="Nächste Seite">Next ▸</button></div>
       </div>
     </div>
   </div>
@@ -1128,15 +1133,16 @@ label{display:block;font-size:.72rem;font-weight:500;color:var(--dim);margin-bot
 </table>
 <p>Du kannst auch frei chatten — die AI hat vollen Zugriff auf alle Segmente und kann sie direkt bearbeiten.</p>
 
-<h3>📚 Transcriptions Library</h3>
-<p>Jede fertige Transkription wird automatisch in einer SQLite-Datenbank gespeichert (<code>data/library.sqlite</code>). Über den <b>📚</b>-Button im Header öffnet sich das Library-Modal:</p>
+<h3>📂 Projektordner</h3>
+<p>Jede fertige Transkription wird automatisch als Projekt gespeichert. Über den <b>📂</b>-Button im Header öffnet sich der Projektordner:</p>
 <table class="htable">
 <tr><th>Aktion</th><th>Beschreibung</th></tr>
 <tr><td><b>Suche</b></td><td>Filtert nach Titel, Dateiname oder Backend</td></tr>
-<tr><td><b>Klick</b></td><td>Öffnet die Transkription — wenn der Job noch existiert, wird er im Editor geladen; sonst wird der SRT-Text im Report-Tab angezeigt</td></tr>
-<tr><td><b>🗑 Löschen</b></td><td>Soft-Delete mit Bestätigung</td></tr>
+<tr><td><b>Klick</b></td><td>Öffnet das Projekt — Segmente, Audio und Downloads werden geladen</td></tr>
+<tr><td><b>✏️ Umbenennen</b></td><td>Inline-Rename mit Enter/Escape</td></tr>
+<tr><td><b>🎬 Editor</b></td><td>Öffnet das Projekt direkt im Video Editor</td></tr>
+<tr><td><b>🗑 Löschen</b></td><td>Löscht das Projekt mit Bestätigung</td></tr>
 </table>
-<p>Deduplizierung: Bei erneutem Transkribieren derselben Datei wird der bestehende Eintrag aktualisiert statt ein Duplikat erstellt.</p>
 
 <h3>🎬 Video Rendering</h3>
 <p>Erstellt ein fertiges Karaoke-Video aus der aktuellen Transkription. Klicke auf <b>🎬 Video Render ▾</b> in der Sidebar:</p>
@@ -1276,6 +1282,9 @@ async function cancelJob(id){
     if(r.ok){toast('Job abgebrochen');refreshJobs()}
     else{const d=await r.json();toast(d.detail||'Fehler','err')}}
   catch(e){toast('Fehler: '+e.message,'err')}}
+
+// ── Saved Projects Sidebar ──
+// (removed — projects now live in Projektordner modal)
 
 async function rDetail(j){
 const ic={pending:'⏳',queued:'⏳',preprocessing:'🔧',transcribing:'🎙',refining:'✨',exporting:'📦',rendering_preview:'🎬',completed:'✅',failed:'❌',cancelled:'⛔'};
@@ -2157,37 +2166,57 @@ await applyPreset('karaoke');
 await doKaraokeHtml('dark');
 toast('Alle Formate exportiert!')}catch(e){toast('Export: '+e.message,'err')}}
 
-// ── Library ──
+// ── Projektordner ──
 let libPage=0,libST=null,libPerPage=20;
-function toggleLibrary(){const m=document.getElementById('libModal');m.classList.toggle('open');if(m.classList.contains('open')){libPage=0;loadLibrary()}}
-async function loadLibrary(){
+function toggleProjectFolder(){const m=document.getElementById('libModal');m.classList.toggle('open');if(m.classList.contains('open')){libPage=0;loadProjectFolder()}}
+async function loadProjectFolder(){
 const q=document.getElementById('libSearch').value.trim();
-try{const r=await(await fetch(B+`/api/library?limit=${libPerPage}&offset=${libPage*libPerPage}&q=${encodeURIComponent(q)}`)).json();
+try{const r=await(await fetch(B+`/api/projects?limit=${libPerPage}&offset=${libPage*libPerPage}&q=${encodeURIComponent(q)}`)).json();
 const el=document.getElementById('libList');el.innerHTML='';
-document.getElementById('libCount').textContent=`${r.total} Einträge`;
+document.getElementById('libCount').textContent=`${r.total} Projekte`;
 document.getElementById('libPrev').disabled=libPage===0;
 document.getElementById('libNext').disabled=(libPage+1)*libPerPage>=r.total;
-if(!r.items.length){el.innerHTML='<div class="lib-empty">Keine Transcriptions gefunden</div>';return}
+if(!r.items.length){el.innerHTML='<div class="lib-empty">Keine Projekte gefunden</div>';return}
 for(const it of r.items){
-const d=new Date(it.created_at);const ds=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'});
+const d=new Date(it.updated_at||it.created_at);const ds=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'});
 const dur=it.duration_sec>0?fmt(it.duration_sec):'';
 const conf=it.avg_confidence>0?`${(it.avg_confidence*100).toFixed(0)}%`:'';
 const rev=it.needs_review>0?`<span class="li-badge rev">⚠ ${it.needs_review}</span>`:'';
 const bpm=it.bpm>0?`<span style="color:var(--accent)">${it.bpm.toFixed(0)}♩</span>`:'';
+// Type badge
+let tbadge='';
+if(it.type==='both') tbadge='<span style="font-size:.6rem;opacity:.7">🎤+🎬</span> ';
+else if(it.type==='editor') tbadge='<span style="font-size:.6rem;opacity:.7">🎬</span> ';
+else tbadge='<span style="font-size:.6rem;opacity:.7">🎤</span> ';
+// Meta line
+let metaParts=[];
+if(it.backend) metaParts.push(esc(it.backend));
+if(it.language) metaParts.push(esc(it.language));
+if(dur) metaParts.push(dur);
+if(conf) metaParts.push(conf);
+if(bpm) metaParts.push(bpm);
+if(it.editor_clips>0) metaParts.push(it.editor_clips+' clips');
+if(rev) metaParts.push(rev);
+metaParts.push(ds);
 const div=document.createElement('div');div.className='lib-item';
-div.innerHTML=`<div class="li-title" title="${esc(it.source_filename)}">${esc(it.title)}</div>
-<div class="li-meta">${esc(it.backend)} · ${esc(it.language||'?')} · ${dur} ${conf} ${bpm} ${rev} · ${ds}</div>
-<button class="li-del" onclick="event.stopPropagation();delLib('${it.id}','${escAttr(it.title)}')" title="Löschen">🗑</button>`;
+div.innerHTML=`<div class="li-title" id="lt-${it.id}" data-name="${esc(it.name)}" title="${esc(it.source_filename||it.name)}">${tbadge}${esc(it.name)}</div>
+<div class="li-meta">${metaParts.join(' · ')}</div>
+<div class="li-acts">
+<button class="li-act" onclick="event.stopPropagation();renameLib('${it.id}')" title="Umbenennen">✏️</button>
+${it.has_karaoke?`<button class="li-act" onclick="event.stopPropagation();window.location='/?pid=${it.id}'" title="Im Karaoke Tool öffnen">🎤</button>`:''}
+<button class="li-act" onclick="event.stopPropagation();window.open('/editor?pid=${it.id}','_blank')" title="Im Editor öffnen">🎬</button>
+<button class="li-act del" onclick="event.stopPropagation();delLib('${it.id}','${escAttr(it.name)}')" title="Löschen">🗑</button>
+</div>`;
 div.onclick=()=>openLib(it);el.appendChild(div)}
-}catch(e){toast('Library: '+e.message,'err')}}
+}catch(e){toast('Projekte: '+e.message,'err')}}
 
 async function openLib(item){
-toggleLibrary();
-const jid=item.job_id||item.id;
+toggleProjectFolder();
+const jid=item.id;
 // Strategy 1: If job still in active session, use native selJob
 if(jid){
   try{const j=await(await fetch(B+'/api/jobs/'+jid)).json();
-  if(j.status==='completed'){selJob(jid);toast(`"${item.title}" geladen`);return}}catch(e){}}
+  if(j.status==='completed'){selJob(jid);toast(`"${item.name}" geladen`);return}}catch(e){}}
 // Strategy 2: Reconstruct UI from project record
 try{const r=await(await fetch(B+'/api/library/'+jid)).json();
 _persistSession({job_id:jid});
@@ -2304,7 +2333,25 @@ stab('seg');
 toast(`"${r.title}" aus Library geladen`)}
 
 async function delLib(id,title){if(!confirm(`"${title}" wirklich löschen?`))return;
-try{await fetch(B+'/api/library/'+id,{method:'DELETE'});toast('Gelöscht');loadLibrary()}catch(e){toast('Err','err')}}
+try{await fetch(B+'/api/projects/'+id,{method:'DELETE'});toast('Gelöscht');loadProjectFolder();
+if(aJobId===id){aJobId=null;_clearSession();document.getElementById('jd').style.display='none';document.getElementById('es').style.display=''}
+}catch(e){toast('Err','err')}}
+
+async function renameLib(id){
+  const nameEl=document.getElementById('lt-'+id);if(!nameEl)return;
+  const oldHTML=nameEl.innerHTML;
+  const oldName=nameEl.getAttribute('data-name')||nameEl.textContent.replace(/^[🎤🎬+\s]+/,'').trim();
+  const inp=document.createElement('input');inp.type='text';inp.value=oldName;inp.className='li-rename';
+  nameEl.replaceWith(inp);inp.focus();inp.select();
+  const restore=()=>{const sp=document.createElement('div');sp.className='li-title';sp.id='lt-'+id;sp.innerHTML=oldHTML;inp.replaceWith(sp)};
+  const finish=async()=>{const nv=inp.value.trim();
+    if(!nv||nv===oldName){restore();return}
+    try{await fetch(B+'/api/projects/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv})});
+    toast('Umbenannt → '+nv);loadProjectFolder();
+    if(aJobId===id){const bn=document.getElementById('projBannerName');if(bn)bn.textContent=nv;
+      document.getElementById('dF').textContent=nv}}
+    catch(e){toast('Fehler beim Umbenennen','err')}};
+  inp.onblur=finish;inp.onkeydown=e=>{if(e.key==='Enter')finish();if(e.key==='Escape')restore()}}
 
 // ── Video Render ──
 async function startRender(){

@@ -990,35 +990,43 @@ async function openProjectModal(){
   modal.classList.add('open');
   document.getElementById('projModalBody').innerHTML='<div style="color:var(--dim);font-size:.75rem;text-align:center;padding:30px">⏳ Lade Projekte...</div>';
   try{
-    // In-memory projects
-    const memProjs=await(await fetch(B+'/api/editor/projects')).json();
-    // Saved project files
-    const savedResp=await fetch(B+'/api/editor/saved-projects');
-    let savedProjs=[];
-    if(savedResp.ok)savedProjs=await savedResp.json();
-    renderProjectModal(memProjs,savedProjs)
+    const r=await(await fetch(B+'/api/projects?limit=100')).json();
+    // Also fetch in-memory active projects for "current" badge
+    let memIds=new Set();
+    try{const mp=await(await fetch(B+'/api/editor/projects')).json();mp.forEach(p=>memIds.add(p.id))}catch(e){}
+    renderProjectModal(r.items||[], memIds)
   }catch(e){document.getElementById('projModalBody').innerHTML='<div style="color:var(--danger);font-size:.75rem;padding:20px;text-align:center">'+e.message+'</div>'}}
 
 function closeProjectModal(){document.getElementById('projModal').classList.remove('open')}
 
-function renderProjectModal(memProjs,savedProjs){
+function renderProjectModal(projects, memIds){
   const el=document.getElementById('projModalBody');
   let html='';
-  if(memProjs.length){
-    html+='<div style="font-size:.65rem;font-weight:600;color:var(--dim);text-transform:uppercase;padding:4px 12px;margin-top:4px">Aktive Projekte</div>';
-    html+=memProjs.map(p=>`<div class="job-modal-item" onclick="switchProject('${p.id}')">
-      <div class="jm-icon">${p.id===PID?'✅':'📂'}</div>
-      <div class="jm-info"><div class="jm-name">${esc(p.name)}</div>
-        <div class="jm-meta">${p.clips||0} Clips · ${fmt(p.duration||0)} · ${p.assets||0} Assets</div></div>
-      ${p.id===PID?'<span class="jm-badge" style="background:var(--accent)30;color:var(--accent)">Aktuell</span>':''}
-    </div>`).join('')}
-  if(savedProjs.length){
-    html+='<div style="font-size:.65rem;font-weight:600;color:var(--dim);text-transform:uppercase;padding:4px 12px;margin-top:8px">Gespeicherte Projekte</div>';
-    html+=savedProjs.map(p=>`<div class="job-modal-item" onclick="loadSavedProject('${esc(p.id)}')">
-      <div class="jm-icon">💾</div>
-      <div class="jm-info"><div class="jm-name">${esc(p.name||p.id)}</div>
-        <div class="jm-meta">${p.clips||0} Clips · ${p.size_kb||'?'}KB · ${p.date||''}</div></div>
-    </div>`).join('')}
+  if(projects.length){
+    html+=projects.map(p=>{
+      const isCurrent=p.id===PID;
+      const isActive=memIds.has(p.id);
+      // Type badge
+      let tbadge='';
+      if(p.type==='both') tbadge='🎤+🎬';
+      else if(p.type==='editor') tbadge='🎬';
+      else tbadge='🎤';
+      // Meta parts
+      let meta=[];
+      if(p.has_editor) meta.push((p.editor_clips||0)+' Clips');
+      if(p.duration_sec>0) meta.push(fmt(p.duration_sec));
+      if(p.segments_count>0) meta.push(p.segments_count+' seg');
+      if(p.backend) meta.push(p.backend);
+      // Click action: if editor project or both, load in editor; if karaoke only, load saved
+      const clickAction=p.has_editor&&isActive?`switchProject('${p.id}')`:
+                         p.has_editor?`loadSavedProject('${esc(p.id)}')`:
+                         `loadSavedProject('${esc(p.id)}')`;
+      return `<div class="job-modal-item" onclick="${clickAction}">
+        <div class="jm-icon">${tbadge}</div>
+        <div class="jm-info"><div class="jm-name">${esc(p.name||p.id)}</div>
+          <div class="jm-meta">${meta.join(' · ')}</div></div>
+        ${isCurrent?'<span class="jm-badge" style="background:var(--accent)30;color:var(--accent)">Aktuell</span>':''}
+      </div>`}).join('')}
   if(!html)html='<div style="color:var(--dim);font-size:.75rem;text-align:center;padding:30px">Keine Projekte vorhanden</div>';
   el.innerHTML=html}
 
