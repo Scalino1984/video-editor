@@ -41,3 +41,6 @@ watchdog>=3.0
 
 # Optional: Vocal isolation
 # demucs>=4.0
+
+# Optional: Luma AI (video/image generation)
+# lumaai>=1.0

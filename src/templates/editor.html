@@ -270,6 +270,38 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
 .render-card .render-actions a,.render-card .render-actions button{padding:6px 16px;border-radius:6px;font-size:.8rem;font-weight:600;text-decoration:none;cursor:pointer;border:none}
 .render-card .render-actions a{background:var(--accent);color:#000}
 .render-card .render-actions button{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+/* ── Generation UI ── */
+.gen-type-btn{transition:background .15s,border-color .15s}
+.gen-type-btn.on{background:var(--accent)!important;color:#000!important;border-color:var(--accent)!important;font-weight:700}
+.gen-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;position:relative;overflow:hidden}
+.gen-card .gen-thumb{width:100%;border-radius:6px;margin-bottom:4px;object-fit:cover;max-height:120px;background:#111}
+.gen-card .gen-status{font-size:.6rem;display:flex;align-items:center;gap:4px;margin-bottom:3px}
+.gen-card .gen-status .dot{display:inline-block;width:6px;height:6px;border-radius:50%}
+.gen-card .gen-status .dot.pending{background:#f90}
+.gen-card .gen-status .dot.processing{background:#0cf;animation:pulse 1.2s infinite}
+.gen-card .gen-status .dot.downloading{background:#0cf}
+.gen-card .gen-status .dot.completed{background:#0b5}
+.gen-card .gen-status .dot.failed{background:#e44}
+.gen-card .gen-status .dot.cancelled{background:#888}
+.gen-card .gen-prompt{font-size:.6rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gen-card .gen-progress{height:3px;background:var(--bg);border-radius:2px;margin:4px 0;overflow:hidden}
+.gen-card .gen-progress-fill{height:100%;background:var(--accent);transition:width .3s;border-radius:2px}
+.gen-card .gen-actions{display:flex;gap:4px;margin-top:4px}
+.gen-card .gen-actions button{font-size:.55rem;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.gen-card .gen-actions button:hover{border-color:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* ── Auto Scene cards ── */
+.scene-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.scene-card:hover{border-color:var(--accent);box-shadow:0 0 8px rgba(var(--accent-rgb,.15))}
+.scene-card.selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--bg2))}
+.scene-card .sc-title{font-size:.7rem;font-weight:700;margin-bottom:2px;display:flex;align-items:center;gap:4px}
+.scene-card .sc-mood{font-size:.55rem;color:var(--accent);font-weight:600;margin-bottom:3px}
+.scene-card .sc-prompt{font-size:.6rem;color:var(--dim);line-height:1.3;margin-bottom:3px}
+.scene-card .sc-lyrics{font-size:.55rem;color:var(--dim);font-style:italic;opacity:.7;border-left:2px solid var(--border);padding-left:6px}
+.scene-card .sc-actions{margin-top:4px;display:flex;gap:4px}
+.scene-card .sc-actions button{font-size:.6rem;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;transition:background .15s}
+.scene-card .sc-actions button:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+.scene-card .sc-actions button.sc-go{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
 </style>
 </head>
 <body>
@@ -320,6 +352,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <div class="sb-tab" data-tab="overlays" onclick="sbTab('overlays')">✨ Overlays</div>
     <div class="sb-tab" data-tab="loops" onclick="sbTab('loops')">🎬 Loops</div>
     <div class="sb-tab" data-tab="templates" onclick="sbTab('templates')">⚡ Quick</div>
+    <div class="sb-tab" data-tab="generate" onclick="sbTab('generate')">🎨 KI</div>
   </div>
 
   <!-- Assets Tab -->
@@ -372,6 +405,116 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
         <span style="font-size:1rem">📱</span> <b>Vertical (9:16)</b><br>
         <span style="font-size:.65rem;color:var(--dim)">TikTok/Reels Format</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Generate Tab (AI Video/Image) -->
+  <div class="sb-content" id="sbGenerate" style="display:none">
+    <div style="font-size:.7rem;color:var(--dim);margin-bottom:8px">🎨 KI Video- & Bildgenerierung (Luma Dream Machine)</div>
+
+    <!-- Provider Status -->
+    <div id="genProviderStatus" style="margin-bottom:8px;font-size:.65rem;padding:4px 8px;border-radius:6px;background:var(--bg2)">
+      <span id="genStatusDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;margin-right:4px;vertical-align:middle"></span>
+      <span id="genStatusText">Prüfe Provider...</span>
+    </div>
+
+    <!-- Type Selector -->
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      <button class="btn-s gen-type-btn on" id="genTypeVideo" onclick="setGenType('video')" style="flex:1;font-size:.7rem;padding:6px">🎬 Video</button>
+      <button class="btn-s gen-type-btn" id="genTypeImage" onclick="setGenType('image')" style="flex:1;font-size:.7rem;padding:6px">🖼️ Bild</button>
+    </div>
+
+    <!-- Auto Scene Suggestions -->
+    <button class="btn" id="genAutoBtn" onclick="generateAutoScenes()" style="width:100%;margin-bottom:8px;font-size:.75rem;padding:8px;background:linear-gradient(135deg,var(--accent),#a855f7);color:#000;font-weight:700" title="KI analysiert die Lyrics und schlägt 5 perfekte Szenen vor">
+      ✨ Auto — 5 Szenen aus Lyrics generieren
+    </button>
+    <div id="genAutoStatus" style="display:none;font-size:.65rem;color:var(--dim);text-align:center;padding:6px">⏳ KI analysiert Lyrics...</div>
+    <div id="genSceneGallery" style="display:none;margin-bottom:10px"></div>
+
+    <!-- Manual Prompt (optional) -->
+    <details id="genManualDetails" style="margin-bottom:6px">
+      <summary style="font-size:.65rem;color:var(--dim);cursor:pointer;user-select:none">✏️ Manueller Prompt (optional)</summary>
+      <textarea id="genPrompt" rows="3" placeholder="Beschreibe dein Video/Bild... z.B. 'Cinematic aerial shot of a mountain lake at sunset'" style="width:100%;font-size:.7rem;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);resize:vertical;font-family:inherit;margin-top:4px"></textarea>
+    </details>
+
+    <!-- Settings Grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px">
+      <div>
+        <label style="font-size:.6rem;color:var(--dim)">Modell</label>
+        <select id="genModel" style="width:100%;font-size:.65rem;padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+          <option value="ray-2">ray-2 (Qualität)</option>
+          <option value="ray-flash-2">ray-flash-2 (Schnell)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.6rem;color:var(--dim)">Seitenverhältnis</label>
+        <select id="genAspect" style="width:100%;font-size:.65rem;padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+          <option value="16:9">16:9 Landscape</option>
+          <option value="9:16">9:16 Portrait</option>
+          <option value="1:1">1:1 Quadrat</option>
+          <option value="4:3">4:3</option>
+          <option value="3:4">3:4</option>
+          <option value="21:9">21:9 Ultrawide</option>
+          <option value="9:21">9:21</option>
+        </select>
+      </div>
+      <div id="genDurationWrap">
+        <label style="font-size:.6rem;color:var(--dim)">Dauer</label>
+        <select id="genDuration" style="width:100%;font-size:.65rem;padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+          <option value="5s">5 Sekunden</option>
+          <option value="9s">9 Sekunden</option>
+        </select>
+      </div>
+      <div id="genResolutionWrap">
+        <label style="font-size:.6rem;color:var(--dim)">Auflösung</label>
+        <select id="genResolution" style="width:100%;font-size:.65rem;padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+          <option value="720p">720p</option>
+          <option value="1080p" selected>1080p</option>
+          <option value="4k">4K</option>
+          <option value="540p">540p</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Video-only: Loop -->
+    <div id="genLoopWrap" style="margin-top:6px">
+      <label style="font-size:.6rem;color:var(--dim);display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="genLoop" style="width:auto"> Loop-Video (nahtlose Schleife)
+      </label>
+    </div>
+
+    <!-- Image-only: Format (hidden by default) -->
+    <div id="genImageFormatWrap" style="margin-top:6px;display:none">
+      <label style="font-size:.6rem;color:var(--dim)">Bildformat</label>
+      <select id="genImageFormat" style="width:100%;font-size:.65rem;padding:3px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+        <option value="jpg">JPG</option>
+        <option value="png">PNG</option>
+      </select>
+    </div>
+
+    <!-- Image-to-Video: Start Frame -->
+    <div id="genKeyframeWrap" style="margin-top:6px">
+      <label style="font-size:.6rem;color:var(--dim)">Startbild (optional, für Image-to-Video)</label>
+      <div style="display:flex;gap:4px;align-items:center">
+        <input type="text" id="genKeyframeUrl" placeholder="Bild-URL oder Asset-ID" style="flex:1;font-size:.65rem;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
+        <button class="btn-s" onclick="pickAssetForGen('keyframe')" style="font-size:.6rem;padding:3px 6px" title="Asset als Startbild wählen">📎</button>
+      </div>
+    </div>
+
+    <!-- Submit (manual or from selected scene) -->
+    <button class="btn" id="genSubmitBtn" onclick="submitGeneration()" style="width:100%;margin-top:10px;font-size:.75rem;padding:8px" title="KI-Generierung starten" disabled>
+      🚀 Generieren
+    </button>
+
+    <!-- Active Generations -->
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="font-size:.65rem;color:var(--dim);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>Generierungen</span>
+        <button class="btn-s" onclick="refreshGenerations()" style="font-size:.55rem;padding:1px 6px" title="Aktualisieren">↻</button>
+      </div>
+      <div id="genGallery" style="display:flex;flex-direction:column;gap:6px">
+        <div style="color:var(--dim);font-size:.65rem;text-align:center;padding:10px">Noch keine Generierungen</div>
+      </div>
     </div>
   </div>
 </aside>
@@ -555,7 +698,7 @@ label{display:block;font-size:.68rem;font-weight:500;color:var(--dim);margin-bot
     <!-- AI Chat -->
     <div id="propAI" style="display:none" class="chat-section">
       <div class="chat-msgs" id="aiMsgs">
-        <div class="chat-msg ai">👋 Hallo! Ich bin dein KI-Video-Editor-Assistent. Sag mir was du machen möchtest — ich kann Clips bearbeiten, Effekte anwenden, Timing ändern, <b>Spuren hinzufügen/entfernen</b> und mehr.<br><br>💡 Schnellbefehle: <code>+ video</code>, <code>+ audio</code>, <code>- ebene 2</code>, <code>undo</code></div>
+        <div class="chat-msg ai">👋 Hallo! Ich bin dein KI-Video-Editor-Assistent. Sag mir was du machen möchtest — ich kann Clips bearbeiten, Effekte anwenden, Timing ändern, <b>Spuren hinzufügen/entfernen</b>, <b>KI-Videos/Bilder generieren</b> und mehr.<br><br>💡 Schnellbefehle: <code>+ video</code>, <code>+ audio</code>, <code>- ebene 2</code>, <code>undo</code></div>
       </div>
       <div class="chat-input-row">
         <input type="text" id="aiInput" placeholder="z.B. '+ video', 'Füge Fade-In hinzu', '- ebene 2'" onkeydown="if(event.key==='Enter')sendAI()" title="AI-Anweisung oder Spur-Befehl eingeben">
@@ -865,8 +1008,10 @@ function sbTab(t){
   document.getElementById('sbOverlays').style.display=t==='overlays'?'':'none';
   document.getElementById('sbLoops').style.display=t==='loops'?'':'none';
   document.getElementById('sbTemplates').style.display=t==='templates'?'':'none';
+  document.getElementById('sbGenerate').style.display=t==='generate'?'':'none';
   if(t==='overlays')loadOverlays();
-  if(t==='loops')loadLoopVideos()}
+  if(t==='loops')loadLoopVideos();
+  if(t==='generate')initGenerateTab()}
 
 let _jobCache=[];
 async function loadJobs(){
@@ -2209,6 +2354,318 @@ async function quickTemplate(type){
   sbTab('assets')}
 
 // ══════════════════════════════════════════════════════════════════════════════
+// AI GENERATION (Luma Dream Machine)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _genType='video';
+let _genProviderOk=false;
+let _genPollTimer=null;
+
+async function initGenerateTab(){
+  // Check provider status
+  try{
+    const r=await(await fetch(B+'/api/editor/generation/status')).json();
+    _genProviderOk=r.available;
+    const dot=document.getElementById('genStatusDot');
+    const txt=document.getElementById('genStatusText');
+    dot.style.background=r.available?'#0b5':'#e44';
+    txt.textContent=r.available?'Luma Dream Machine bereit':r.message;
+    _updateGenSubmitBtn();
+  }catch(e){
+    document.getElementById('genStatusText').textContent='Provider nicht erreichbar';
+    document.getElementById('genStatusDot').style.background='#e44';
+  }
+  // Listen for prompt changes
+  const ta=document.getElementById('genPrompt');
+  ta.removeEventListener('input',_updateGenSubmitBtn);
+  ta.addEventListener('input',_updateGenSubmitBtn);
+  refreshGenerations();
+}
+
+function setGenType(t){
+  _genType=t;
+  document.getElementById('genTypeVideo').classList.toggle('on',t==='video');
+  document.getElementById('genTypeImage').classList.toggle('on',t==='image');
+  // Toggle video-only / image-only fields
+  document.getElementById('genDurationWrap').style.display=t==='video'?'':'none';
+  document.getElementById('genResolutionWrap').style.display=t==='video'?'':'none';
+  document.getElementById('genLoopWrap').style.display=t==='video'?'':'none';
+  document.getElementById('genKeyframeWrap').style.display=t==='video'?'':'none';
+  document.getElementById('genImageFormatWrap').style.display=t==='image'?'':'none';
+  // Update model options
+  const modelSel=document.getElementById('genModel');
+  if(t==='video'){
+    modelSel.innerHTML='<option value="ray-2">ray-2 (Qualität)</option><option value="ray-flash-2">ray-flash-2 (Schnell)</option>';
+  }else{
+    modelSel.innerHTML='<option value="photon-1">photon-1 (Qualität)</option><option value="photon-flash-1">photon-flash-1 (Schnell)</option>';
+  }
+}
+
+async function submitGeneration(){
+  let prompt=document.getElementById('genPrompt').value.trim();
+  // Fallback to selected scene
+  if(!prompt&&_selectedScene>=0&&_autoScenes[_selectedScene]){
+    prompt=_autoScenes[_selectedScene].prompt;
+  }
+  if(!prompt){toast('Bitte Prompt eingeben oder Szene wählen','err');return}
+  if(!PID){toast('Erst Projekt erstellen','err');return}
+  if(!_genProviderOk){toast('Luma Provider nicht verfügbar','err');return}
+
+  const btn=document.getElementById('genSubmitBtn');
+  btn.disabled=true;btn.textContent='⏳ Wird gesendet...';
+
+  const body={
+    gen_type:_genType,
+    prompt:prompt,
+    project_id:PID,
+    model:document.getElementById('genModel').value,
+    aspect_ratio:document.getElementById('genAspect').value,
+  };
+  if(_genType==='video'){
+    body.duration=document.getElementById('genDuration').value;
+    body.resolution=document.getElementById('genResolution').value;
+    body.loop=document.getElementById('genLoop').checked;
+    body.keyframe_image_url=document.getElementById('genKeyframeUrl').value.trim();
+  }else{
+    body.image_format=document.getElementById('genImageFormat').value;
+  }
+
+  try{
+    const r=await fetch(B+'/api/editor/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||'Fehler')}
+    const data=await r.json();
+    toast('Generierung gestartet: '+data.gen_id);
+    document.getElementById('genPrompt').value='';
+    startGenPolling();
+    refreshGenerations();
+  }catch(e){toast('Generierung fehlgeschlagen: '+e.message,'err')}
+  finally{btn.disabled=false;btn.textContent='🚀 Generieren'}
+}
+
+function startGenPolling(){
+  if(_genPollTimer)return;
+  _genPollTimer=setInterval(()=>{refreshGenerations()},4000);
+}
+function stopGenPolling(){
+  if(_genPollTimer){clearInterval(_genPollTimer);_genPollTimer=null}
+}
+
+async function refreshGenerations(){
+  const gallery=document.getElementById('genGallery');
+  if(!gallery)return;
+  try{
+    const pid=PID||'';
+    const r=await(await fetch(B+'/api/editor/generations?project_id='+encodeURIComponent(pid))).json();
+    if(!r.length){
+      gallery.innerHTML='<div style="color:var(--dim);font-size:.65rem;text-align:center;padding:10px">Noch keine Generierungen</div>';
+      stopGenPolling();
+      return;
+    }
+    let hasActive=false;
+    gallery.innerHTML='';
+    for(const j of r){
+      const card=document.createElement('div');card.className='gen-card';card.id='gen-'+j.id;
+      const isActive=['pending','processing','downloading'].includes(j.status);
+      if(isActive)hasActive=true;
+
+      // Status dot + label
+      const statusLabels={pending:'Wartend',processing:'Generiert...',downloading:'Download...',completed:'Fertig',failed:'Fehlgeschlagen',cancelled:'Abgebrochen'};
+      let html=`<div class="gen-status"><span class="dot ${j.status}"></span><span>${statusLabels[j.status]||j.status}</span>`;
+      html+=`<span style="margin-left:auto;font-size:.55rem;color:var(--dim)">${j.model||''}</span></div>`;
+
+      // Thumbnail for completed
+      if(j.status==='completed'&&j.local_path){
+        const ext=j.local_path.split('.').pop();
+        if(['mp4','webm','mov'].includes(ext)){
+          html+=`<video class="gen-thumb" src="/data/editor/assets/${j.local_path.split('/').pop()}" muted loop onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>`;
+        }else{
+          html+=`<img class="gen-thumb" src="/data/editor/assets/${j.local_path.split('/').pop()}" alt="Generated">`;
+        }
+      }
+
+      // Progress bar for active
+      if(isActive){
+        const pct=Math.round(j.progress*100);
+        html+=`<div class="gen-progress"><div class="gen-progress-fill" style="width:${pct}%"></div></div>`;
+      }
+
+      // Error
+      if(j.status==='failed'&&j.error){
+        html+=`<div style="font-size:.55rem;color:#e44;margin-top:2px">${esc(j.error)}</div>`;
+      }
+
+      // Prompt
+      html+=`<div class="gen-prompt" title="${esc(j.prompt)}">${esc(j.prompt)}</div>`;
+
+      // Actions
+      html+='<div class="gen-actions">';
+      if(j.status==='completed'){
+        if(!j.asset_id){
+          html+=`<button onclick="importGeneration('${j.id}')" title="Als Asset importieren">📥 Import</button>`;
+        }else{
+          html+=`<span style="font-size:.55rem;color:#0b5">✅ Importiert</span>`;
+        }
+      }
+      if(isActive){
+        html+=`<button onclick="cancelGeneration('${j.id}')" title="Abbrechen">✕</button>`;
+      }
+      if(['completed','failed','cancelled'].includes(j.status)){
+        html+=`<button onclick="deleteGeneration('${j.id}')" title="Löschen">🗑️</button>`;
+      }
+      html+='</div>';
+
+      card.innerHTML=html;
+      gallery.appendChild(card);
+    }
+    if(!hasActive)stopGenPolling();
+    else if(!_genPollTimer)startGenPolling();
+  }catch(e){console.warn('[gen] refresh error',e)}
+}
+
+async function cancelGeneration(gid){
+  try{
+    await fetch(B+'/api/editor/generations/'+gid,{method:'DELETE'});
+    toast('Generierung abgebrochen');
+    refreshGenerations();
+  }catch(e){toast('Fehler: '+e.message,'err')}}
+
+async function deleteGeneration(gid){
+  try{
+    await fetch(B+'/api/editor/generations/'+gid,{method:'DELETE'});
+    refreshGenerations();
+  }catch(e){toast('Fehler: '+e.message,'err')}}
+
+async function importGeneration(gid){
+  if(!PID){toast('Erst Projekt erstellen','err');return}
+  try{
+    const r=await fetch(B+'/api/editor/generations/'+gid+'/import',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({project_id:PID})});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||'Fehler')}
+    const d=await r.json();
+    toast('Asset importiert: '+d.asset_id);
+    await loadProjectData();
+    refreshGenerations();
+  }catch(e){toast('Import fehlgeschlagen: '+e.message,'err')}}
+
+function pickAssetForGen(target){
+  if(!PID||!PROJ){toast('Erst Projekt erstellen','err');return}
+  const assets=Object.values(PROJ.assets).filter(a=>a.type==='image');
+  if(!assets.length){toast('Keine Bild-Assets vorhanden','err');return}
+  const names=assets.map((a,i)=>`${i+1}. ${a.filename}`).join('\n');
+  const choice=prompt('Bild-Asset wählen (Nummer):\n'+names);
+  if(!choice)return;
+  const idx=parseInt(choice)-1;
+  if(idx>=0&&idx<assets.length){
+    const a=assets[idx];
+    // Build URL for the asset file
+    const url=location.origin+'/api/editor/projects/'+PID+'/assets/'+a.id+'/file';
+    if(target==='keyframe')document.getElementById('genKeyframeUrl').value=url;
+  }
+}
+
+// ── Auto Scene Suggestions ──
+let _autoScenes=[];
+let _selectedScene=-1;
+
+async function generateAutoScenes(){
+  if(!PID){toast('Erst Projekt erstellen','err');return}
+
+  const btn=document.getElementById('genAutoBtn');
+  const status=document.getElementById('genAutoStatus');
+  const gallery=document.getElementById('genSceneGallery');
+
+  btn.disabled=true;btn.style.opacity='.5';
+  status.style.display='';status.textContent='⏳ KI analysiert Lyrics und erstellt 5 Szenen-Vorschläge...';
+  gallery.style.display='none';gallery.innerHTML='';
+  _autoScenes=[];_selectedScene=-1;
+  _updateGenSubmitBtn();
+
+  try{
+    const body={
+      gen_type:_genType,
+      aspect_ratio:document.getElementById('genAspect').value,
+    };
+    const r=await fetch(B+'/api/editor/projects/'+PID+'/auto-scenes',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||'Fehler')}
+    const data=await r.json();
+    _autoScenes=data.scenes||[];
+    if(!_autoScenes.length)throw new Error('Keine Szenen generiert');
+    _renderSceneGallery();
+    status.style.display='none';
+    toast(_autoScenes.length+' Szenen-Vorschläge erstellt');
+  }catch(e){
+    status.textContent='❌ '+e.message;
+    status.style.color='var(--danger)';
+    toast('Auto-Szenen: '+e.message,'err');
+  }finally{btn.disabled=false;btn.style.opacity=''}
+}
+
+function _renderSceneGallery(){
+  const gallery=document.getElementById('genSceneGallery');
+  gallery.style.display='flex';gallery.style.flexDirection='column';gallery.style.gap='6px';
+  gallery.innerHTML='';
+  const icons=['🎬','🌅','💫','🎭','🔥'];
+  _autoScenes.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.className='scene-card'+(i===_selectedScene?' selected':'');
+    card.onclick=()=>selectScene(i);
+    let h='';
+    h+=`<div class="sc-title">${icons[i]||'🎬'} ${esc(s.title||'Szene '+(i+1))}</div>`;
+    if(s.mood)h+=`<div class="sc-mood">${esc(s.mood)}</div>`;
+    h+=`<div class="sc-prompt">${esc(s.prompt||'')}</div>`;
+    if(s.lyrics_ref)h+=`<div class="sc-lyrics">&ldquo;${esc(s.lyrics_ref)}&rdquo;</div>`;
+    h+='<div class="sc-actions">';
+    h+=`<button class="sc-go" onclick="event.stopPropagation();generateScene(${i})" title="Diese Szene direkt generieren">🚀 Generieren</button>`;
+    h+=`<button onclick="event.stopPropagation();editScene(${i})" title="Prompt bearbeiten">✏️</button>`;
+    h+='</div>';
+    card.innerHTML=h;
+    gallery.appendChild(card);
+  });
+}
+
+function selectScene(i){
+  _selectedScene=i;
+  document.querySelectorAll('.scene-card').forEach((c,ci)=>c.classList.toggle('selected',ci===i));
+  // Set prompt field to selected scene prompt
+  const s=_autoScenes[i];
+  if(s){
+    document.getElementById('genPrompt').value=s.prompt;
+    document.getElementById('genManualDetails').open=true;
+  }
+  _updateGenSubmitBtn();
+}
+
+function editScene(i){
+  const s=_autoScenes[i];
+  if(!s)return;
+  const newPrompt=prompt('Prompt bearbeiten:',s.prompt);
+  if(newPrompt!==null&&newPrompt.trim()){
+    _autoScenes[i].prompt=newPrompt.trim();
+    _renderSceneGallery();
+    if(_selectedScene===i)document.getElementById('genPrompt').value=newPrompt.trim();
+  }
+}
+
+async function generateScene(i){
+  const s=_autoScenes[i];
+  if(!s||!s.prompt){toast('Kein Prompt vorhanden','err');return}
+  _selectedScene=i;
+  document.getElementById('genPrompt').value=s.prompt;
+  _renderSceneGallery();
+  await submitGeneration();
+}
+
+function _updateGenSubmitBtn(){
+  const btn=document.getElementById('genSubmitBtn');
+  if(!_genProviderOk){btn.disabled=true;return}
+  const hasPrompt=document.getElementById('genPrompt').value.trim().length>0;
+  const hasScene=_selectedScene>=0;
+  btn.disabled=!(hasPrompt||hasScene);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // AI CHAT
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2329,6 +2786,16 @@ function connectEditorSSE(){
       if(d.type==='subtitle_updated'&&PID&&d.job_id===PID){
         console.log('[sse] Untertitel aktualisiert — lade Cues neu');
         loadSubtitleCues();
+      }
+      // Generation SSE events
+      if(d.type&&d.type.startsWith('gen_')&&d.project_id===PID){
+        console.log('[sse] Generation event:',d.type,d.gen_id);
+        refreshGenerations();
+        if(d.type==='gen_completed'){
+          toast('KI-Generierung fertig! '+((d.gen_type==='video')?'🎬':'🖼️'));
+          loadProjectData(); // Reload assets if auto-imported
+        }
+        if(d.type==='gen_failed')toast('Generierung fehlgeschlagen: '+(d.error||''),'err');
       }
     }catch(ex){}
   };

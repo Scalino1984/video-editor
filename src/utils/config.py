@@ -117,6 +117,18 @@ class RenderingConfig(BaseModel):
     max_concurrent: int = 1  # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS
 
 
+class GenerationConfig(BaseModel):
+    provider: str = "luma"
+    luma_model_video: str = "ray-2"
+    luma_model_image: str = "photon-1"
+    default_aspect_ratio: str = "16:9"
+    default_duration: str = "5s"
+    default_resolution: str = "1080p"
+    poll_interval_s: float = 3.0
+    max_concurrent: int = 3
+    auto_import: bool = True
+
+
 class WordTimelineConfig(BaseModel):
     enabled: bool = True
     generate_syllables: bool = False
@@ -149,6 +161,7 @@ class AppConfig(BaseModel):
     confidence: ConfidenceConfig = ConfidenceConfig()
     word_timeline: WordTimelineConfig = WordTimelineConfig()
     rendering: RenderingConfig = RenderingConfig()
+    generation: GenerationConfig = GenerationConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
@@ -272,4 +285,15 @@ rendering:
   x264_threads: 0            # 0 = same as ffmpeg_threads. Limits libx264 encoder threads
   nice: 10                   # Process priority 0-19 (Linux only). Env: MEDIA_NICE
   max_concurrent: 1          # Max parallel heavy media jobs. Env: MAX_MEDIA_JOBS
+
+generation:
+  provider: luma             # Generation provider (luma)
+  luma_model_video: ray-2    # ray-2 (quality) | ray-flash-2 (fast)
+  luma_model_image: photon-1 # photon-1 (quality) | photon-flash-1 (fast)
+  default_aspect_ratio: "16:9"
+  default_duration: "5s"     # 5s | 9s
+  default_resolution: "1080p" # 540p | 720p | 1080p | 4k
+  poll_interval_s: 3.0       # Poll interval for generation status
+  max_concurrent: 3          # Max parallel generations
+  auto_import: true          # Auto-import completed generations as assets
 """

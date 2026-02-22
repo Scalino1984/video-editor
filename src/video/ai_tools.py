@@ -35,6 +35,8 @@ ACTION_ALLOWLIST = frozenset({
     # Track/layer actions (v2)
     "add_track", "remove_track", "rename_track",
     "set_track_props", "reorder_tracks",
+    # AI generation actions
+    "generate_video", "generate_image",
 })
 
 # Input length limit for chat messages
@@ -72,6 +74,8 @@ VERFÜGBARE AKTIONEN (nutze diese als JSON-Blöcke in deiner Antwort):
 {"action": "undo"}
 {"action": "redo"}
 {"action": "render"}
+{"action": "generate_video", "prompt": "...", "aspect_ratio": "16:9", "duration": "5s", "model": "ray-2", "resolution": "1080p", "loop": false}
+{"action": "generate_image", "prompt": "...", "aspect_ratio": "16:9", "model": "photon-1"}
 ```
 
 REGELN:
@@ -91,6 +95,12 @@ EFFEKT-PARAMETER:
 - rotate: {"angle": 90|180|270}
 - zoom: {"factor": 1.3}
 - overlay_text: {"text": "...", "size": 48, "color": "white", "x": "(w-text_w)/2", "y": "h-80"}
+
+AI GENERATION:
+- generate_video: Erstellt ein KI-Video mit Luma Dream Machine. Modelle: ray-2 (Qualität), ray-flash-2 (Schnell). Dauer: 5s oder 9s. Auflösung: 540p, 720p, 1080p, 4k.
+- generate_image: Erstellt ein KI-Bild mit Luma Photon. Modelle: photon-1 (Qualität), photon-flash-1 (Schnell).
+- Aspect ratios: 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 9:21
+- Generierte Assets werden automatisch ins Projekt importiert.
 """
 
 
@@ -361,7 +371,47 @@ def _execute_action(pid: str, action: dict) -> str:
             return f"Gerendert: {output.name} ({mb:.1f} MB)"
         return f"Render fehlgeschlagen: {err}"
 
+    # ── AI generation actions ──
+    elif act == "generate_video":
+        return _execute_generation(pid, action, "video")
+
+    elif act == "generate_image":
+        return _execute_generation(pid, action, "image")
+
     return f"Unbekannte Aktion: {act}"
+
+
+def _execute_generation(pid: str, action: dict, gen_type: str) -> str:
+    """Execute a generation action (video or image) synchronously by scheduling the async call."""
+    import asyncio
+    from src.video.generation.base import GenRequest, GenType
+    from src.video.generation.manager import submit_generation
+
+    request = GenRequest(
+        gen_type=GenType(gen_type),
+        prompt=action.get("prompt", ""),
+        project_id=pid,
+        model=action.get("model", ""),
+        aspect_ratio=action.get("aspect_ratio", "16:9"),
+        duration=action.get("duration", "5s"),
+        loop=action.get("loop", False),
+        resolution=action.get("resolution", "1080p"),
+        keyframe_image_url=action.get("keyframe_image_url", ""),
+        keyframe_end_url=action.get("keyframe_end_url", ""),
+        image_format=action.get("image_format", "jpg"),
+        style_ref_url=action.get("style_ref_url", ""),
+        modify_image_url=action.get("modify_image_url", ""),
+    )
+
+    # Schedule in the running loop (we are already in an async context via run_editor_chat)
+    try:
+        loop = asyncio.get_running_loop()
+        future = asyncio.ensure_future(submit_generation(request))
+        # We can't await here (sync function), so just return immediately
+        type_label = "Video" if gen_type == "video" else "Bild"
+        return f"{type_label}-Generierung gestartet (Prompt: {request.prompt[:60]}). Das Ergebnis wird automatisch ins Projekt importiert."
+    except Exception as e:
+        return f"Generierung fehlgeschlagen: {e}"
 
 
 async def _call_ai(model_name: str, messages: list[dict]) -> str:

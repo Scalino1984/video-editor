@@ -76,6 +76,19 @@ async def lifespan(application: FastAPI):
     except ImportError:
         info("AI Chat: pydantic-ai not installed")
 
+    # Generation provider (Luma)
+    try:
+        from src.video.generation.manager import set_sse_callback, check_provider
+        from src.api.tasks import _emit_sse
+        set_sse_callback(_emit_sse)
+        import os
+        if os.environ.get("LUMA_API_KEY"):
+            info("AI Generation: Luma Dream Machine verfügbar")
+        else:
+            info("AI Generation: LUMA_API_KEY nicht gesetzt")
+    except Exception as e:
+        info(f"AI Generation: {e}")
+
     # Library DB
     try:
         from src.db.library import init_db
@@ -128,11 +141,13 @@ from src.ai.routes import router as ai_router  # noqa: E402
 from src.db.routes import router as lib_router  # noqa: E402
 from src.video.editor_routes import router as editor_router  # noqa: E402
 from src.video.overlay_routes import router as overlay_router  # noqa: E402
+from src.video.generation.routes import router as gen_router  # noqa: E402
 app.include_router(api_router)
 app.include_router(ai_router)
 app.include_router(lib_router)
 app.include_router(editor_router)
 app.include_router(overlay_router)
+app.include_router(gen_router)
 
 # ── Static / WebUI ────────────────────────────────────────────────────────────
 
